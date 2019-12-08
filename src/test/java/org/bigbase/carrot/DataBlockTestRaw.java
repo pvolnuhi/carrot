@@ -146,7 +146,7 @@ public class DataBlockTestRaw {
       assertEquals(OpResult.OK, result);
     }
     
-    assertEquals(0, b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfRecords());
     for (Long key: keys) {
       long result = b.get(key, keyLength, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
@@ -171,11 +171,11 @@ public class DataBlockTestRaw {
     IndexBlock ib = new IndexBlock(4096);
     bb.register(ib, 0);
     
-    assertEquals(0, bb.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(0, (int)bb.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
-    assertEquals(totalKVs, bb.getNumberOfRecords() + b.getNumberOfRecords());
-    assertEquals(totalDataSize, b.getDataSize() + bb.getDataSize());
+    assertEquals(totalKVs, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
+    assertEquals(totalDataSize, (int)b.getDataSize() + bb.getDataSize());
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -204,11 +204,11 @@ public class DataBlockTestRaw {
     IndexBlock ib = new IndexBlock(4096);
     bb.register(ib, 0);
     
-    assertEquals(0, bb.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(0, (int)bb.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
-    assertEquals(totalKVs, bb.getNumberOfRecords() + b.getNumberOfRecords());
-    assertEquals(totalDataSize, b.getDataSize() + bb.getDataSize());
+    assertEquals(totalKVs, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
+    assertEquals(totalDataSize, (int)b.getDataSize() + bb.getDataSize());
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -216,9 +216,9 @@ public class DataBlockTestRaw {
     assertTrue (Utils.compareTo(f1, 0, f1.length, f2, 0, f2.length) < 0);
     b.merge(bb, true, true);
     
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(totalKVs, b.getNumberOfRecords());
-    assertEquals(totalDataSize, b.getDataSize());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(totalKVs, (int)b.getNumberOfRecords());
+    assertEquals(totalDataSize, (int)b.getDataSize());
     
     scanAndVerify(b, keyLength);
     System.out.println("testBlockMerge after scanAndVerify");
@@ -249,7 +249,7 @@ public class DataBlockTestRaw {
       assertEquals(OpResult.OK, result);
     }
     
-    assertEquals(0, b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfRecords());
     
     for (Long key: keys) {
       long result = b.get(key, keyLength, Long.MAX_VALUE);
@@ -258,8 +258,8 @@ public class DataBlockTestRaw {
     
     b.compact(false);
     
-    assertEquals( 0, b.getNumberOfRecords());
-    assertEquals( 0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals( 0, (int)b.getNumberOfRecords());
+    assertEquals( 0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     assertTrue (b.getFirstKey() == null);  
     b.free();
     System.out.println("testCompactionFull DONE");
@@ -284,7 +284,7 @@ public class DataBlockTestRaw {
       }
     }
     
-    assertEquals(keys.size() - deletedKeys.size(), b.getNumberOfRecords());
+    assertEquals(keys.size() - deletedKeys.size(), (int)b.getNumberOfRecords());
     
     for (Long key: deletedKeys) {
       long result = b.get(key, keyLength, Long.MAX_VALUE);
@@ -293,8 +293,8 @@ public class DataBlockTestRaw {
     
     b.compact(true);
     
-    assertEquals( keys.size() - deletedKeys.size(), b.getNumberOfRecords());
-    assertEquals( 0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals( keys.size() - deletedKeys.size(), (int)b.getNumberOfRecords());
+    assertEquals( 0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     b.free();
     System.out.println("testCompactionPartial DONE");
 
@@ -417,8 +417,8 @@ public class DataBlockTestRaw {
       assertTrue(res);
     }
     
-    assertEquals(keys.size(), b.getNumberOfRecords());
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
     // Delete  5 first
     for (int i = 0; i < 5; i++) {
@@ -437,16 +437,16 @@ public class DataBlockTestRaw {
       b.put(key, keyLength, key, keyLength/2, Long.MAX_VALUE, 0);
       kkeys.add(key);
     }
-    assertEquals(keys.size(), b.getNumberOfRecords());
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     scanAndVerify(b, keys);
     // Now insert existing keys with original value
     for (long key: kkeys) {
       boolean res = b.put(key, keyLength, key, keyLength, Long.MAX_VALUE, 0);
       assertTrue(res);
     }    
-    assertEquals(keys.size(), b.getNumberOfRecords());
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     scanAndVerify(b, keys);
     b.free();
     System.out.println("testOverwriteOnUpdateEnabled DONE");

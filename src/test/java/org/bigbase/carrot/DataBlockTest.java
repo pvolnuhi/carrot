@@ -143,11 +143,11 @@ public class DataBlockTest {
     IndexBlock ib = new IndexBlock(4096);
     bb.register(ib ,  0);
     
-    assertEquals(0, bb.numDeletedAndUpdatedRecords);
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(0, (int)bb.numDeletedAndUpdatedRecords);
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
-    assertEquals(totalKVs, bb.numRecords + b.getNumberOfRecords());
-    assertEquals(totalDataSize, b.getDataSize() + bb.dataSize);
+    assertEquals(totalKVs, (int)(bb.numRecords + b.getNumberOfRecords()));
+    assertEquals(totalDataSize, (int)(b.getDataSize() + bb.dataSize));
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -174,11 +174,11 @@ public class DataBlockTest {
     IndexBlock ib = new IndexBlock(4096);
     bb.register(ib, 0);
     
-    assertEquals(0, bb.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(0, (int)bb.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
-    assertEquals(totalKVs, bb.getNumberOfRecords() + b.getNumberOfRecords());
-    assertEquals(totalDataSize, b.getDataSize() + bb.getDataSize());
+    assertEquals(totalKVs, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
+    assertEquals(totalDataSize, (int)b.getDataSize() + bb.getDataSize());
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -186,9 +186,9 @@ public class DataBlockTest {
     assertTrue (Utils.compareTo(f1, 0, f1.length, f2, 0, f2.length) < 0);
     b.merge(bb, true, true);
     
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(totalKVs, b.getNumberOfRecords());
-    assertEquals(totalDataSize, b.getDataSize());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(totalKVs, (int)b.getNumberOfRecords());
+    assertEquals(totalDataSize, (int)b.getDataSize());
     
     scanAndVerify(b, keys.get(0).length);
     
@@ -209,7 +209,7 @@ public class DataBlockTest {
     }
     
     assertEquals(b.getNumberOfDeletedAndUpdatedRecords(), b.getNumberOfRecords());
-    assertEquals(0, b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfRecords());
     
     for (byte[] key: keys) {
       long result = b.get(key, 0, key.length, Long.MAX_VALUE);
@@ -240,7 +240,7 @@ public class DataBlockTest {
       }
     }
     
-    assertEquals(keys.size() - deletedKeys.size(), b.getNumberOfRecords());
+    assertEquals(keys.size() - deletedKeys.size(), (int)b.getNumberOfRecords());
     
     for (byte[] key: deletedKeys) {
       long result = b.get(key, 0, key.length, Long.MAX_VALUE);
@@ -249,8 +249,8 @@ public class DataBlockTest {
     
     b.compact(true);
     
-    assertEquals( keys.size() - deletedKeys.size(), b.getNumberOfRecords());
-    assertEquals( 0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals( keys.size() - deletedKeys.size(), (int)b.getNumberOfRecords());
+    assertEquals( 0, (int) b.getNumberOfDeletedAndUpdatedRecords());
 
   }
   
@@ -366,8 +366,8 @@ public class DataBlockTest {
       assertTrue(res);
     }
     
-    assertEquals(keys.size(), b.getNumberOfRecords());
-    assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
     // Delete  5 first
     for (int i = 0; i < 5; i++) {
@@ -378,7 +378,7 @@ public class DataBlockTest {
     }
     
     keys =  keys.subList(5, keys.size());
-    assertEquals(keys.size(), b.getNumberOfRecords());
+    assertEquals(keys.size(), (int)b.getNumberOfRecords());
 
     scanAndVerify(b, keys);
 
@@ -389,7 +389,7 @@ public class DataBlockTest {
       b.put(key, 0, key.length, key, 0, key.length/2, 0, 0);
       kkeys.add(key);
     }
-    assertEquals(keys.size(), b.getNumberOfRecords());
+    assertEquals(keys.size(), (int)b.getNumberOfRecords());
     
     scanAndVerify(b, keys);
     
@@ -399,7 +399,7 @@ public class DataBlockTest {
       boolean res = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
       assertTrue(res);
     }    
-    assertEquals(keys.size(), b.getNumberOfRecords());
+    assertEquals(keys.size(), (int)b.getNumberOfRecords());
     //assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
     scanAndVerify(b, keys);
     
