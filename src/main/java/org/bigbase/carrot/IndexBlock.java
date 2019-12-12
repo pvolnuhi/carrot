@@ -950,25 +950,21 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @param keyLength
 	 * @return address to insert (or update)
 	 */
-	long searchForGet(long keyPtr, int keyLength, long start) {
-		long ptr = start;
+  long searchForGet(long keyPtr, int keyLength, long start) {
+    long ptr = start;
 
-		try {
-			short keylen = (short) keyLength(ptr);
-			ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
-			if (ptr >= this.dataPtr + this.dataSize) {
-				return NOT_FOUND;
-			}
-			int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keyLength(ptr));
-			if (res != 0) {
-				return ptr = NOT_FOUND;
-			} else {
-				return ptr;
-			}
-		} finally {
-			// checkPointer(ptr);
-		}
-	}
+    short keylen = (short) keyLength(ptr);
+    ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+    if (ptr >= this.dataPtr + this.dataSize) {
+      return NOT_FOUND;
+    }
+    int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keyLength(ptr));
+    if (res != 0) {
+      return ptr = NOT_FOUND;
+    } else {
+      return ptr;
+    }
+  }
 
 	/**
 	 * Search block by a given key equals to a given key
@@ -1017,71 +1013,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			writeUnlock();
 		}
 	}
-
-//  public OpResult delete(byte[] key, int keyOffset, int keyLength, long version) 
-//      throws RetryOperationException {
-//
-//    try {
-//      writeLock();
-//      long ptr = search(key, keyOffset, keyLength, version, Op.DELETE);
-//      DataBlock b = block.get();
-//      b.set(this, ptr - dataPtr);
-//      while (true) {
-//        OpResult res = b.delete(key, keyOffset, keyLength, version);
-//        if (res == OpResult.SPLIT_REQUIRED) {
-//          if (b.canSplit()) {
-//            // get split position
-//            long addr = b.splitPos(false);
-//            // check if we will be able to insert new block
-//            int startKeyLength = UnsafeAccess.toShort(addr);
-//            int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
-//            if (dataSize + required > blockSize) {
-//              // index block split is required
-//              return OpResult.SPLIT_REQUIRED;
-//            }
-//            DataBlock right = b.split(false);
-//            // we do not check result - it must be true
-//            insertBlock(right);
-//            // select which block we should delete k-v now
-//            int r1 = right.compareTo(key, keyOffset, keyLength, version, Op.DELETE);
-//            if (r1 >= 0) {
-//              b = right;
-//            }
-//            continue;
-//          } else {
-//            // We can not split block and can delete directly
-//            // we need to *add* delete tombstone to a new block
-//            int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
-//            if (dataSize + required > blockSize) {
-//              // index block split is required
-//              return OpResult.SPLIT_REQUIRED;
-//            }
-//            // new block insert after
-//            DataBlock bb = new DataBlock();
-//            insertNewBlock(bb, key, keyOffset, keyLength, version, Op.DELETE);
-//            // we do not check result - it should be OK (empty block)
-//            bb.addDelete(key, keyOffset, keyLength, version);
-//            return OpResult.OK; // if false, then index block split is required
-//          }
-//        } else if (res == OpResult.NOT_FOUND) {
-//          long address = ptr;
-//          while ((address = searchForGet(key, keyOffset, keyLength, address)) != NOT_FOUND) {
-//            b.set(this, address - this.dataPtr);
-//            res = b.delete(key, keyOffset, keyLength, version);
-//            // TODO: SPLIT_REQUIRED
-//            if (res != OpResult.NOT_FOUND) {
-//              return res;
-//            }
-//          }
-//          return OpResult.NOT_FOUND;
-//        } else {
-//          return res;
-//        }
-//      }
-//    } finally {
-//      writeUnlock();
-//    }
-//  }	
 	
 	private OpResult deleteInBlock(DataBlock b, long address, byte[] key, int keyOffset, 
 	    int keyLength, long version) {
@@ -1176,68 +1107,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 
-//  public OpResult delete(long keyPtr, int keyLength, long version) throws RetryOperationException {
-//    try {
-//      writeLock();
-//      long ptr = search(keyPtr, keyLength, version, Op.DELETE);
-//      DataBlock b = block.get();
-//      b.set(this, ptr - dataPtr);
-//      while (true) {
-//        OpResult res = b.delete(keyPtr, keyLength, version);
-//        if (res == OpResult.SPLIT_REQUIRED) {
-//          if (b.canSplit()) {
-//            // get split position
-//            long addr = b.splitPos(false);
-//            // check if we will be able to insert new block
-//            int startKeyLength = UnsafeAccess.toShort(addr);
-//            int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
-//            if (dataSize + required > blockSize) {
-//              // index block split is required
-//              return OpResult.SPLIT_REQUIRED;
-//            }
-//            DataBlock right = b.split(false);
-//            // we do not check result - it must be true
-//            insertBlock(right);
-//            // select which block we should put k-v now
-//            int r1 = right.compareTo(keyPtr, keyLength, version, Op.DELETE);
-//            if (r1 >= 0) {
-//              b = right;
-//            }
-//            continue;
-//          } else {
-//            // We can not split block and can not delete directly
-//            // we need to *add* delete tomb stone to a new block
-//            int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
-//            if (dataSize + required > blockSize) {
-//              // index block split is required
-//              return OpResult.SPLIT_REQUIRED;
-//            }
-//            // new block insert after
-//            DataBlock bb = new DataBlock();
-//            insertNewBlock(bb, keyPtr, keyLength, version, Op.DELETE);
-//            // we do not check result - it should be OK (empty block)
-//            bb.addDelete(keyPtr, keyLength, version);
-//            return OpResult.OK; // if false, then index block split is required
-//          }
-//        } else if (res == OpResult.NOT_FOUND) {
-//          long address = ptr;
-//          while ((address = searchForGet(keyPtr, keyLength, address)) != NOT_FOUND) {
-//            b.set(this, address - this.dataPtr);
-//            res = b.delete(keyPtr, keyLength, version);
-//            // TODO: SPLIT_REQUIRED
-//            if (res != OpResult.NOT_FOUND) {
-//              return res;
-//            }
-//          }
-//          return OpResult.NOT_FOUND;
-//        } else {
-//          return res;
-//        }
-//      }
-//    } finally {
-//      writeUnlock();
-//    }
-//  }
+
 	
 	private OpResult deleteInBlock(DataBlock b, long address, long keyPtr, int keyLength, long version) {
     while (true) {
