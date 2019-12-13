@@ -7,8 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.util.Bytes;
-import org.bigbase.util.Utils;
+import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
 
 public class IndexBlockTest {

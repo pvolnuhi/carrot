@@ -5,8 +5,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
-import org.bigbase.util.Bytes;
-import org.bigbase.util.Utils;
 import org.junit.Test;
 
 import com.google.common.util.concurrent.AtomicDouble;

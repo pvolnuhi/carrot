@@ -3,8 +3,8 @@ package org.bigbase.carrot;
 import java.io.Closeable;
 import java.io.IOException;
 
-import org.bigbase.util.UnsafeAccess;
-import org.bigbase.util.Utils;
+import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 
 /**
  * Thread unsafe implementation

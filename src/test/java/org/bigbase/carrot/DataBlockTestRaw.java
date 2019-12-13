@@ -8,8 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.util.UnsafeAccess;
-import org.bigbase.util.Utils;
+import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
 
 public class DataBlockTestRaw {

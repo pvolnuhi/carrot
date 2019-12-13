@@ -1,4 +1,4 @@
-package org.bigbase.xcache.util;
+package org.bigbase.carrot.util;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -7,8 +7,8 @@ import java.util.Random;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.bigbase.util.UnsafeAccess;
-import org.bigbase.util.Utils;
+import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
 
 public class TestUtils {

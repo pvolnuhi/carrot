@@ -3,10 +3,9 @@ package org.bigbase.carrot;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
 
-import org.bigbase.util.Bytes;
-import org.bigbase.util.UnsafeAccess;
-import org.bigbase.util.Utils;
-import org.bigbase.zcache.BigSortedMapOld;
+import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 
 /**
  * Records are lexicographically sorted 

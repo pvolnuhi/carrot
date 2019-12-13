@@ -1,4 +1,4 @@
-package org.bigbase.util;
+package org.bigbase.carrot.util;
 
 import java.io.DataInput;
 import java.io.DataOutput;

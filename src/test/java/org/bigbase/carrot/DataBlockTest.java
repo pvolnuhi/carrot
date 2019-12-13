@@ -11,8 +11,7 @@ import java.util.Random;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.RetryOperationException;
-import org.bigbase.util.Utils;
-import org.junit.Ignore;
+import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
 
 
@@ -27,7 +26,6 @@ public class DataBlockTest {
     return b;
   }
   
- // @Ignore
   @Test
   public void testDataBlockPutGet() throws RetryOperationException {
     System.out.println("testDataBlockPutGet");

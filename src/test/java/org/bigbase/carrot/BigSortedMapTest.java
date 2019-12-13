@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.util.Utils;
+import org.bigbase.carrot.util.Utils;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
