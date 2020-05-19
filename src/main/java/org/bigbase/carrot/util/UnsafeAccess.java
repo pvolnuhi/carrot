@@ -17,9 +17,10 @@ import sun.nio.ch.DirectBuffer;
 public final class UnsafeAccess {
 
   private static final Log LOG = LogFactory.getLog(UnsafeAccess.class);
-
   public static final Unsafe theUnsafe;
-
+  
+  public final static long MALLOC_FAILED = -1;
+  
   /** The offset to the first element in a byte array. */
   public static final long BYTE_ARRAY_BASE_OFFSET;
 

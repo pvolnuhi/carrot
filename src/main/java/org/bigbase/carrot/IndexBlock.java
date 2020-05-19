@@ -52,7 +52,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	public final static int VERSION_SIZE = 8;
 	public final static int TYPE_SIZE = 1;
 	public final static int DATA_BLOCK_STATIC_OVERHEAD = DATA_BLOCK_STATIC_PREFIX + VERSION_SIZE + TYPE_SIZE; // 28
-																												// bytes
+	public final static int INT_SIZE = 4;
+	public final static int ADDRESS_SIZE = 8;
+	// bytes
 
 	static {
 		String val = System.getProperty(MAX_BLOCK_SIZE_KEY);
@@ -134,6 +136,10 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		return -1;
 	}
 
+	
+	static boolean mustAllocateExternally(int len) {
+	  return len >= MAX_BLOCK_SIZE/2;
+	}
 	/*
 	 * Index block address (current)
 	 */
@@ -207,18 +213,49 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @param len     length of a key
 	 * @param version version
 	 */
-	public void putForSearch(byte[] key, int off, int len, long version) {
+  void putForSearch(byte[] key, int off, int len, long version) {
 		this.threadSafe = true;
 		long address = this.dataPtr + DATA_BLOCK_STATIC_PREFIX;
-		UnsafeAccess.putShort(address, (short) len);
-		address += KEY_SIZE_LENGTH;
-		UnsafeAccess.copy(key, off, address, len);
-		address += len;
-		UnsafeAccess.putLong(address, version);
-		address += VERSION_SIZE;
-		UnsafeAccess.putByte(address, (byte) Op.DELETE.ordinal());
+		putInternal(address, key, off, len, version, Op.DELETE);
 	}
 
+	
+  private long allocateKeyExternally(byte[] key, int off, int len) {
+    long extAddress = UnsafeAccess.malloc(len + INT_SIZE);
+    if (extAddress <= 0) {
+      // TODO allocation failure
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    UnsafeAccess.putInt(extAddress, len);
+    UnsafeAccess.copy(key, off, extAddress + INT_SIZE, len);
+    return extAddress;
+  }
+  
+  private boolean putInternal(long address, byte[] key, int off, int len, long version, Op op) {
+    boolean extAlloc = mustAllocateExternally(len);
+    long extAddress = 0;
+    if (extAlloc) {
+      extAddress = allocateKeyExternally(key, off, len);
+      if (extAddress == UnsafeAccess.MALLOC_FAILED) {
+        return false;
+      }
+    }
+
+    UnsafeAccess.putShort(address, extAlloc? (short)0:(short) len);
+    address += KEY_SIZE_LENGTH;
+    if(extAlloc) {
+      UnsafeAccess.putLong(address, extAddress);
+      address += ADDRESS_SIZE;
+    } else {
+      UnsafeAccess.copy(key, off, address, len);
+      address += len;
+    }
+    UnsafeAccess.putLong(address, version);
+    address += VERSION_SIZE;
+    UnsafeAccess.putByte(address, (byte) op.ordinal());
+
+    return true;
+  }
 	/**
 	 * The method is used only during navigating through CSLM
 	 * 
@@ -227,18 +264,50 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @param len     length of a key
 	 * @param version version
 	 */
-	public void putForSearch(long keyPtr, int len, long version) {
+	void putForSearch(long keyPtr, int len, long version) {
 		this.threadSafe = true;
 		long address = this.dataPtr + DATA_BLOCK_STATIC_PREFIX;
-		UnsafeAccess.putShort(address, (short) len);
-		address += KEY_SIZE_LENGTH;
-		UnsafeAccess.copy(keyPtr, address, len);
-		address += len;
-		UnsafeAccess.putLong(address, version);
-		address += VERSION_SIZE;
-		UnsafeAccess.putByte(address, (byte) Op.DELETE.ordinal());
+		putInternal(address, keyPtr, len, version, Op.DELETE);
 	}
 
+  private long allocateKeyExternally(long keyPtr, int len) {
+    long extAddress = UnsafeAccess.malloc(len + INT_SIZE);
+    if (extAddress <= 0) {
+      // TODO allocation failure
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    UnsafeAccess.putInt(extAddress, len);
+    UnsafeAccess.copy(keyPtr, extAddress + INT_SIZE, len);
+    return extAddress;	
+  }
+  private boolean putInternal(long address, long keyPtr, int len, long version, Op op) {
+    boolean extAlloc = mustAllocateExternally(len);
+    long extAddress = 0;
+    if (extAlloc) {
+      extAddress = UnsafeAccess.malloc(len + INT_SIZE);
+      if (extAddress <= 0) {
+        // TODO allocation failure
+        return false;
+      }
+      UnsafeAccess.putInt(extAddress, len);
+      UnsafeAccess.copy(keyPtr, extAddress + INT_SIZE, len);
+    }
+
+    UnsafeAccess.putShort(address, extAlloc? (short)0:(short) len);
+    address += KEY_SIZE_LENGTH;
+    if(extAlloc) {
+      UnsafeAccess.putLong(address, extAddress);
+      address += ADDRESS_SIZE;
+    } else {
+      UnsafeAccess.copy(keyPtr, address, len);
+      address += len;
+    }
+    UnsafeAccess.putLong(address, version);
+    address += VERSION_SIZE;
+    UnsafeAccess.putByte(address, (byte) op.ordinal());
+
+    return true;
+  }
 	/**
 	 * Get atomically list of data blocks (write lock)
 	 * 
@@ -271,21 +340,45 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 
-	private final int keyLength(long blockAddress) {
-		return UnsafeAccess.toShort(blockAddress + DATA_BLOCK_STATIC_PREFIX);
+	private boolean isExternalBlock(long blockAddress) {
+	  return UnsafeAccess.toShort(blockAddress + DATA_BLOCK_STATIC_PREFIX) == 0;
 	}
-
+	
+	private final int keyLength(long blockAddress) {
+		if (isExternalBlock(blockAddress)) {
+		  long recAddress = UnsafeAccess.toLong(blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH);
+      return UnsafeAccess.toInt(recAddress);		
+    } else {
+      return UnsafeAccess.toShort(blockAddress + DATA_BLOCK_STATIC_PREFIX);
+		}
+	}
+  
+  private final int blockKeyLength(long blockAddress) {
+    if (isExternalBlock(blockAddress)) {
+      return ADDRESS_SIZE;
+    } else {
+      return UnsafeAccess.toShort(blockAddress + DATA_BLOCK_STATIC_PREFIX);
+    }
+  }
+	
 	private final long version(long blockAddress) {
-		return UnsafeAccess.toLong(blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength(blockAddress));
+		return UnsafeAccess.toLong(blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH 
+		  + blockKeyLength(blockAddress));
 	}
 
 	private final byte type(long blockAddress) {
 		return UnsafeAccess.toByte(
-				blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength(blockAddress) + VERSION_SIZE);
+				blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + blockKeyLength(blockAddress) 
+				+ VERSION_SIZE);
 	}
 
 	private final long keyAddress(long blockAddress) {
-		return blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH;
+	  if (isExternalBlock(blockAddress)) {
+	    long recAddress = UnsafeAccess.toLong(blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH);
+	    return recAddress + INT_SIZE;
+	  } else {
+	    return blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH;
+	  }
 	}
 
 	/**
@@ -425,7 +518,11 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						// get split position
 						long addr = b.splitPos(false);
 						// check if we will be able to insert new block
-						int startKeyLength = UnsafeAccess.toShort(addr);
+						int startKeyLength = DataBlock.keyLength(addr);
+						if (mustAllocateExternally(startKeyLength)) {
+						  startKeyLength = ADDRESS_SIZE;
+						}
+						
 						int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
 						if (dataSize + required > blockSize) {
 							// index block split is required
@@ -442,7 +539,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						}
 						continue;
 					} else {
-						int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+						
+					  int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+					      (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
 						if (dataSize + required > blockSize) {
 							// index block split is required
 							return false;
@@ -468,7 +567,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	private boolean insertBlock(DataBlock bb) {
 		// required space for new entry
 		int len = bb.getFirstKeyLength();
-		int required = len + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+		boolean extAlloc = mustAllocateExternally(len);
+		int required = (extAlloc? ADDRESS_SIZE:len) + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
 		if (dataSize + required > blockSize) {
 			return false;
 		}
@@ -477,12 +577,12 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		Op type = bb.getFirstKeyType();
 		long pos = search(addr, len, version, type);
 		// Get to the next index record
-		int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength(pos);
+		int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(pos);
 		pos += skip;
 
 		UnsafeAccess.copy(pos, pos + required, dataSize - (pos - dataPtr));
 		bb.register(this, pos - dataPtr);
-		/* DEBUG */ System.out.println("insert block " + bb.getDataPtr());
+		///* DEBUG */ System.out.println("insert block " + bb.getDataPtr());
 		this.dataSize += required;
 		this.numDataBlocks += 1;
 		updateFirstKey(bb);
@@ -492,15 +592,23 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	private boolean insertNewBlock(DataBlock bb, byte[] key, int off, int len, long version, Op type) {
 
 		// required space for new entry
-		int required = len + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+	  boolean extAlloc = mustAllocateExternally(len);
+	  
+		int required = (extAlloc? ADDRESS_SIZE:len) + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
 		if (dataSize + required > blockSize) {
 			return false;
 		}
 		long pos = search(key, off, len, version, type);
-		// Get to the next index record
-		int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength(pos);
-		pos += skip;
-		UnsafeAccess.copy(pos, pos + required, dataSize - (pos - dataPtr));
+		boolean insert = pos < dataPtr + dataSize;
+		if (insert) {
+		  // Get to the next index record
+		  int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(pos);
+		  pos += skip;
+		  UnsafeAccess.copy(pos, pos + required, dataSize - (pos - dataPtr));
+		} else {
+		  // append to the end of active section of index block
+		  // do nothing
+		}
 		bb.register(this, pos - dataPtr);
 		/* DEBUG */ System.out.println("insert NEW block " + bb.getDataPtr());
 		this.dataSize += required;
@@ -536,11 +644,24 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			long version, long expire) {
 		DataBlock b = new DataBlock();
 		b.register(this, 0);
-		UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
-		UnsafeAccess.copy(key, keyOffset, dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
-		UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-		UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+		if(mustAllocateExternally(keyLength)) {
+      UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) 0);
+      long addr = allocateKeyExternally(key, keyOffset, keyLength);
+      if (addr == UnsafeAccess.MALLOC_FAILED) {
+        return false;
+      }
+      UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
+      keyLength = ADDRESS_SIZE;
+      UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+        (byte) Op.PUT.ordinal());
+		} else {
+		  UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
+		  UnsafeAccess.copy(key, keyOffset, dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+		  UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+		  UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
 				(byte) Op.PUT.ordinal());
+		}
 		this.version = version;
 		this.type = (byte) Op.PUT.ordinal();
 		this.numDataBlocks++;
@@ -557,7 +678,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * 
 	 * @param block
 	 */
-	void updateFirstKey(DataBlock block) {
+	boolean updateFirstKey(DataBlock block) {
 		// TODO: handle key size change
 		// If we deleted first key in a block
 		long indexPtr = block.getIndexPtr();
@@ -565,31 +686,64 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		int keyLength = block.getFirstKeyLength();
 		long version = block.getFirstKeyVersion();
 		Op type = block.getFirstKeyType();
-		UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
-		UnsafeAccess.copy(key, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+		if (mustAllocateExternally(keyLength)) {
+      long addr = allocateKeyExternally(key, keyLength);
+      if (addr == UnsafeAccess.MALLOC_FAILED) {
+        return false;
+      }
+      UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) 0);
+      UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
+      keyLength = ADDRESS_SIZE;
+		} else {
+		  UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
+		  UnsafeAccess.copy(key, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+		}
 		UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
 		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
 				(byte) type.ordinal());
+		return true;
 	}
 
-	void updateFirstKey(long indexPtr, byte[] key, int keyOffset, int keyLength, long version, Op type) {
+	boolean updateFirstKey(long indexPtr, byte[] key, int keyOffset, int keyLength, long version, Op type) {
 		// TODO: handle key size change
 		// If we deleted first key in a block
-		UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
-		UnsafeAccess.copy(key, keyOffset, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+	  if (mustAllocateExternally(keyLength)) {
+	    long addr = allocateKeyExternally(key, keyOffset, keyLength);
+	    if (addr == UnsafeAccess.MALLOC_FAILED) {
+	      return false;
+	    }
+	    UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) 0);
+      UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
+	    keyLength = ADDRESS_SIZE;
+	  } else {
+	    UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
+	    UnsafeAccess.copy(key, keyOffset, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+	  }
 		UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
 		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
 				(byte) type.ordinal());
+		return true;
 	}
 
-	void updateFirstKey(long indexPtr, long keyPtr, int keyLength, long version, Op type) {
+	boolean updateFirstKey(long indexPtr, long keyPtr, int keyLength, long version, Op type) {
 		// TODO: handle key size change
 		// If we deleted first key in a block
-		UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
-		UnsafeAccess.copy(keyPtr, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+    if (mustAllocateExternally(keyLength)) {
+      long addr = allocateKeyExternally(keyPtr, keyLength);
+      if (addr == UnsafeAccess.MALLOC_FAILED) {
+        return false;
+      }
+      UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) 0);
+      UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
+      keyLength = ADDRESS_SIZE;
+    } else {
+      UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
+      UnsafeAccess.copy(keyPtr, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+    }
 		UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
 		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
 				(byte) type.ordinal());
+		return true;
 	}
 
 	/**
@@ -603,13 +757,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public boolean isLargerThanMax(byte[] key, int keyOffset, int keyLength, long version) {
 		// TODO: Locking is required, make sure we hold read lock
-		// try {
-		// readLock();
 		long address = search(key, keyOffset, keyLength, version, Op.PUT);
 		return address == dataPtr + getDataSize();
-		// } finally {
-		// readUnlock();
-		// }
 	}
 
 	/**
@@ -623,13 +772,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public boolean isLargerThanMax(long keyPtr, int keyLength, long version) {
 		// TODO: Locking is required, make sure we hold read lock
-		// try {
-		// readLock();
 		long address = search(keyPtr, keyLength, version, Op.PUT);
 		return address == dataPtr + getDataSize();
-		// } finally {
-		// readUnlock();
-		// }
 	}
 
 	/**
@@ -667,8 +811,11 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						// get split position
 						long addr = b.splitPos(false);
 						// check if we will be able to insert new block
-						int startKeyLength = UnsafeAccess.toShort(addr);
-						int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
+						int startKeyLength = DataBlock.keyLength(addr);
+            if (mustAllocateExternally(startKeyLength)) {
+              startKeyLength = ADDRESS_SIZE;
+            }
+            int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
 						if (dataSize + required > blockSize) {
 							// index block split is required
 							return false;
@@ -683,8 +830,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						}
 						continue;
 					} else {
-						int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
-						if (dataSize + required > blockSize) {
+					  int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+                (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
+					  if (dataSize + required > blockSize) {
 							// index block split is required
 							return false;
 						}
@@ -709,10 +857,23 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	private boolean putEmpty(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, long expire) {
 		DataBlock b = new DataBlock();
 		b.register(this, 0);
-		UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
-		UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-		UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+    if(mustAllocateExternally(keyLength)) {
+      UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) 0);
+      long addr = allocateKeyExternally(keyPtr, keyLength);
+      if (addr == UnsafeAccess.MALLOC_FAILED) {
+        return false;
+      }
+      UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
+      keyLength = ADDRESS_SIZE;
+      UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+        (byte) Op.PUT.ordinal());
+    } else {
+      UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
+      UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
 				(byte) Op.PUT.ordinal());
+    }
 		this.version = version;
 		this.type = (byte) Op.PUT.ordinal();
 		UnsafeAccess.copy(keyPtr, dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
@@ -737,7 +898,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 		try {
 			while (count++ < numDataBlocks) {
-				short keylen = (short) keyLength(ptr);
+				int keylen =  keyLength(ptr);
 				int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
 				if (res < 0) {
 					if (prevPtr == NOT_FOUND) {
@@ -767,6 +928,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 					}
 				}
 				prevPtr = ptr;
+				if (isExternalBlock(ptr)) {
+				  keylen = ADDRESS_SIZE;
+				}
 				ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
 			}
 			// last data block
@@ -787,7 +951,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
   long searchForGet(byte[] key, int keyOffset, int keyLength, long start) {
     long ptr = start;
-    short keylen = (short) keyLength(ptr);
+    short keylen = isExternalBlock(ptr)? ADDRESS_SIZE: (short) keyLength(ptr);
     ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
     if (ptr >= this.dataPtr + this.dataSize) {
       return NOT_FOUND;
@@ -875,12 +1039,14 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			readLock();
 			long ptr = blck != null ? blck.getIndexPtr() : getAddress();
 			int keyLength = blck.getFirstKeyLength();
+			if (mustAllocateExternally(keyLength)) {
+			  keyLength = ADDRESS_SIZE;
+			}
 			if (ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength >= dataPtr + dataSize) {
 				// last block
 				return null;
 			}
 			DataBlock b = block.get();
-			// b.reset();
 			b.set(this, ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength - dataPtr);
 			return b;
 		} finally {
@@ -902,7 +1068,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 		try {
 			while (count++ < numDataBlocks) {
-				short keylen = (short) keyLength(ptr);
+				int keylen =  keyLength(ptr);
 				int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
 				if (res < 0) {
 					if (prevPtr == NOT_FOUND) {
@@ -931,6 +1097,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 					}
 				}
 				prevPtr = ptr;
+				if (isExternalBlock(ptr)) {
+          keylen = ADDRESS_SIZE;
+        }
 				ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
 			}
 			// last data block
@@ -953,7 +1122,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
   long searchForGet(long keyPtr, int keyLength, long start) {
     long ptr = start;
 
-    short keylen = (short) keyLength(ptr);
+    short keylen = isExternalBlock(ptr)? ADDRESS_SIZE: (short) keyLength(ptr);
     ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
     if (ptr >= this.dataPtr + this.dataSize) {
       return NOT_FOUND;
@@ -1023,7 +1192,10 @@ public class IndexBlock implements Comparable<IndexBlock> {
           // get split position
           long addr = b.splitPos(false);
           // check if we will be able to insert new block
-          int startKeyLength = UnsafeAccess.toShort(addr);
+          int startKeyLength = DataBlock.keyLength(addr);
+          if (mustAllocateExternally(startKeyLength)) {
+            startKeyLength = ADDRESS_SIZE;
+          }
           int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
           if (dataSize + required > blockSize) {
             // index block split is required
@@ -1041,7 +1213,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
         } else {
           // We can not split block and can delete directly
           // we need to *add* delete tombstone to a new block
-          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+              (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
+          
           if (dataSize + required > blockSize) {
             // index block split is required
             return OpResult.SPLIT_REQUIRED;
@@ -1117,7 +1291,10 @@ public class IndexBlock implements Comparable<IndexBlock> {
           // get split position
           long addr = b.splitPos(false);
           // check if we will be able to insert new block
-          int startKeyLength = UnsafeAccess.toShort(addr);
+          int startKeyLength = DataBlock.keyLength(addr);
+          if (mustAllocateExternally(startKeyLength)) {
+            startKeyLength = ADDRESS_SIZE;
+          }
           int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
           if (dataSize + required > blockSize) {
             // index block split is required
@@ -1135,7 +1312,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
         } else {
           // We can not split block and can not delete directly
           // we need to *add* delete tomb stone to a new block
-          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + 
+              (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
           if (dataSize + required > blockSize) {
             // index block split is required
             return OpResult.SPLIT_REQUIRED;
@@ -1451,11 +1629,45 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public void free() {
 		// TODO: deallocate data blocks
+	  deallocateBlocks();
+	  // deallocate large keys
+	  deallocateLargeKeys();
 		UnsafeAccess.free(dataPtr);
 		valid = false;
 	}
 
-	@Override
+	private void deallocateLargeKeys() {
+    long ptr = dataPtr;
+    int count = 0;
+    try {
+      while (count++ < numDataBlocks) {
+        int keylen =  keyLength(ptr);
+        
+        if (isExternalBlock(ptr)) {
+          long recAddress = UnsafeAccess.toLong(ptr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH);
+          UnsafeAccess.free(recAddress);
+          keylen = ADDRESS_SIZE;
+        }
+        ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+      }
+      // last data block
+    } finally {
+      checkPointer(ptr);
+    }    
+  }
+
+  private void deallocateBlocks() {
+	  DataBlock prev = null;
+	  DataBlock curr = null;
+	  while((curr = nextBlock(prev)) != null) {
+	    if (prev != null) {
+	      prev.free();
+	    }
+	    prev = curr;
+	  }
+  }
+
+  @Override
 	public int compareTo(IndexBlock o) {
 		if (this == o)
 			return 0;
@@ -1483,7 +1695,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 		try {
 			readLock();
-			short keylen = (short) keyLength(dataPtr);
+			int keylen =  keyLength(dataPtr);
 			byte[] buf = new byte[keylen];
 			UnsafeAccess.copy(keyAddress(dataPtr), buf, 0, buf.length);
 			firstKey = buf;

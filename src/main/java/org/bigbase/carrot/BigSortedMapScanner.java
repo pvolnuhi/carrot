@@ -194,6 +194,7 @@ public class BigSortedMapScanner implements Closeable{
   @Override
   public void close() throws IOException {
     // do nothing yet
+    this.indexScanner.close();
   }
   
 }

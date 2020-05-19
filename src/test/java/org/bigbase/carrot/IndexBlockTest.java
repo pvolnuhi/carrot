@@ -2,6 +2,7 @@ package org.bigbase.carrot;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,10 +11,11 @@ import java.util.Random;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IndexBlockTest {
-  
-  int kvSize = 32;
+  Logger LOG = LoggerFactory.getLogger(IndexBlockTest.class);
   
   @Test
   public void testPutGet() {
@@ -21,15 +23,14 @@ public class IndexBlockTest {
     IndexBlock ib = getIndexBlock(4096);
     ArrayList<byte[]> keys = fillIndexBlock(ib);
     Utils.sort(keys);
-    byte[] value = new byte[kvSize];
-    System.out.println("INDEX_BLOCK");  
+    byte[] value = null;
     for(byte[] key: keys) {
+      value = new byte[key.length];
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-      assertTrue(size == kvSize);
+      assertTrue(size == value.length);
       int res = Utils.compareTo(key, 0, key.length, value, 0, value.length);
       assertEquals(0, res);
     }
-    System.out.println("testPutGet OK");  
   }
 
   @Test
@@ -38,14 +39,15 @@ public class IndexBlockTest {
     IndexBlock ib = getIndexBlock(4096);
     ArrayList<byte[]> keys = fillIndexBlock(ib);
     Utils.sort(keys);
-    byte[] value = new byte[kvSize];
+    byte[] value = null;
     int found = 0;
-    System.out.println("INDEX_BLOCK DUMP:");  
+    //System.out.println("INDEX_BLOCK DUMP:");  
     for(byte[] key: keys) {
-      System.out.println("Get found"+(++found) +" "+ Bytes.toHex(key));  
+      value = new byte[key.length];
+      //System.out.println("Get found"+(++found) +" "+ Bytes.toHex(key));  
 
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-      assertTrue(size == kvSize);
+      assertTrue(size == value.length);
       int res = Utils.compareTo(key, 0, key.length, value, 0, value.length);
       assertEquals(0, res);
 
@@ -58,17 +60,17 @@ public class IndexBlockTest {
       
       OpResult result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
       if (result != OpResult.OK) {
-        System.out.println("Not found for delete: "+(++found) +" "+ Bytes.toHex(key));  
+        System.err.println("Not found for delete: "+(++found) +" "+ Bytes.toHex(key));  
         long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-        if (size != kvSize) {
-          System.out.println("Get failed with return=" + size);
+        if (size != key.length) {
+          fail("Get failed with return=" + size);
         } else {
-          System.out.println("Get OK with return=" + size);
+          System.err.println("Get OK with return=" + size);
         }
         result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
       }
       assertEquals(OpResult.OK, result);
-      System.out.println("Deleted "+(++found) +" "+ Bytes.toHex(key));  
+      //System.out.println("Deleted "+(++found) +" "+ Bytes.toHex(key));  
 
       // try again
       result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
@@ -89,12 +91,13 @@ public class IndexBlockTest {
     IndexBlock ib = getIndexBlock(4096);
     ArrayList<byte[]> keys = fillIndexBlock(ib);
     Utils.sort(keys);
-    byte[] value = new byte[kvSize];
+    byte[] value = null;
     System.out.println("INDEX_BLOCK DUMP:");  
 
     for(byte[] key: keys) {
+      value = new byte[key.length];
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-      assertTrue(size == kvSize);
+      assertTrue(size == value.length);
       int res = Utils.compareTo(key, 0, key.length, value, 0, value.length);
       assertEquals(0, res);
     }
@@ -111,17 +114,19 @@ public class IndexBlockTest {
     }
     // Now try get them
     for(byte[] key: toDelete) {
+      value = new byte[key.length];
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
       assertTrue(size == DataBlock.NOT_FOUND);
     }
     // Now get the rest
     for(byte[] key: keys.subList(keys.size()/2, keys.size())) {
+      value = new byte[key.length];
+
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-      assertTrue(size == kvSize);
+      assertTrue(size == value.length);
       int res = Utils.compareTo(key, 0, key.length, value, 0, value.length);
       assertEquals(0, res);
     }
-    System.out.println("testPutGetDeletePartial OK");
   } 
   
   
@@ -132,10 +137,10 @@ public class IndexBlockTest {
     return ib;
   }
   
-  private ArrayList<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
+  protected ArrayList<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
-
+    int kvSize = 32;
     boolean result = true;
     while(true) {
       byte[] key = new byte[kvSize];

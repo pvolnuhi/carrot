@@ -3,7 +3,9 @@ package org.bigbase.carrot;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -36,35 +38,34 @@ public class DataBlockTest {
     System.out.println("Total inserted ="+ keys.size());
     int found = 0;
     long start = System.currentTimeMillis();
-    for(int i = 0 ; i < 10000000; i++) {
+    for(int i = 0 ; i < 100000; i++) {
       int index = r.nextInt(keys.size());
       byte[] key = keys.get(index);
-      long off = b.get(key,  0,  key.length, Long.MAX_VALUE);
-      if(off > 0) found++;
+      byte[] value = new byte[key.length];
+      long size = b.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
+      assertTrue(size == value.length);
+      assertEquals(0, Utils.compareTo(key, 0, key.length, 
+        value, 0, value.length));
+      found++;
     }
     System.out.println("Total found ="+ found + " in "+(System.currentTimeMillis() - start) +"ms");
     System.out.println("Rate = "+(1000d * found)/(System.currentTimeMillis() - start) +" RPS");
 
   }
-
+  
   @Test
-  public void testScanAfterDelete() throws RetryOperationException
+  public void testScanAfterDelete() throws RetryOperationException, IOException
   {
     System.out.println("testScanAfterDelete");
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
     scanAndVerify(b, keys);
     byte[] fk = b.getFirstKey();
-    b.delete(fk, 0, fk.length, Long.MAX_VALUE);
+    OpResult res = b.delete(fk, 0, fk.length, Long.MAX_VALUE);
+    assertEquals(OpResult.OK, res);
     System.out.println("delete done");
-    //Random r = new Random();
-    //int toDelete = r.nextInt(keys.size());
-    List<byte[]> newKeys = remove(keys, fk);//delete(b, keys, 1);
-    System.out.println("Total deleted ="+ 1);
-
+    List<byte[]> newKeys = remove(keys, fk);
     scanAndVerify(b, newKeys);
-    System.out.println("testScanAfterDelete DONE");
-
   }
   
   
@@ -80,13 +81,12 @@ public class DataBlockTest {
     nkeys.remove(index);
     return nkeys;
   }
-
+   
   @Test
-  public void testDataBlockPutScan() throws RetryOperationException {
+  public void testDataBlockPutScan() throws RetryOperationException, IOException {
     System.out.println("testDataBlockPutScan");
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
-    System.out.println("Total inserted ="+ keys.size());
     long start = System.currentTimeMillis();
     byte[] buffer = new byte[keys.get(0).length * 2];
     int N = 1000000;
@@ -99,20 +99,19 @@ public class DataBlockTest {
         count++;
       }
       assertEquals(keys.size(), count);
+      bs.close();
 
     }
     System.out.println("Rate = "+(1000d * N * keys.size())/(System.currentTimeMillis() - start) +" RPS");
 
   }
-  
-  //@Ignore
+   
   @Test
   public void testDataBlockPutDelete() throws RetryOperationException {
     System.out.println("testDataBlockPutDelete");
 
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
-    System.out.println("Total inserted ="+ keys.size());
     
     for (byte[] key: keys) {
       OpResult result = b.delete(key, 0, key.length, Long.MAX_VALUE);
@@ -127,13 +126,13 @@ public class DataBlockTest {
 
   }
   
+   
   @Test
-  public void testDataBlockSplit() throws RetryOperationException {
+  public void testDataBlockSplit() throws RetryOperationException, IOException {
     System.out.println("testDataBlockSplit");
 
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
-    System.out.println("Total inserted ="+ keys.size());
     int totalKVs = keys.size();
     int totalDataSize = b.getDataSize();
     DataBlock bb = b.split(true);
@@ -152,19 +151,18 @@ public class DataBlockTest {
     assertNotNull(f2);
     assertTrue (Utils.compareTo(f1, 0, f1.length, f2, 0, f2.length) < 0);
     
-    scanAndVerify(bb, keys.get(0).length);
-    scanAndVerify(b, keys.get(0).length);
+    scanAndVerify(bb);
+    scanAndVerify(b);
 
   }
   
-  
+   
   @Test
-  public void testDataBlockMerge() throws RetryOperationException {
+  public void testDataBlockMerge() throws RetryOperationException, IOException {
     System.out.println("testDataBlockMerge");
 
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
-    System.out.println("Total inserted ="+ keys.size());
     int totalKVs = keys.size();
     int totalDataSize = b.getDataSize();
     DataBlock bb = b.split(true);
@@ -188,18 +186,17 @@ public class DataBlockTest {
     assertEquals(totalKVs, (int)b.getNumberOfRecords());
     assertEquals(totalDataSize, (int)b.getDataSize());
     
-    scanAndVerify(b, keys.get(0).length);
+    scanAndVerify(b);
     
   }
   
-  
+   
   @Test
   public void testCompactionFull() throws RetryOperationException {
     System.out.println("testCompactionFull");
 
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
-    System.out.println("Total inserted ="+ keys.size());
     
     for (byte[] key: keys) {
       OpResult result = b.delete(key, 0, key.length, Long.MAX_VALUE);
@@ -212,14 +209,13 @@ public class DataBlockTest {
     for (byte[] key: keys) {
       long result = b.get(key, 0, key.length, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
-    }
-    
+    }    
     b.compact(false);
-    
     assertTrue (b.getFirstKey() == null);    
 
   }
   
+   
   @Test
   public void testCompactionPartial() throws RetryOperationException {
     System.out.println("testCompactionPartial");
@@ -252,22 +248,24 @@ public class DataBlockTest {
 
   }
   
+   
   @Test
-  public void testOrderedInsertion() throws RetryOperationException {
+  public void testOrderedInsertion() throws RetryOperationException, IOException {
     System.out.println("testOrderedInsertion");
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
-    System.out.println("Total inserted =" + keys.size());
-    scanAndVerify(b, keys.get(0).length);
+    scanAndVerify(b, keys);
   }
   
-  private void scanAndVerify(DataBlock b, int keyLength) throws RetryOperationException {
-    byte[] buffer = new byte[keyLength];
-    byte[] tmp = new byte[keyLength];
+  private void scanAndVerify(DataBlock b) throws RetryOperationException, IOException {
+    byte[] buffer = null;
+    byte[] tmp = null;
 
     DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
     int count = 0;
     while (bs.hasNext()) {
+      int len = bs.keySize();
+      buffer = new byte[len];
       bs.key(buffer, 0);
       bs.next();
       count++;
@@ -276,43 +274,39 @@ public class DataBlockTest {
         int res = Utils.compareTo(tmp, 0, tmp.length, buffer, 0, buffer.length);
         assertTrue (res < 0);
       }
+      tmp = new byte[buffer.length];
       System.arraycopy(buffer, 0, tmp, 0, tmp.length);
     }
+    bs.close();
     System.out.println("Scanned ="+ count);
   }
   
-  private List<byte[]> delete(DataBlock b, List<byte[]> keys, int num) {
-    List<byte[]> list = new ArrayList<byte[]>(keys);
-    Random r = new Random();
-    for(int i = 0; i < num; i++) {
-      //int n = r.nextInt(list.size());
-      byte[] key = list.remove(0);
-      OpResult res = b.delete(key, 0, key.length, Long.MAX_VALUE);
-      assertTrue(res == OpResult.OK);
-    }
-    return list;
-  }
   
-  private void scanAndVerify(DataBlock b, List<byte[]> keys) throws RetryOperationException {
-    int keyLength = keys.get(0).length;
-    byte[] buffer = new byte[keyLength];
-    byte[] tmp = new byte[keyLength];
-
-    DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
-    int count = 0;
-    while (bs.hasNext()) {
-      bs.key(buffer, 0);
-      assertTrue(contains(buffer, keys));
-      bs.next();
-      count++;
-      if (count > 1) {
-        // compare
-        int res = Utils.compareTo(tmp, 0, tmp.length, buffer, 0, buffer.length);
-        assertTrue (res < 0);
+  private void scanAndVerify(DataBlock b, List<byte[]> keys) 
+      throws RetryOperationException, IOException {
+    byte[] buffer = null;
+    byte[] tmp = null;
+    try (DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);) {
+      int count = 0;
+      while (bs.hasNext()) {
+        int len = bs.keySize();
+        buffer = new byte[len];
+        bs.key(buffer, 0);
+        
+        boolean result = contains(buffer, keys);
+        assertTrue(result);
+        bs.next();
+        count++;
+        if (count > 1) {
+          // compare
+          int res = Utils.compareTo(tmp, 0, tmp.length, buffer, 0, buffer.length);
+          assertTrue(res < 0);
+        }
+        tmp = new byte[len];
+        System.arraycopy(buffer, 0, tmp, 0, tmp.length);
       }
-      System.arraycopy(buffer, 0, tmp, 0, tmp.length);
+      assertEquals(keys.size(), count);
     }
-    assertEquals(keys.size(), count);
   }
   
   private boolean contains(byte[] key, List<byte[]> keys) {
@@ -324,7 +318,8 @@ public class DataBlockTest {
     return false;
   }
   
-  //@Ignore
+  
+   
   @Test
   public void testDataBlockPutAfterDelete() throws RetryOperationException {
     System.out.println("testDataBlockPutAfterDelete");
@@ -332,7 +327,16 @@ public class DataBlockTest {
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
     
-    byte[] key = new byte[32];
+    int dataSize = b.getDataSize();
+    int blockSize = b.getBlockSize();
+    int avail = blockSize - dataSize - DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (avail >= blockSize/2) {
+      System.out.println("Skip test");
+      return;
+    } else if (avail < 0) {
+      avail = 62;
+    }
+    byte[] key = new byte[avail/2 +1];
     Random r = new Random();
     r.nextBytes(key);
     
@@ -342,19 +346,26 @@ public class DataBlockTest {
     
     // Delete one record
     byte[] oneKey = keys.get(0);
+        
     OpResult res = b.delete(oneKey, 0, oneKey.length, Long.MAX_VALUE);
-    
+    dataSize = b.getDataSize();
+    blockSize = b.getBlockSize();
+    avail = blockSize - dataSize;
     assertEquals(OpResult.OK, res);
     
     // Try insert one more time
     // Try to insert
+    int reqSize = DataBlock.mustStoreExternally(key.length, key.length)? DataBlock.RECORD_TOTAL_OVERHEAD + 12:
+      2*key.length + DataBlock.RECORD_TOTAL_OVERHEAD;
+    boolean expResult = reqSize < avail ? true: false;
     result = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
-    assertEquals(true, result);            
+    assertEquals(expResult, result);            
 
   }
   
+   
   @Test
-  public void testOverwriteOnUpdateEnabled() throws RetryOperationException {
+  public void testOverwriteOnUpdateEnabled() throws RetryOperationException, IOException {
     System.out.println("testOverwriteOnUpdateEnabled");
 
     DataBlock b = getDataBlock();
@@ -366,47 +377,107 @@ public class DataBlockTest {
     
     assertEquals(keys.size(), (int)b.getNumberOfRecords());
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-    
-    // Delete  5 first
-    for (int i = 0; i < 5; i++) {
+
+    // Delete some
+    int numRecords = b.getNumberOfRecords();
+    int toDelete = numRecords/2;
+    if (toDelete == 0) {
+      // bypass test
+      return;
+    }
+    for (int i = 0; i < toDelete; i++) {
       byte[] key = keys.get(i);
       OpResult res = b.delete(key, 0, key.length, Long.MAX_VALUE);
       assertTrue(res == OpResult.OK);
 
     }
-    
-    keys =  keys.subList(5, keys.size());
+
+    keys =  keys.subList(toDelete, keys.size());
     assertEquals(keys.size(), (int)b.getNumberOfRecords());
 
     scanAndVerify(b, keys);
 
     ArrayList<byte[]> kkeys = new ArrayList<byte[]>();
     // Now insert existing keys with val/2
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < keys.size(); i++) {
       byte[] key = keys.get(i);
-      b.put(key, 0, key.length, key, 0, key.length/2, 0, 0);
+
+      long addr = b.get(key, 0, key.length, Long.MAX_VALUE);
+      int oldValLen = DataBlock.valueLength(addr);
+
+      boolean res = b.put(key, 0, key.length, key, 0, key.length/2, 0, 0);
+      // With large K-Vs we not always able to insert all k-v
+      if (res == false) {
+        if (isValidFailure(b, key, key.length, key.length/2, oldValLen)) {
+          continue;
+        } else {
+          fail("FAIL");
+        }
+      }
+      byte[] val = new byte[key.length/2];
+      long size = b.get(key, 0, key.length, val, 0, Long.MAX_VALUE);
+      assertEquals(val.length, (int)size);
+      verifyGets(b, keys);
+      scanAndVerify(b, keys);
       kkeys.add(key);
     }
     assertEquals(keys.size(), (int)b.getNumberOfRecords());
-    
     scanAndVerify(b, keys);
-    
     // Now insert existing keys with original value
-        
     for (byte[] key: kkeys) {
+      long addr = b.get(key, 0, key.length, Long.MAX_VALUE);
+      assertTrue(addr > 0);
+      int oldValLen = DataBlock.valueLength(addr);
+
       boolean res = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
+      if (res == false) {
+        if (isValidFailure(b, key, key.length, key.length, oldValLen)) {
+          continue;
+        } else {
+          fail("FAIL");
+        }
+      }
+      byte[] val = new byte[key.length];
+      long size = b.get(key,  0,  key.length, val, 0, Long.MAX_VALUE);
+      assertEquals(val.length, (int)size);
       assertTrue(res);
     }    
+
     assertEquals(keys.size(), (int)b.getNumberOfRecords());
-    //assertEquals(0, b.getNumberOfDeletedAndUpdatedRecords());
-    scanAndVerify(b, keys);
-    
+    scanAndVerify(b, keys);    
 
   }
+  private void verifyGets(DataBlock b, List<byte[]> keys) {
+    for(byte[] key: keys) {
+      long address = b.get(key, 0, key.length, Long.MAX_VALUE);
+      
+      assertTrue(address>0);
+      int klen = DataBlock.keyLength(address);
+      int vlen = DataBlock.valueLength(address);
+      assertEquals(key.length, klen);
+      byte[] buf = new byte[vlen];
+      long size = b.get(key, 0, key.length, buf, 0, Long.MAX_VALUE);
+      assertEquals(vlen, (int)size);
+    }
+  }
+  private boolean isValidFailure(DataBlock b, byte[] key, int keyLen, int valLen, int oldValLen) {
+    int dataSize = b.getDataSize();
+    int blockSize = b.getBlockSize();
+    int newRecSize = keyLen + valLen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (DataBlock.mustStoreExternally(keyLen, valLen)) {
+      newRecSize = 12 + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    int oldRecSize = keyLen + oldValLen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (DataBlock.mustStoreExternally(keyLen, oldValLen)) {
+      oldRecSize = 12 + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
     
-  
+    return dataSize + newRecSize -oldRecSize > blockSize;
+  }
+ 
+   
   @Test
-  public void testFirstKey() {
+  public void testFirstKey() throws IOException {
     System.out.println("testFirstKey");
 
     DataBlock b = getDataBlock();
@@ -420,19 +491,23 @@ public class DataBlockTest {
     scanner.key(key, 0);
     byte[] kkey = b.getFirstKey();
     assertTrue(Utils.compareTo(key, 0, key.length, kkey, 0, kkey.length) == 0);
+    // Close scanner - this will release read lock on a block
+    scanner.close();
+    
     OpResult res = b.delete(kkey, 0, kkey.length, Long.MAX_VALUE);
     assertEquals( OpResult.OK, res);
-    //kkey = b.getFirstKey();
-    //assertTrue(Utils.compareTo(key, 0, key.length, kkey, 0, kkey.length) == 0);   
     kkey = b.getFirstKey();   
     scanner = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
     // It will skip deleted
+    keySize = scanner.keySize();    
+    key = new byte[keySize];   
     scanner.key(key, 0);    
-    assertTrue(Utils.compareTo(key, 0, key.length, kkey, 0, kkey.length) == 0);    
+    assertTrue(Utils.compareTo(key, 0, key.length, kkey, 0, kkey.length) == 0); 
+    scanner.close();
   }
     
   
-  private ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
+  protected ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
 

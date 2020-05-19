@@ -3,19 +3,29 @@ package org.bigbase.carrot;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import org.junit.Ignore;
 import org.junit.Test;
 
-public class DataBlockTestRaw {
+public class DataBlockDirectMemoryTest {
 
-  int keyLength = 32;
-  int valueLength = 32;
+  class Key {
+    long address;
+    int size;
+    
+    Key(long address, int size){
+      this.address = address;
+      this.size = size;
+    }
+  }
   
   static IndexBlock ib = new IndexBlock(4096);
   
@@ -28,16 +38,17 @@ public class DataBlockTestRaw {
   public void testBlockPutGet() throws RetryOperationException {
     System.out.println("testBlockPutGet");
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     Random r = new Random();
 
     System.out.println("Total inserted ="+ keys.size());
     int found = 0;
     long start = System.currentTimeMillis();
-    int n = 10000000;
+    int n = 1000000;
     for(int i = 0 ; i < n; i++) {
       int index = r.nextInt(keys.size());
-      long keyPtr = keys.get(index);
+      long keyPtr = keys.get(index).address;
+      int keyLength = keys.get(index).size;
       long off = b.get(keyPtr,  keyLength, Long.MAX_VALUE);
       int res = Utils.compareTo(DataBlock.keyAddress(off), keyLength, keyPtr, keyLength);
       assertTrue(res == 0);
@@ -107,13 +118,14 @@ public class DataBlockTestRaw {
   }
   
   @Test
-  public void testBlockPutScan() throws RetryOperationException {
+  public void testBlockPutScan() throws RetryOperationException, IOException {
     System.out.println("testBlockPutScan");
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     long start = System.currentTimeMillis();
-    long buffer = UnsafeAccess.malloc(keyLength + valueLength);
+    
+    long buffer = UnsafeAccess.malloc(16384);
     int N = 1000000;
     for(int i = 0 ; i < N; i++) {
       DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
@@ -124,6 +136,7 @@ public class DataBlockTestRaw {
         count++;
       }
       assertEquals(keys.size(), count);
+      bs.close();
 
     }
     b.free();
@@ -138,17 +151,17 @@ public class DataBlockTestRaw {
     System.out.println("testBlockPutDelete");
 
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     
-    for (Long key: keys) {
-      OpResult result = b.delete(key, keyLength, Long.MAX_VALUE);
+    for (Key key: keys) {
+      OpResult result = b.delete(key.address, key.size, Long.MAX_VALUE);
       assertEquals(OpResult.OK, result);
     }
     
     assertEquals(0, (int)b.getNumberOfRecords());
-    for (Long key: keys) {
-      long result = b.get(key, keyLength, Long.MAX_VALUE);
+    for (Key key: keys) {
+      long result = b.get(key.address, key.size, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
     }
     b.free();
@@ -158,11 +171,11 @@ public class DataBlockTestRaw {
   
   //@Ignore
   @Test
-  public void testBlockSplit() throws RetryOperationException {
+  public void testBlockSplit() throws RetryOperationException, IOException {
     System.out.println("testBlockSplit");
 
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     int totalKVs = keys.size();
     int totalDataSize = b.getDataSize();
@@ -182,8 +195,8 @@ public class DataBlockTestRaw {
     assertNotNull(f2);
     assertTrue (Utils.compareTo(f1, 0, f1.length, f2, 0, f2.length) < 0);
     
-    scanAndVerify(bb, keyLength);
-    scanAndVerify(b, keyLength);
+    scanAndVerify(bb);
+    scanAndVerify(b);
     b.free();
     bb.free();
     System.out.println("testBlockSplit DONE");
@@ -192,11 +205,11 @@ public class DataBlockTestRaw {
   
   //@Ignore
   @Test
-  public void testBlockMerge() throws RetryOperationException {
+  public void testBlockMerge() throws RetryOperationException, IOException {
     System.out.println("testBlockMerge");
 
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     int totalKVs = keys.size();
     int totalDataSize = b.getDataSize();
@@ -220,14 +233,14 @@ public class DataBlockTestRaw {
     assertEquals(totalKVs, (int)b.getNumberOfRecords());
     assertEquals(totalDataSize, (int)b.getDataSize());
     
-    scanAndVerify(b, keyLength);
+    scanAndVerify(b);
     System.out.println("testBlockMerge after scanAndVerify");
 
     b.free();
     System.out.println("testBlockMerge FREE b");
 
     //TODO: fix this later
-    bb.free();
+//    bb.free();
     System.out.println("testBlockMerge FREE bb");
 
     System.out.println("testBlockMerge DONE");
@@ -241,18 +254,18 @@ public class DataBlockTestRaw {
     System.out.println("testCompactionFull");
 
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     
-    for (Long key: keys) {
-      OpResult result = b.delete(key, keyLength, Long.MAX_VALUE);
+    for (Key key: keys) {
+      OpResult result = b.delete(key.address, key.size, Long.MAX_VALUE);
       assertEquals(OpResult.OK, result);
     }
     
     assertEquals(0, (int)b.getNumberOfRecords());
     
-    for (Long key: keys) {
-      long result = b.get(key, keyLength, Long.MAX_VALUE);
+    for (Key key: keys) {
+      long result = b.get(key.address, key.size, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
     }
     
@@ -271,14 +284,14 @@ public class DataBlockTestRaw {
     System.out.println("testCompactionPartial");
 
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     
     Random r = new Random();
-    ArrayList<Long> deletedKeys = new ArrayList<Long>();
-    for (Long key: keys) {
+    ArrayList<Key> deletedKeys = new ArrayList<Key>();
+    for (Key key: keys) {
       if( r.nextDouble() < 0.5) {
-        OpResult result = b.delete(key, keyLength, Long.MAX_VALUE);
+        OpResult result = b.delete(key.address, key.size, Long.MAX_VALUE);
         assertEquals(OpResult.OK, result);
         deletedKeys.add(key);
       }
@@ -286,8 +299,8 @@ public class DataBlockTestRaw {
     
     assertEquals(keys.size() - deletedKeys.size(), (int)b.getNumberOfRecords());
     
-    for (Long key: deletedKeys) {
-      long result = b.get(key, keyLength, Long.MAX_VALUE);
+    for (Key key: deletedKeys) {
+      long result = b.get(key.address, key.size, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
     }
     
@@ -302,72 +315,74 @@ public class DataBlockTestRaw {
   }
   
   @Test
-  public void testOrderedInsertion() throws RetryOperationException {
+  public void testOrderedInsertion() throws RetryOperationException, IOException {
     System.out.println("testOrderedInsertion");
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     System.out.println("Total inserted =" + keys.size());
-    scanAndVerify(b, keyLength);
+    scanAndVerify(b, keys);
     b.free();
     System.out.println("testOrderedInsertion DONE");
 
   }
   
-  private void scanAndVerify(DataBlock b, int keyLength) throws RetryOperationException {
-    long buffer = UnsafeAccess.malloc(keyLength);
-    long tmp = UnsafeAccess.malloc(keyLength);
+  private void scanAndVerify(DataBlock b) throws RetryOperationException, IOException {
+    long buffer ;
+    long tmp =0;
 
     DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+    int prevKeySize=0;
     int count = 0;
     while (bs.hasNext()) {
-      bs.key(buffer, keyLength);
+      int keySize = bs.keySize();
+      buffer = UnsafeAccess.malloc(keySize);
+      bs.key(buffer, keySize);
       bs.next();
       count++;
       if (count > 1) {
         // compare
-        int res = Utils.compareTo(tmp, keyLength, buffer, keyLength);
+        int res = Utils.compareTo(tmp, prevKeySize, buffer, keySize);
         assertTrue (res < 0);
+        UnsafeAccess.free(tmp);
       }
-      UnsafeAccess.copy(buffer, tmp, keyLength);
+      tmp = buffer;
+      prevKeySize = keySize;
     }
-    UnsafeAccess.free(buffer);
     UnsafeAccess.free(tmp);
-    
+    bs.close();
     System.out.println("Scanned ="+ count);
   }
-  
-  private void dumpAddress(long addr, int n) {
-    for (int i=0; i < n; i++) {
-      System.out.print(UnsafeAccess.toByte(addr + i) +" ");
-    }
-    System.out.println();
-  }
-  
-  private void scanAndVerify(DataBlock b, List<Long> keys) throws RetryOperationException {
-    long buffer = UnsafeAccess.malloc(keyLength);
-    long tmp = UnsafeAccess.malloc(keyLength);
+
+  private void scanAndVerify(DataBlock b, List<Key> keys) 
+      throws RetryOperationException, IOException {
+    long buffer = 0;
+    long tmp = 0;
 
     DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
     int count = 0;
+    int prevKeySize = 0;
     while (bs.hasNext()) {
-      bs.key(buffer, keyLength);
-      assertTrue(contains(buffer, keys));
+      int keySize = bs.keySize();
+      buffer = UnsafeAccess.malloc(keySize);
+      bs.key(buffer, keySize);
+      assertTrue(contains(buffer,keySize, keys));
       bs.next();
       count++;
       if (count > 1) {
         // compare
-        int res = Utils.compareTo(tmp, keyLength, buffer, keyLength);
+        int res = Utils.compareTo(tmp, prevKeySize, buffer, keySize);
         assertTrue (res < 0);
       }
-      UnsafeAccess.copy(buffer, tmp, keyLength);
+      tmp = buffer;
+      prevKeySize = keySize;
     }
-    UnsafeAccess.free(buffer);
     UnsafeAccess.free(tmp);
+    bs.close();
   }
   
-  private boolean contains(long key, List<Long> keys) {
-    for (Long k : keys) {
-      if (Utils.compareTo(k, keyLength, key, keyLength) == 0) {
+  private boolean contains(long key, int keySize, List<Key> keys) {
+    for (Key k : keys) {
+      if (Utils.compareTo(k.address, k.size, key, keySize) == 0) {
         return true;
       }
     }
@@ -380,96 +395,163 @@ public class DataBlockTestRaw {
     System.out.println("testBlockPutAfterDelete");
 
     DataBlock b = getDataBlock();
-    ArrayList<Long> keys = fillBlock(b);
+    ArrayList<Key> keys = fillBlock(b);
     
-    byte[] key = new byte[32];
-    Random r = new Random();
-    r.nextBytes(key);
-    long tmp = UnsafeAccess.malloc(keyLength);
-    UnsafeAccess.copy(key, 0, tmp, keyLength);
+    int dataSize = b.getDataSize();
+    int blockSize = b.getBlockSize();
+    int avail = blockSize - dataSize - DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (avail >= blockSize/2) {
+      System.out.println("Skip test");
+      return;
+    } else if (avail < 0) {
+      avail = 62;
+    }
+    long key = UnsafeAccess.malloc(avail/2 +1);
+    int size = avail/2 + 1;
+    
     // Try to insert
-    boolean result = b.put(tmp, keyLength, tmp, keyLength, Long.MAX_VALUE, 0);
+    boolean result = b.put(key, size, key, size, 0, 0);
     assertEquals(false, result);
     
     // Delete one record
-    long oneKey = keys.get(0);
-    OpResult res = b.delete(oneKey, keyLength, Long.MAX_VALUE);
-    
+    Key oneKey = keys.get(0);
+        
+    OpResult res = b.delete(oneKey.address, oneKey.size, Long.MAX_VALUE);
+    dataSize = b.getDataSize();
+    blockSize = b.getBlockSize();
+    avail = blockSize - dataSize;
     assertEquals(OpResult.OK, res);
     
     // Try insert one more time
     // Try to insert
-    result = b.put(tmp, keyLength, tmp, keyLength, Long.MAX_VALUE, 0 );
-    assertEquals(true, result);      
+    int reqSize = DataBlock.mustStoreExternally(size, size)? DataBlock.RECORD_TOTAL_OVERHEAD + 12:
+      2 * size + DataBlock.RECORD_TOTAL_OVERHEAD;
+    boolean expResult = reqSize < avail ? true: false;
+    result = b.put(key, size, key, size, 0, 0);
+    assertEquals(expResult, result); 
     b.free();
-    System.out.println("testBlockPutAfterDelete DONE");
 
   }
   
+  @Ignore
   @Test
-  public void testOverwriteOnUpdateEnabled() throws RetryOperationException {
+  public void loopNext() throws RetryOperationException, IOException {
+    for(int i=1; i < 100000; i++) {
+      testOverwriteOnUpdateEnabled();
+    }
+  }
+  
+  
+  @Test
+  public void testOverwriteOnUpdateEnabled() throws RetryOperationException, IOException {
     System.out.println("testOverwriteOnUpdateEnabled");
 
     DataBlock b = getDataBlock();
-    List<Long> keys = fillBlock(b);
-    for( long key: keys) {
-      boolean res = b.put(key, keyLength, key, keyLength, Long.MAX_VALUE, 0);
+    List<Key> keys = fillBlock(b);
+    for( Key key: keys) {
+      boolean res = b.put(key.address, key.size, key.address, key.size, Long.MAX_VALUE, 0);
       assertTrue(res);
     }
     
     assertEquals(keys.size(), (int)b.getNumberOfRecords());
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
-    // Delete  5 first
-    for (int i = 0; i < 5; i++) {
-      long key = keys.get(i);
-      OpResult res = b.delete(key, keyLength, Long.MAX_VALUE);
+    int toDelete = keys.size()/2;
+    
+    // Delete  first
+    for (int i = 0; i < toDelete; i++) {
+      Key key = keys.get(i);
+      OpResult res = b.delete(key.address, key.size, Long.MAX_VALUE);
       assertTrue(res == OpResult.OK);
 
     }
-    keys =  keys.subList(5, keys.size());
+    keys =  keys.subList(toDelete, keys.size());
     assertTrue(keys.size() == b.getNumberOfRecords());
     scanAndVerify(b, keys);
-    ArrayList<Long> kkeys = new ArrayList<Long>();
     // Now insert existing keys with val/2
-    for (int i = 0; i < 5; i++) {
-      long key = keys.get(i);
-      b.put(key, keyLength, key, keyLength/2, Long.MAX_VALUE, 0);
-      kkeys.add(key);
+    for (int i = 0; i < keys.size(); i++) {
+      Key key = keys.get(i);
+      long addr = b.get(key.address, key.size, Long.MAX_VALUE);
+      int oldValLen = DataBlock.valueLength(addr);
+      boolean res = b.put(key.address, key.size, key.address, key.size/2, Long.MAX_VALUE, 0);
+      if (res == false) {
+        if (isValidFailure(b, key, key.size/2, oldValLen)) {
+          continue;
+        } else {
+          fail("FAIL");
+        }
+      }
     }
+    verifyGets(b, keys);
+    scanAndVerify(b, keys);
     assertEquals(keys.size(), (int)b.getNumberOfRecords());
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-    scanAndVerify(b, keys);
     // Now insert existing keys with original value
-    for (long key: kkeys) {
-      boolean res = b.put(key, keyLength, key, keyLength, Long.MAX_VALUE, 0);
+    for (Key key: keys) {
+      long addr = b.get(key.address, key.size, Long.MAX_VALUE);
+      assertTrue(addr > 0);
+      int oldValLen = DataBlock.valueLength(addr);
+      boolean res = b.put(key.address, key.size, key.address, key.size, Long.MAX_VALUE, 0);
+      if (res == false) {
+        if (isValidFailure(b, key, key.size, oldValLen)) {
+          continue;
+        } else {
+          fail("FAIL");
+        }
+      }
       assertTrue(res);
     }    
     assertEquals(keys.size(), (int)b.getNumberOfRecords());
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     scanAndVerify(b, keys);
     b.free();
-    System.out.println("testOverwriteOnUpdateEnabled DONE");
 
   }
     
-  private ArrayList<Long> fillBlock (DataBlock b) throws RetryOperationException {
-    ArrayList<Long> keys = new ArrayList<Long>();
+  protected ArrayList<Key> fillBlock (DataBlock b) throws RetryOperationException {
+    ArrayList<Key> keys = new ArrayList<Key>();
     Random r = new Random();
-
+    int keyLength = 32;
     boolean result = true;
     while(result == true) {
-      byte[] key = new byte[32];
+      byte[] key = new byte[keyLength];
       r.nextBytes(key);
       long ptr = UnsafeAccess.malloc(keyLength);
       UnsafeAccess.copy(key, 0, ptr, keyLength);
       result = b.put(key, 0, key.length, key, 0, key.length, Long.MAX_VALUE, 0);
       if(result) {
-        keys.add(ptr);
+        keys.add(new Key(ptr, keyLength));
       }
     }
     System.out.println("M: "+ DataBlock.getTotalAllocatedMemory() +" D:"+DataBlock.getTotalDataSize());
     return keys;
   }
   
+  private void verifyGets(DataBlock b, List<Key> keys) {
+    for(Key key: keys) {
+      long address = b.get(key.address, key.size, Long.MAX_VALUE);
+      
+      assertTrue(address > 0);
+      int klen = DataBlock.keyLength(address);
+      int vlen = DataBlock.valueLength(address);
+      assertEquals(key.size, klen);
+      long buf = UnsafeAccess.malloc(vlen);
+      long size = b.get(key.address, key.size, buf, vlen, Long.MAX_VALUE);
+      assertEquals(vlen, (int)size);
+    }
+  }
+  private boolean isValidFailure(DataBlock b,  Key key, int valLen, int oldValLen) {
+    int dataSize = b.getDataSize();
+    int blockSize = b.getBlockSize();
+    int newRecSize = key.size + valLen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (DataBlock.mustStoreExternally(key.size, valLen)) {
+      newRecSize = 12 + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    int oldRecSize = key.size + oldValLen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (DataBlock.mustStoreExternally(key.size, oldValLen)) {
+      oldRecSize = 12 + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    
+    return dataSize + newRecSize -oldRecSize > blockSize;
+  }
 }

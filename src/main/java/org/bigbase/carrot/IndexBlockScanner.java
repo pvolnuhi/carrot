@@ -107,6 +107,7 @@ public final class IndexBlockScanner implements Closeable{
     this.startRow = null;
     this.stopRow = null;
     this.indexBlock = null;
+    
     this.curDataBlockScanner = null;
     this.snapshotId = 0;
   }
@@ -189,6 +190,14 @@ public final class IndexBlockScanner implements Closeable{
     
   private DataBlockScanner nextBlockScannerInternal() {
     // No checks are required
+    if(this.curDataBlockScanner != null) {
+      try {
+        this.curDataBlockScanner.close();
+      } catch (IOException e) {
+        //TODO Auto-generated catch block
+        //e.printStackTrace();
+      }
+    }
     this.blockIndex++;
     DataBlock b = blockList.get().get(this.blockIndex);
     this.curDataBlockScanner =
@@ -199,5 +208,13 @@ public final class IndexBlockScanner implements Closeable{
   @Override
   public void close() throws IOException {
     // do nothing yet
+    if(this.curDataBlockScanner != null) {
+      try {
+        this.curDataBlockScanner.close();
+      } catch (IOException e) {
+        //TODO Auto-generated catch block
+        //e.printStackTrace();
+      }
+    }
   }
 }
