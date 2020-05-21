@@ -25,6 +25,7 @@ public class BigSortedMapTest {
     while(true) {
       byte[] key = ("KEY"+ (totalLoaded)).getBytes();
       byte[] value = ("VALUE"+ (totalLoaded)).getBytes();
+      /*DEBUG*/System.out.println(totalLoaded);
       boolean res = map.put(key, 0, key.length, value, 0, value.length, 0);
       if (res == false) {
         totalLoaded--;

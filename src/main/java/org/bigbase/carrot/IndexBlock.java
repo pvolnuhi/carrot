@@ -1,6 +1,5 @@
 package org.bigbase.carrot;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -187,7 +186,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	byte[] firstKey;
 	long version;
 	byte type;
-
+  boolean isFirst = false;
 	/**
 	 * Constructor
 	 * 
@@ -205,6 +204,16 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		this.blockSize = (short) size;
 	}
 
+	void setFirstIndexBlock() {
+    byte[] kk = new byte[] { (byte) 0};
+    put(kk, 0, kk.length, kk, 0, kk.length, Long.MAX_VALUE, Op.DELETE.ordinal());
+    this.isFirst = true;
+	}
+	// TODO; first system {0}{0}?
+	boolean isFirstIndexBlock() {
+	  return this.isFirst;
+	}
+	
 	/**
 	 * The method is used only during navigating through CSLM
 	 * 
@@ -308,37 +317,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
     return true;
   }
-	/**
-	 * Get atomically list of data blocks (write lock)
-	 * 
-	 * @param input list of data blocks to initialize (all are MAX_SIZE)
-	 * @return number of data blocks in this index block
-	 */
-	public int getDataBlocks(List<DataBlock> list) {
-
-		try {
-			writeLock();
-			int size = list.size();
-			if (size < this.numDataBlocks) {
-				for (int i = 0; i < this.numDataBlocks - size; i++) {
-					list.add(new DataBlock());
-				}
-			}
-			DataBlock block = firstBlock();
-			if (block == null) {
-				return 0;
-			} else {
-				Iterator<DataBlock> it = list.iterator();
-				do {
-					DataBlock db = it.next();
-					db.copyOf(block);
-				} while ((block = nextBlock(block)) != null);
-			}
-			return this.numDataBlocks;
-		} finally {
-			writeUnlock();
-		}
-	}
 
 	private boolean isExternalBlock(long blockAddress) {
 	  return UnsafeAccess.toShort(blockAddress + DATA_BLOCK_STATIC_PREFIX) == 0;
@@ -418,6 +396,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		this.firstKey = null;
 		this.version = 0;
 		this.type = 0;
+		this.isFirst = false;
 	}
 
 	/**
@@ -526,7 +505,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
 						if (dataSize + required > blockSize) {
 							// index block split is required
-							return false;
+							/*DEBUG*/ System.out.println("dataSize="+ dataSize+" required="+ required+" blockSize=" + blockSize);
+						  return false;
 						}
 						// Do not enforce compaction, it was done already during put
 						DataBlock right = b.split(false);
@@ -1037,6 +1017,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 		try {
 			readLock();
+			if (blck == null) {
+			  return firstBlock();
+			}
 			long ptr = blck != null ? blck.getIndexPtr() : getAddress();
 			int keyLength = blck.getFirstKeyLength();
 			if (mustAllocateExternally(keyLength)) {
@@ -1551,8 +1534,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			int recCount = 0;
 
 			// Now we should have zero deleted records
-			while (recCount < this.numDataBlocks) {
-				short keylen = (short) keyLength(ptr);
+			while (recCount < this.numDataBlocks/2) {
+				short keylen = (short) blockKeyLength(ptr);
 				ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
 				recCount++;
 			}
@@ -1560,9 +1543,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			int oldNumRecords = this.numDataBlocks;
 			this.dataSize = (short) (ptr - dataPtr);
 			this.numDataBlocks = (short) recCount;
-			int leftDataSize = oldDataSize - this.dataSize;
-			int leftBlockSize = getMinSizeGreaterThan(getBlockSize(), leftDataSize);
-			IndexBlock right = new IndexBlock(leftBlockSize);
+			int rightBlockSize = this.blockSize;//getMinSizeGreaterThan(getBlockSize(), leftDataSize);
+			IndexBlock right = new IndexBlock(rightBlockSize);
 
 			right.numDataBlocks = (short) (oldNumRecords - this.numDataBlocks);
 			right.dataSize = (short) (oldDataSize - this.dataSize);
@@ -1656,6 +1638,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
     }    
   }
 
+	//TODO : IS IT SAFE?
   private void deallocateBlocks() {
 	  DataBlock prev = null;
 	  DataBlock curr = null;

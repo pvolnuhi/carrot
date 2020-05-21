@@ -10,7 +10,7 @@ public class DataBlockDirectMemoryLargeKVsTest extends DataBlockDirectMemoryTest
   
   protected ArrayList<Key> fillBlock (DataBlock b) throws RetryOperationException {
     ArrayList<Key> keys = new ArrayList<Key>();
-    Random r = new Random(-1790016925600082812L);
+    Random r = new Random();
 //    long seed = r.nextLong();
 //    r.setSeed(seed);
 //    System.out.println("seed="+seed);

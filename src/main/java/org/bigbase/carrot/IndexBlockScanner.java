@@ -2,8 +2,6 @@ package org.bigbase.carrot;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.bigbase.carrot.util.Utils;
 
@@ -27,7 +25,7 @@ public final class IndexBlockScanner implements Closeable{
   byte[] stopRow; // EXCLUSIVE  
   
   /*
-   * Index block to scan
+   * Index block to scan: readLock index block
    */
   private IndexBlock indexBlock;
   
@@ -36,15 +34,6 @@ public final class IndexBlockScanner implements Closeable{
    */
   private DataBlockScanner curDataBlockScanner;
   
-  /*
-   * Start index in a list of a data blocks
-   */
-  int blockIndex = 0;
-  
-  /*
-   * Stop index in a list of data blocks (if any)
-   */
-  int stopIndex = -1;
   
   /*
    * Snapshot Id
@@ -52,9 +41,11 @@ public final class IndexBlockScanner implements Closeable{
   private long snapshotId;
   
   /*
-   * Number of data blocks in the index block
+   * Current data block 
    */
-  private int numBlocks = 0;
+  private DataBlock currentDataBlock;
+  
+  private boolean closed = false;
   
   /*
    * Thread local for scanner instance
@@ -66,14 +57,6 @@ public final class IndexBlockScanner implements Closeable{
     }    
   };
   
-  static ThreadLocal<List<DataBlock>> blockList = new ThreadLocal<List<DataBlock>>() {
-
-    @Override
-    protected List<DataBlock> initialValue() {
-      // TODO Auto-generated method stub
-      return new ArrayList<DataBlock>();
-    }
-  };
   
   private static IndexBlockScanner getScanner(IndexBlock b, long snapshotId) 
       throws RetryOperationException {
@@ -92,10 +75,18 @@ public final class IndexBlockScanner implements Closeable{
       if (res > 0) {
         return null; // out of range
       }
+    }    
+    try {     
+      // Lock index block   
+      b.readLock();
+      IndexBlockScanner bs = getScanner(b, snapshotId);
+      bs.setStartStopRows(startRow, stopRow);
+      return bs;
+    }catch (Throwable t) {
+      //TODO log error
+      b.readUnlock();
+      throw new RuntimeException(t);
     }
-    IndexBlockScanner bs = getScanner(b, snapshotId);
-    bs.setStartStopRows(startRow, stopRow);
-    return bs;
   }
   /** 
    * Private ctor
@@ -109,37 +100,29 @@ public final class IndexBlockScanner implements Closeable{
     this.indexBlock = null;
     
     this.curDataBlockScanner = null;
+    this.currentDataBlock = null;
     this.snapshotId = 0;
+    this.closed = false;
   }
   
-  //TODO - change
   private void setStartStopRows(byte[] start, byte[] stop) {
     this.startRow = start;
     this.stopRow = stop;
+    // Returns IndexBlock thread local
     DataBlock b = this.startRow != null
-        ? indexBlock.searchBlock(blockList.get(), this.startRow, 0, this.startRow.length,
+        ? indexBlock.searchBlock( this.startRow, 0, this.startRow.length,
           snapshotId, Op.DELETE)
-        : blockList.get().get(0);
+        : indexBlock.firstBlock();
+        
+    this.currentDataBlock = b;
     if (b == null) {
       // FATAL
       throw new RuntimeException("Index block scanner");
     }
-    // Set start index
-    this.blockIndex = blockList.get().indexOf(b);
-    this.curDataBlockScanner =
-        DataBlockScanner.getScanner(b, this.startRow, this.stopRow, snapshotId);
-    // Set stop index
-    if (this.stopRow != null) {
-      DataBlock bb = indexBlock.searchBlock(blockList.get(), this.stopRow, 0, this.stopRow.length, snapshotId, 
-        Op.DELETE);
-      if (bb == null) {
-        // FATAL
-        throw new RuntimeException("Index block scanner");
-      }
-      this.stopIndex = blockList.get().indexOf(bb);
-    }
+
   }
  
+
   /**
    * Set scanner with new block
    * @param b block
@@ -147,74 +130,74 @@ public final class IndexBlockScanner implements Closeable{
    */
   private void setBlock(IndexBlock b) throws RetryOperationException {
     this.indexBlock = b;
-    List<DataBlock> list = blockList.get();
-    this.numBlocks = b.getDataBlocks(list);
-    blockList.set(list);
   }
   
-  /**
-   * Check if has next
-   * @return true, false
-   */
-  public final boolean hasNextBlockScanner() {
-	  if (this.blockIndex == this.numBlocks -1) {
-	    return false;
-	  }
-	  
-	  if (this.stopIndex >=0) {
-	    return this.blockIndex < this.stopIndex;
-	  } else {
-	    return true;
-	  }
-  }
+
   
   /**
    * Advance scanner by one data block
    * @return data block scanner or null
    */
   public final DataBlockScanner nextBlockScanner() {
-    if (this.blockIndex == this.numBlocks - 1) {
+    // No checks are required
+    if (isClosed()) {
       return null;
     }
-    if (this.stopIndex >=0) {
-      if (this.blockIndex < this.stopIndex) {
-        return nextBlockScannerInternal();
-      } else {
-        return null;
-      }
-    } else {
-      return nextBlockScannerInternal();
-    }
-  }
-  
-    
-  private DataBlockScanner nextBlockScannerInternal() {
-    // No checks are required
-    if(this.curDataBlockScanner != null) {
+    if (this.curDataBlockScanner != null) {
       try {
         this.curDataBlockScanner.close();
+        this.curDataBlockScanner = null;
       } catch (IOException e) {
-        //TODO Auto-generated catch block
-        //e.printStackTrace();
       }
-    }
-    this.blockIndex++;
-    DataBlock b = blockList.get().get(this.blockIndex);
-    this.curDataBlockScanner =
-        DataBlockScanner.getScanner(b, this.startRow, this.stopRow, snapshotId);
-    return this.curDataBlockScanner;
-  }
+      this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock);
 
+      if (this.currentDataBlock == null) {
+        this.closed = true;
+        return null;
+      }
+      
+      //TODO: check stopRow, version and op
+      if(stopRow != null) {
+        if (this.currentDataBlock.compareTo(stopRow, 0, stopRow.length, 0, Op.DELETE) < 0) {
+          this.currentDataBlock = null;
+          this.closed = true;
+          return null;
+        }
+      }
+      this.curDataBlockScanner =
+          DataBlockScanner.getScanner(this.currentDataBlock, this.startRow, this.stopRow, snapshotId);
+      return this.curDataBlockScanner;
+    } else if(!closed){
+      this.curDataBlockScanner =
+          DataBlockScanner.getScanner(this.currentDataBlock, this.startRow, this.stopRow, snapshotId);
+      if (this.indexBlock.isFirstIndexBlock() && this.startRow == null &&
+          this.curDataBlockScanner != null) {
+        // skip system first entry : {0}{0}
+        this.curDataBlockScanner.next();
+      }
+      return this.curDataBlockScanner;
+    } else {
+      return null;
+    }
+  }
+    
+  public boolean isClosed() {
+    return this.closed;
+  }
   @Override
   public void close() throws IOException {
     // do nothing yet
+    closed = true;
     if(this.curDataBlockScanner != null) {
       try {
         this.curDataBlockScanner.close();
       } catch (IOException e) {
-        //TODO Auto-generated catch block
-        //e.printStackTrace();
+        
       }
+    }
+    // Unlock index block
+    if (indexBlock != null) {
+      indexBlock.readUnlock();
     }
   }
 }

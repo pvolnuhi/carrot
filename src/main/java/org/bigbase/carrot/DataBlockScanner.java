@@ -60,7 +60,7 @@ public final class DataBlockScanner implements Closeable{
   /*
    * Thread local for memory buffer
    */
-  static ThreadLocal<Long> memory = new ThreadLocal<Long>(); 
+  //static ThreadLocal<Long> memory = new ThreadLocal<Long>(); 
   /*
    * Thread local for scanner instance
    */
@@ -71,14 +71,6 @@ public final class DataBlockScanner implements Closeable{
     }    
   };
       
-  public static DataBlockScanner getScanner(DataBlock b, long snapshotId) 
-      throws RetryOperationException {
-    DataBlockScanner bs = scanner.get();
-    bs.reset();
-    bs.setBlock(b);
-    bs.setSnapshotId(snapshotId);
-    return bs;
-  }
   
   public static DataBlockScanner getScanner(DataBlock b, byte[] startRow, byte[] stopRow,
       long snapshotId) throws RetryOperationException {
@@ -188,36 +180,37 @@ public final class DataBlockScanner implements Closeable{
    */
   private void setBlock(DataBlock b) throws RetryOperationException {
     
-	  boolean needLock = false;
+	  //boolean needLock = false;
     try {
 
       b.readLock();
-      needLock = b.hasLargeKVs();
-      if (needLock) {
+      //needLock = b.hasLargeKVs();
+      //if (needLock) {
         db = b;
-      }
+      //  System.out.println("NEED LOCK");
+      //}
       this.blockSize = BigSortedMap.maxBlockSize;
       this.dataSize = b.getDataSize();
       this.numRecords = b.getNumberOfRecords();
       this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
-      if (!needLock) {
-        if (memory.get() == null) {
-          this.ptr = UnsafeAccess.malloc(this.blockSize);
-          // TODO handle allocation failure
-          memory.set(ptr);
-        } else {
-          this.ptr = memory.get();
-        }
-        UnsafeAccess.copy(b.getAddress(), this.ptr, this.dataSize);
-      } else {
+//      if (!needLock) {
+//        if (memory.get() == null) {
+//          this.ptr = UnsafeAccess.malloc(this.blockSize);
+//          // TODO handle allocation failure
+//          memory.set(ptr);
+//        } else {
+//          this.ptr = memory.get();
+//        }
+//        UnsafeAccess.copy(b.getAddress(), this.ptr, this.dataSize);
+//      } else {
         this.ptr = b.getAddress(); 
-      }
+//      }
       this.curPtr = this.ptr;
 
     } finally {
-      if (!needLock) {
-        b.readUnlock();
-      }
+//      if (!needLock) {
+//        b.readUnlock();
+//      }
     }
 
   }
@@ -239,8 +232,8 @@ public final class DataBlockScanner implements Closeable{
     if (this.curPtr - this.ptr >= this.dataSize) {
       return false;
     } else if (stopRow != null) {
-      int res = DataBlock.compareTo(this.curPtr, stopRow, 0, stopRow.length, Long.MAX_VALUE, Op.DELETE);
-      if (res >= 0) {
+      int res = DataBlock.compareTo(this.curPtr, stopRow, 0, stopRow.length, 0, Op.DELETE);
+      if (res > 0) {
         return true;
       } else {
         return false;
@@ -262,9 +255,12 @@ public final class DataBlockScanner implements Closeable{
       int keylen = DataBlock.blockKeyLength(this.curPtr);
       int vallen = DataBlock.blockValueLength(this.curPtr);
       this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+      if(this.curPtr - this.ptr >= this.dataSize) {
+        return false;
+      }
       if (stopRow != null) {
-        int res = DataBlock.compareTo(this.curPtr, stopRow, 0, stopRow.length, Long.MAX_VALUE, Op.DELETE);
-        if (res >= 0) {
+        int res = DataBlock.compareTo(this.curPtr, stopRow, 0, stopRow.length, 0, Op.DELETE);
+        if (res > 0) {
           return true;
         } else {
           return false;
@@ -470,6 +466,7 @@ public final class DataBlockScanner implements Closeable{
   public void close() throws IOException {
     if (db != null) {
       db.readUnlock();
+      db = null;
     }
   }
 }

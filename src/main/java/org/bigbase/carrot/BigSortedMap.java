@@ -191,7 +191,7 @@ public class BigSortedMap {
 	  if (off < 0 || off >= buf.length) {
 		  throw new IllegalArgumentException("illegal offset: "+ off);
 	  }
-	  if (len <=0 || len>= buf.length - off) {
+	  if (len <=0 || len > buf.length - off) {
 		  throw new IllegalArgumentException("illegal length: "+ len);
 
 	  }
@@ -232,11 +232,14 @@ public class BigSortedMap {
           // In sequential pattern of puts, we do not need to split
           // but need to add new block with a given K-V
           IndexBlock bb = null;
+          /*DEBUG*/System.out.println("First key="+ new String(b.getFirstKey()));
+
           if (b.isLargerThanMax(key, keyOffset, keyLength, version)) {
             bb = new IndexBlock(maxIndexBlockSize);
             // FIXME: if below assumption of a successful operation safe?
             bb.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
           } else {
+            /*DEBUG*/ System.out.println("SPLIT");
             bb = b.split();
             isSplit = true;
           }
@@ -544,8 +547,8 @@ public class BigSortedMap {
           b = b == null ? map.firstKey() : map.ceilingKey(b);
           if (b == null) return null;
           IndexBlockScanner scanner = IndexBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
-          while (scanner.hasNextBlockScanner()) {
-            DataBlockScanner sc = scanner.nextBlockScanner();
+          DataBlockScanner sc = null;
+          while ((sc = scanner.nextBlockScanner()) != null) {
             int keySize = sc.keySize();
             byte[] key = new byte[keySize];
             sc.key(key, 0);

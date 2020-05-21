@@ -631,29 +631,6 @@ public class DataBlock  {
     return UnsafeAccess.toByte(indexPtr + auxOffset) & 7;
   }
   
-  /**
-   * Does this block has large K-V allocated outside?
-   * @return true if has, false otherwise
-   */
-  public boolean hasLargeKVs() {
-    return (UnsafeAccess.toByte(indexPtr + auxOffset) & 8) != 0;
-
-  }
-  /**
-   * TODO: do we need counter?
-   * Sets large K-Vs
-   * @param b true or false
-   */
-  public void setHasLargeKVs(boolean b) {
-    int v = UnsafeAccess.toByte(indexPtr + auxOffset);
-    if (b) {
-      v |= 8;
-    } else {
-      v &= 0xf7;
-    }
-    UnsafeAccess.putByte(indexPtr + auxOffset, (byte)v);
-    UnsafeAccess.storeFence();
-  }
   
   /**
    * Sets compression codec id (0-7)
@@ -957,7 +934,6 @@ public class DataBlock  {
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
     UnsafeAccess.copy(valuePtr, recAddress + 2*INT_SIZE + keyLength, valueLength);
-    setHasLargeKVs(true);
     return recAddress;
   }
   
@@ -979,7 +955,6 @@ public class DataBlock  {
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(key, keyOffset, recAddress + 2 * INT_SIZE, keyLength);
     UnsafeAccess.copy(value, valueOffset, recAddress + 2 * INT_SIZE + keyLength, valueLength);
-    setHasLargeKVs(true);
     return recAddress;
   }
   
