@@ -1,5 +1,7 @@
 package org.bigbase.carrot;
 
+import java.io.IOException;
+
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -32,7 +34,7 @@ public class BigSortedMapPerfTest {
   }
   
   @Test
-  public void testCountRecords() {
+  public void testCountRecords() throws IOException {
     System.out.println("testCountRecords");
     int n = 100;
     long start = System.currentTimeMillis();
@@ -45,7 +47,7 @@ public class BigSortedMapPerfTest {
     System.out.println( totalScanned * 1000 / (end -start) + " RPS");
   }
   
-  long countRecords() {
+  long countRecords() throws IOException {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long counter = 0;
     while(scanner.hasNext()) {

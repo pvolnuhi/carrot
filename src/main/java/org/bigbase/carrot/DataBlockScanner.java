@@ -250,6 +250,8 @@ public final class DataBlockScanner implements Closeable{
    * @return true, false
    */
   public final boolean next() {
+    //*DEBUG*/ System.out.println("next");
+    //Thread.dumpStack();
     skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr < this.dataSize) {
       int keylen = DataBlock.blockKeyLength(this.curPtr);

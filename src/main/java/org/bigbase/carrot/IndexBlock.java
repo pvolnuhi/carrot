@@ -1,8 +1,9 @@
 package org.bigbase.carrot;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -62,15 +63,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 
-	static ThreadLocal<Long> bufPtr = new ThreadLocal<Long>() {
-
-		@Override
-		protected Long initialValue() {
-			int maxSize = BigSortedMap.getMaxBlockSize() + 80;
-			return UnsafeAccess.malloc(maxSize);
-		}
-
-	};
 
 	static ThreadLocal<DataBlock> block = new ThreadLocal<DataBlock>() {
 
@@ -88,6 +80,21 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 	};
 
+	static ThreadLocal<Long> keyBuffer = new ThreadLocal<Long>() {
+	  @Override 
+	  protected Long initialValue() {
+	    long ptr = UnsafeAccess.malloc(64*1024);
+	    return ptr;
+	  }
+	};
+	
+	static ThreadLocal<Integer> keyBufferSize = new ThreadLocal<Integer>() {
+	  @Override
+	  protected Integer initialValue() {
+	    return 64 * 1024;
+	  }
+	};
+	
 	/*
 	 * TODO: make this configurable
 	 */
@@ -137,7 +144,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 	
 	static boolean mustAllocateExternally(int len) {
-	  return len >= MAX_BLOCK_SIZE/2;
+	  return len +DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH >= MAX_BLOCK_SIZE/2;
 	}
 	/*
 	 * Index block address (current)
@@ -206,7 +213,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 	void setFirstIndexBlock() {
     byte[] kk = new byte[] { (byte) 0};
-    put(kk, 0, kk.length, kk, 0, kk.length, Long.MAX_VALUE, Op.DELETE.ordinal());
+    put(kk, 0, kk.length, kk, 0, kk.length, -1, Op.PUT.ordinal());
     this.isFirst = true;
 	}
 	// TODO; first system {0}{0}?
@@ -225,19 +232,40 @@ public class IndexBlock implements Comparable<IndexBlock> {
   void putForSearch(byte[] key, int off, int len, long version) {
 		this.threadSafe = true;
 		long address = this.dataPtr + DATA_BLOCK_STATIC_PREFIX;
+		checkKeyBuffer(len);
 		putInternal(address, key, off, len, version, Op.DELETE);
 	}
 
+  void releaseFromSearch() {
+//    if (isExternalBlock(dataPtr)) {
+//      UnsafeAccess.free(getExternalAllocationAddress(dataPtr));
+//      largeKVs.decrementAndGet();
+//    }
+  }
 	
   private long allocateKeyExternally(byte[] key, int off, int len) {
-    long extAddress = UnsafeAccess.malloc(len + INT_SIZE);
+    long extAddress = isThreadSafe()? keyBuffer.get(): UnsafeAccess.malloc(len + INT_SIZE);
     if (extAddress <= 0) {
       // TODO allocation failure
       return UnsafeAccess.MALLOC_FAILED;
     }
     UnsafeAccess.putInt(extAddress, len);
     UnsafeAccess.copy(key, off, extAddress + INT_SIZE, len);
+    if (!isThreadSafe()) {
+      largeKVs.incrementAndGet();
+    }
     return extAddress;
+  }
+  
+  private void checkKeyBuffer(int required) {
+    if (required > keyBufferSize.get()) {
+      // Deallocate existing
+      UnsafeAccess.free(keyBuffer.get());
+      // Allocate new
+      long ptr = UnsafeAccess.malloc(required);
+      keyBuffer.set(ptr);
+      keyBufferSize.set(required);
+    }
   }
   
   private boolean putInternal(long address, byte[] key, int off, int len, long version, Op op) {
@@ -276,14 +304,18 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	void putForSearch(long keyPtr, int len, long version) {
 		this.threadSafe = true;
 		long address = this.dataPtr + DATA_BLOCK_STATIC_PREFIX;
+		checkKeyBuffer(len);
 		putInternal(address, keyPtr, len, version, Op.DELETE);
 	}
 
   private long allocateKeyExternally(long keyPtr, int len) {
-    long extAddress = UnsafeAccess.malloc(len + INT_SIZE);
+    long extAddress = isThreadSafe()? keyBuffer.get():UnsafeAccess.malloc(len + INT_SIZE);
     if (extAddress <= 0) {
       // TODO allocation failure
       return UnsafeAccess.MALLOC_FAILED;
+    }
+    if (!isThreadSafe()) {
+      largeKVs.incrementAndGet();
     }
     UnsafeAccess.putInt(extAddress, len);
     UnsafeAccess.copy(keyPtr, extAddress + INT_SIZE, len);
@@ -293,13 +325,10 @@ public class IndexBlock implements Comparable<IndexBlock> {
     boolean extAlloc = mustAllocateExternally(len);
     long extAddress = 0;
     if (extAlloc) {
-      extAddress = UnsafeAccess.malloc(len + INT_SIZE);
-      if (extAddress <= 0) {
-        // TODO allocation failure
+      extAddress = allocateKeyExternally(keyPtr, len);
+      if (extAddress == UnsafeAccess.MALLOC_FAILED) {
         return false;
       }
-      UnsafeAccess.putInt(extAddress, len);
-      UnsafeAccess.copy(keyPtr, extAddress + INT_SIZE, len);
     }
 
     UnsafeAccess.putShort(address, extAlloc? (short)0:(short) len);
@@ -359,6 +388,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	  }
 	}
 
+	private final long getExternalAllocationAddress(long blockAddress) {
+	  return UnsafeAccess.toLong(blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH);
+	}
 	/**
 	 * Set thread safe
 	 * 
@@ -397,8 +429,15 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		this.version = 0;
 		this.type = 0;
 		this.isFirst = false;
+		this.threadSafe = false;
+		this.valid = true;
 	}
 
+	public void invalidate() {
+	  valid = false;
+	}
+	
+	
 	/**
 	 * Read lock
 	 * 
@@ -407,12 +446,16 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public void readLock() throws RetryOperationException {
 		// TODO: optimize, loop until success
+
 		if (isThreadSafe())
 			return;
 		long before = this.seqNumberSplitOrMerge;
 		int index = (hashCode() % locks.length);
 		ReentrantReadWriteLock lock = locks[index];
 		lock.readLock().lock();
+    if (!isValid()) {
+      throw new RetryOperationException();
+    }
 		long after = this.seqNumberSplitOrMerge;
 		if (before != after) {
 			throw new RetryOperationException();
@@ -437,13 +480,17 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @throws InterruptedException
 	 */
 	public void writeLock() throws RetryOperationException {
-		// Optimize: loop until success
+
+	  // Optimize: loop until success
 		if (isThreadSafe())
 			return;
 		long before = this.seqNumberSplitOrMerge;
 		int index = (hashCode() % locks.length);
 		ReentrantReadWriteLock lock = locks[index];
 		lock.writeLock().lock();
+    if (!isValid()) {
+      throw new RetryOperationException();
+    }
 		long after = this.seqNumberSplitOrMerge;
 		if (before != after) {
 			throw new RetryOperationException();
@@ -505,7 +552,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
 						if (dataSize + required > blockSize) {
 							// index block split is required
-							/*DEBUG*/ System.out.println("dataSize="+ dataSize+" required="+ required+" blockSize=" + blockSize);
+							//*DEBUG*/ System.out.println("dataSize="+ dataSize+" required="+ required+" blockSize=" + blockSize);
 						  return false;
 						}
 						// Do not enforce compaction, it was done already during put
@@ -562,10 +609,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 		UnsafeAccess.copy(pos, pos + required, dataSize - (pos - dataPtr));
 		bb.register(this, pos - dataPtr);
-		///* DEBUG */ System.out.println("insert block " + bb.getDataPtr());
 		this.dataSize += required;
 		this.numDataBlocks += 1;
-		updateFirstKey(bb);
+		setFirstKey(bb);
 		return true;
 	}
 
@@ -590,30 +636,40 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		  // do nothing
 		}
 		bb.register(this, pos - dataPtr);
-		/* DEBUG */ System.out.println("insert NEW block " + bb.getDataPtr());
+		//* DEBUG */ System.out.println("insert NEW block " + bb.getDataPtr());
 		this.dataSize += required;
 		this.numDataBlocks += 1;
 		// set first key
-		updateFirstKey(pos, key, off, len, version, type);
+		setFirstKey(pos, key, off, len, version, type);
 		return true;
 	}
 
 	private boolean insertNewBlock(DataBlock bb, long key, int len, long version, Op type) {
-		// required space for new entry
-		int required = len + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
-		if (dataSize + required > blockSize) {
-			return false;
-		}
-		long pos = search(key, len, version, type);
-		// Get to the next index record
-		int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength(pos);
-		pos += skip;
-		UnsafeAccess.copy(pos, pos + required, dataSize - (pos - dataPtr));
-		bb.register(this, pos - dataPtr);
-		this.dataSize += required;
-		this.numDataBlocks += 1;
-		updateFirstKey(pos, key, len, version, type);
-		return true;
+    // required space for new entry
+    boolean extAlloc = mustAllocateExternally(len);
+    
+    int required = (extAlloc? ADDRESS_SIZE:len) + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+    if (dataSize + required > blockSize) {
+      return false;
+    }
+    long pos = search(key, len, version, type);
+    boolean insert = pos < dataPtr + dataSize;
+    if (insert) {
+      // Get to the next index record
+      int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(pos);
+      pos += skip;
+      UnsafeAccess.copy(pos, pos + required, dataSize - (pos - dataPtr));
+    } else {
+      // append to the end of active section of index block
+      // do nothing
+    }
+    bb.register(this, pos - dataPtr);
+    //* DEBUG */ System.out.println("insert NEW block " + bb.getDataPtr());
+    this.dataSize += required;
+    this.numDataBlocks += 1;
+    // set first key
+    setFirstKey(pos, key, len, version, type);
+    return true;
 	}
 
 	public boolean canSplit() {
@@ -649,16 +705,150 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		return b.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
 	}
 
-	private boolean isEmpty() {
-		return numDataBlocks == 0;
+	public boolean isEmpty() {
+		return this.numDataBlocks == 0;
 	}
 
+  
+	boolean tryUpdateFirstKey(DataBlock block) {
+
+    long indexPtr = block.getIndexPtr();
+    short klen = DataBlock.blockKeyLength(block.dataPtr);
+    short vlen = DataBlock.blockValueLength(block.dataPtr);
+    long address = block.dataPtr;
+    address += klen + vlen + DataBlock.RECORD_TOTAL_OVERHEAD;
+
+    int keyLength = DataBlock.keyLength(address);
+    int available = this.blockSize - this.dataSize;
+    int curKeyLength = blockKeyLength(indexPtr);
+    int recLength = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + curKeyLength;
+    int required;
+    if (mustAllocateExternally(keyLength)) {
+      required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + ADDRESS_SIZE 
+           - recLength;
+
+      if (required > available) {
+        // Required index block split
+        return false;
+      }
+    } else {
+      required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength - recLength;
+
+      if (required > available) {
+        // Required index block split
+        return false;
+      }
+    }
+    return true;
+  }
+	/**
+   * This method can be called during delete operation, if first
+   * key in a block were being deleted.
+   * @param block data block
+   */
+  boolean updateFirstKey(DataBlock block) {
+    //*DEBUG*/ System.out.println("BEFORE:");
+    //dumpIndexBlock();
+    if (block.isEmpty()) {
+      //if (!(isFirstIndexBlock() && block.isFirstBlock())) {
+        deleteBlock(block);
+      //}
+      return true;
+    }
+    long indexPtr = block.getIndexPtr();
+    long key = block.getFirstKeyAddress();
+    int keyLength = block.getFirstKeyLength();
+    long version = block.getFirstKeyVersion();
+    Op type = block.getFirstKeyType();
+    
+    
+    
+    int available = this.blockSize - this.dataSize;
+    int curKeyLength = blockKeyLength(indexPtr);
+    int recLength = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+         + curKeyLength;
+    int required;
+    if (mustAllocateExternally(keyLength)) {
+      required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+          ADDRESS_SIZE - recLength;
+      
+      if (required > available) {
+        // Required index block split
+        return false;
+      }
+    } else {
+      required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+           + keyLength - recLength;
+      
+      if (required > available) {
+        // Required index block split
+        return false;
+      }
+    }
+    // TODO DEALLOCATE EXISTING LARGE KEY  
+    if (isExternalBlock(indexPtr)) {
+      long address = getExternalAllocationAddress(indexPtr);
+      UnsafeAccess.free(address);
+      largeKVs.decrementAndGet();
+    }
+    int toMove = required; 
+    UnsafeAccess.copy(indexPtr+ recLength, indexPtr + recLength +toMove, 
+      dataSize - indexPtr + dataPtr - recLength); 
+      
+      
+    if (mustAllocateExternally(keyLength)) {  
+      long addr = allocateKeyExternally(key, keyLength);
+      if (addr == UnsafeAccess.MALLOC_FAILED) {
+        return false;
+      }
+      UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) 0);
+      UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
+      keyLength = ADDRESS_SIZE;
+    } else {
+      UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
+      UnsafeAccess.copy(key, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
+    }
+    UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+    UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+        (byte) type.ordinal());
+    this.firstKey = null;
+    this.dataSize += toMove;
+    /*DEBUG*/
+//    keyLength = block.getFirstKeyLength();
+//    byte[] buf = new byte[keyLength];
+//    UnsafeAccess.copy(key, buf, 0, keyLength);
+//    System.out.println("Updated First Key="+ Bytes.toString(buf));
+//    /*DEBUG*/ System.out.println("AFTER:");
+//    dumpIndexBlock();
+    return true;
+  }
+	
+  protected void dumpIndexBlock() {
+    int count =0;
+    long ptr = dataPtr;
+    System.out.println("Dump index block: numDataBlocks="+ numDataBlocks);
+    while(count++ < numDataBlocks) {
+      int klen = keyLength(ptr);
+      long keyAddress = keyAddress(ptr);
+      byte[] buf = new byte[klen];
+      UnsafeAccess.copy(keyAddress, buf, 0, klen);
+      String key = Bytes.toString(buf);
+      key = key.substring(0, Math.min(16, key.length()));
+      System.out.println(count +" : key="+ key);
+      ptr += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(ptr);
+      
+    }
+    if (ptr - dataPtr != dataSize) {
+      System.out.println("FATAL: (ptr - dataPtr -dataSize)="+ (ptr - dataPtr - dataSize));
+    }
+  }
+  
 	/**
 	 * Must be called only after Block2.register
 	 * 
 	 * @param block
 	 */
-	boolean updateFirstKey(DataBlock block) {
+	boolean setFirstKey(DataBlock block) {
 		// TODO: handle key size change
 		// If we deleted first key in a block
 		long indexPtr = block.getIndexPtr();
@@ -684,7 +874,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		return true;
 	}
 
-	boolean updateFirstKey(long indexPtr, byte[] key, int keyOffset, int keyLength, long version, Op type) {
+	
+	
+	boolean setFirstKey(long indexPtr, byte[] key, int keyOffset, int keyLength, long version, Op type) {
 		// TODO: handle key size change
 		// If we deleted first key in a block
 	  if (mustAllocateExternally(keyLength)) {
@@ -705,11 +897,11 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		return true;
 	}
 
-	boolean updateFirstKey(long indexPtr, long keyPtr, int keyLength, long version, Op type) {
-		// TODO: handle key size change
-		// If we deleted first key in a block
+	boolean setFirstKey(long indexPtr, long keyPtr, int keyLength, long version, Op type) {
+    // TODO: handle key size change
+    // If we deleted first key in a block
     if (mustAllocateExternally(keyLength)) {
-      long addr = allocateKeyExternally(keyPtr, keyLength);
+      long addr = allocateKeyExternally(keyPtr,  keyLength);
       if (addr == UnsafeAccess.MALLOC_FAILED) {
         return false;
       }
@@ -720,10 +912,10 @@ public class IndexBlock implements Comparable<IndexBlock> {
       UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
       UnsafeAccess.copy(keyPtr, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
     }
-		UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
-				(byte) type.ordinal());
-		return true;
+    UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+    UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+        (byte) type.ordinal());
+    return true;
 	}
 
 	/**
@@ -769,77 +961,81 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, long expire)
 			throws RetryOperationException {
-		try {
-			// TODO: key-value size check
-			// TODO: optimize locking: we do double locking: index block and data block
-			writeLock();
+    try {
+      // TODO: key-value size check
+      // TODO: optimize locking: we do double locking: index block and data block
+      writeLock();
 
-			if (isEmpty()) {
-				// Should be OK if k-v size is below block size
-				return putEmpty(keyPtr, keyLength, valuePtr, valueLength, version, expire);
-			}
-			long ptr = search(keyPtr, keyLength, version, Op.PUT);
-			// Try to insert, split if necessary (if split is possible)
-			// return false if splitting of index block is required
-			DataBlock b = block.get();
-			b.set(this, ptr - dataPtr);
-			boolean res = false;
-			while (true) {
-				res = b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
-				if (res == false) {
-					if (b.canSplit() && !b.isLargerThanMax(keyPtr, keyLength, version)) {
-						// get split position
-						long addr = b.splitPos(false);
-						// check if we will be able to insert new block
-						int startKeyLength = DataBlock.keyLength(addr);
+      if (isEmpty()) {
+        // Should be OK if k-v size is below block size
+        return putEmpty(keyPtr, keyLength, valuePtr, valueLength, version, expire);
+      }
+      long ptr = search(keyPtr, keyLength, version, Op.PUT);
+      // Try to insert, split if necessary (if split is possible)
+      // return false if splitting of index block is required
+      DataBlock b = block.get();
+      b.set(this, ptr - dataPtr);
+      boolean res = false;
+      while (true) {
+        res = b.put(keyPtr, keyLength, valuePtr,  valueLength, version, expire);
+        if (res == false) {
+          if (b.canSplit() && !b.isLargerThanMax(keyPtr,  keyLength, version)) {
+            // get split position
+            long addr = b.splitPos(false);
+            // check if we will be able to insert new block
+            int startKeyLength = DataBlock.keyLength(addr);
             if (mustAllocateExternally(startKeyLength)) {
               startKeyLength = ADDRESS_SIZE;
             }
+            
             int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
-						if (dataSize + required > blockSize) {
-							// index block split is required
-							return false;
-						}
-						DataBlock right = b.split(false);
-						// we do not check result - it must be true
-						insertBlock(right);
-						// select which block we should put k-v now
-						int r1 = right.compareTo(keyPtr, keyLength, version, Op.PUT);
-						if (r1 >= 0) {
-							b = right;
-						}
-						continue;
-					} else {
-					  int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+            if (dataSize + required > blockSize) {
+              // index block split is required
+              //*DEBUG*/ System.out.println("dataSize="+ dataSize+" required="+ required+" blockSize=" + blockSize);
+              return false;
+            }
+            // Do not enforce compaction, it was done already during put
+            DataBlock right = b.split(false);
+            // we do not check result - it must be true
+            insertBlock(right);
+            // select which block we should put k-v now
+            int r1 = right.compareTo(keyPtr,  keyLength, version, Op.PUT);
+            if (r1 >= 0) {
+              b = right;
+            }
+            continue;
+          } else {
+            
+            int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
                 (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
-					  if (dataSize + required > blockSize) {
-							// index block split is required
-							return false;
-						}
-						// new block insert after
-						DataBlock bb = new DataBlock();
-						insertNewBlock(bb, keyPtr, keyLength, version, Op.PUT);
-						// we do not check result - it should be OK (empty block)
-						bb.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
-						return true; // if false, then index block split is required
-					}
-				} else {
-					break;
-				}
-			}
-			// if false, then index block split is required
-			return res;
-		} finally {
-			writeUnlock();
-		}
+            if (dataSize + required > blockSize) {
+              // index block split is required
+              return false;
+            }
+            // new block insert after
+            DataBlock bb = new DataBlock();
+            insertNewBlock(bb, keyPtr, keyLength, version, Op.PUT);
+            // we do not check result - it should be OK (empty block)
+            bb.put(keyPtr, keyLength, valuePtr,  valueLength, version, expire);
+            return true; // if false, then index block split is required
+          }
+        } else {
+          break;
+        }
+      }
+      // if false, then index block split is required
+      return res;
+    } finally {
+      writeUnlock();
+    }
 	}
 
 	private boolean putEmpty(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, long expire) {
-		DataBlock b = new DataBlock();
-		b.register(this, 0);
+    DataBlock b = new DataBlock();
+    b.register(this, 0);
     if(mustAllocateExternally(keyLength)) {
       UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) 0);
-      long addr = allocateKeyExternally(keyPtr, keyLength);
+      long addr = allocateKeyExternally(keyPtr,  keyLength);
       if (addr == UnsafeAccess.MALLOC_FAILED) {
         return false;
       }
@@ -850,16 +1046,16 @@ public class IndexBlock implements Comparable<IndexBlock> {
         (byte) Op.PUT.ordinal());
     } else {
       UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
+      UnsafeAccess.copy(keyPtr, dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
       UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
       UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
-				(byte) Op.PUT.ordinal());
+        (byte) Op.PUT.ordinal());
     }
-		this.version = version;
-		this.type = (byte) Op.PUT.ordinal();
-		UnsafeAccess.copy(keyPtr, dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
-		numDataBlocks++;
-		dataSize += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
-		return b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
+    this.version = version;
+    this.type = (byte) Op.PUT.ordinal();
+    this.numDataBlocks++;
+    this.dataSize += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+    return b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
 	}
 
 	/**
@@ -891,19 +1087,19 @@ public class IndexBlock implements Comparable<IndexBlock> {
 					// compare versions
 					long ver = version(ptr);
 					if (ver < version) {
-						if (prevPtr == NOT_FOUND) {
+						if (prevPtr == NOT_FOUND && count > 1) {
 							// FATAL error
 							return ptr = NOT_FOUND;
 						}
-						return prevPtr;
+						return count > 1? prevPtr: ptr;
 					} else if (ver == version) {
 						byte _type = type(ptr);
-						if (_type > type.ordinal()) {
+						if (_type > type.ordinal() && count > 1) {
 							if (prevPtr == NOT_FOUND) {
 								// FATAL error
 								return ptr = NOT_FOUND;
 							}
-							return prevPtr;
+	            return count > 1? prevPtr: ptr;
 						}
 					}
 				}
@@ -923,7 +1119,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	/**
 	 * TODO: handle not found (new block) Search position of a block, which can
 	 * contain this key
-	 * 
+	 * TODO: why do we need this method for?
 	 * @param key
 	 * @param keyOffset
 	 * @param keyLength
@@ -931,7 +1127,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
   long searchForGet(byte[] key, int keyOffset, int keyLength, long start) {
     long ptr = start;
-    short keylen = isExternalBlock(ptr)? ADDRESS_SIZE: (short) keyLength(ptr);
+    int keylen = blockKeyLength(ptr);
     ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
     if (ptr >= this.dataPtr + this.dataSize) {
       return NOT_FOUND;
@@ -970,24 +1166,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 
-	/**
-	 * Public API,
-	 * 
-	 * @param key
-	 * @param keyOffset
-	 * @param keyLength
-	 * @return block found or null
-	 */
-	DataBlock searchBlock(List<DataBlock> list, byte[] key, int keyOffset, int keyLength, long version, Op type) {
-		DataBlock prev = null;
-		for (int i = 0; i < numDataBlocks; i++) {
-			DataBlock b = list.get(i);
-			if (b.compareTo(key, keyOffset, keyLength, version, type) < 0) {
-				return prev;
-			}
-		}
-		return prev;
-	}
 
 	/**
 	 * Return first block if present
@@ -1021,10 +1199,10 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			  return firstBlock();
 			}
 			long ptr = blck != null ? blck.getIndexPtr() : getAddress();
-			int keyLength = blck.getFirstKeyLength();
-			if (mustAllocateExternally(keyLength)) {
-			  keyLength = ADDRESS_SIZE;
-			}
+			int keyLength = blockKeyLength(ptr);// blck.getFirstKeyLength();
+//			if (mustAllocateExternally(keyLength)) {
+//			  keyLength = ADDRESS_SIZE;
+//			}
 			if (ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength >= dataPtr + dataSize) {
 				// last block
 				return null;
@@ -1037,6 +1215,25 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 
+	DataBlock nextBlock(long ptr) {
+
+	   try {
+	      readLock();
+	      if (ptr < 0) {
+	        return firstBlock();
+	      }
+	      int keyLength = blockKeyLength(ptr);
+	      if (ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength >= dataPtr + dataSize) {
+	        // last block
+	        return null;
+	      }
+	      DataBlock b = block.get();
+	      b.set(this, ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength - dataPtr);
+	      return b;
+	    } finally {
+	      readUnlock();
+	    }
+	}
 	/**
 	 * Search position of a first key which is greater or equals to a given key
 	 * 
@@ -1045,51 +1242,52 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @return address to insert (or update)
 	 */
 	long search(long keyPtr, int keyLength, long version, Op type) {
-		long ptr = dataPtr;
-		long prevPtr = NOT_FOUND;
-		int count = 0;
+    long ptr = dataPtr;
+    long prevPtr = NOT_FOUND;
+    int count = 0;
 
-		try {
-			while (count++ < numDataBlocks) {
-				int keylen =  keyLength(ptr);
-				int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
-				if (res < 0) {
-					if (prevPtr == NOT_FOUND) {
-						// FATAL error
-						return ptr = NOT_FOUND;
-					}
-					return prevPtr;
-				} else if (res == 0) {
-					// compare versions
-					long ver = version(ptr);
-					if (ver < version) {
-						if (prevPtr == NOT_FOUND) {
-							// FATAL error
-							return ptr = NOT_FOUND;
-						}
-						return prevPtr;
-					} else if (ver == version) {
-						byte _type = type(ptr);
-						if (_type > type.ordinal()) {
-							if (prevPtr == NOT_FOUND) {
-								// FATAL error
-								return ptr = NOT_FOUND;
-							}
-							return prevPtr;
-						}
-					}
-				}
-				prevPtr = ptr;
-				if (isExternalBlock(ptr)) {
+    try {
+      while (count++ < numDataBlocks) {
+        int keylen =  keyLength(ptr);
+        int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
+        if (res < 0) {
+          if (prevPtr == NOT_FOUND) {
+            // FATAL error
+            return ptr = NOT_FOUND;
+          } else {
+            return prevPtr;
+          }
+        } else if (res == 0) {
+          // compare versions
+          long ver = version(ptr);
+          if (ver < version) {
+            if (prevPtr == NOT_FOUND && count > 1) {
+              // FATAL error
+              return ptr = NOT_FOUND;
+            }
+            return count > 1? prevPtr: ptr;
+          } else if (ver == version) {
+            byte _type = type(ptr);
+            if (_type > type.ordinal() && count > 1) {
+              if (prevPtr == NOT_FOUND) {
+                // FATAL error
+                return ptr = NOT_FOUND;
+              }
+              return count > 1? prevPtr: ptr;
+            }
+          }
+        }
+        prevPtr = ptr;
+        if (isExternalBlock(ptr)) {
           keylen = ADDRESS_SIZE;
         }
-				ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
-			}
-			// last data block
-			return prevPtr;
-		} finally {
-			checkPointer(ptr);
-		}
+        ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+      }
+      // last data block
+      return prevPtr;
+    } finally {
+      checkPointer(ptr);
+    }
 
 	}
 
@@ -1104,8 +1302,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
   long searchForGet(long keyPtr, int keyLength, long start) {
     long ptr = start;
-
-    short keylen = isExternalBlock(ptr)? ADDRESS_SIZE: (short) keyLength(ptr);
+    int keylen = blockKeyLength(ptr);
     ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
     if (ptr >= this.dataPtr + this.dataSize) {
       return NOT_FOUND;
@@ -1127,6 +1324,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	DataBlock searchBlock(long keyPtr, int keyLength, long version, Op type) {
 		try {
+		  readLock();
 			long ptr = search(keyPtr, keyLength, version, type);
 			if (ptr == NOT_FOUND) {
 				return null;
@@ -1136,6 +1334,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 				return b;
 			}
 		} finally {
+		  //TODO: why unlock w/o lock?
 			readUnlock();
 		}
 	}
@@ -1144,6 +1343,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * Delete operation. FOR NOW deleting first key in a data block does not affect
 	 * its key in an index block TODO: Is it safe?
 	 * 
+	 * TODO: do not first block in a first index block
 	 * @param key
 	 * @param keyOffset
 	 * @param keyLength
@@ -1166,10 +1366,11 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 	
-	private OpResult deleteInBlock(DataBlock b, long address, byte[] key, int keyOffset, 
-	    int keyLength, long version) {
+  private OpResult deleteInBlock(DataBlock b, long address, byte[] key, int keyOffset,
+      int keyLength, long version) {
+    OpResult res = null;
     while (true) {
-      OpResult res = b.delete(key, keyOffset, keyLength, version);
+      res = b.delete(key, keyOffset, keyLength, version);
       if (res == OpResult.SPLIT_REQUIRED) {
         if (b.canSplit()) {
           // get split position
@@ -1196,9 +1397,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
         } else {
           // We can not split block and can delete directly
           // we need to *add* delete tombstone to a new block
-          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
-              (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
-          
+          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH
+              + (mustAllocateExternally(keyLength) ? ADDRESS_SIZE : keyLength);
+
           if (dataSize + required > blockSize) {
             // index block split is required
             return OpResult.SPLIT_REQUIRED;
@@ -1216,22 +1417,26 @@ public class IndexBlock implements Comparable<IndexBlock> {
         // it returns its address
         address = searchForGet(key, keyOffset, keyLength, address);
         if (address == NOT_FOUND) {
-          return OpResult.NOT_FOUND; 
+          return OpResult.NOT_FOUND;
         } else {
           b.set(this, address - this.dataPtr);
           res = b.delete(key, keyOffset, keyLength, version);
-          if (res == OpResult.OK) {
+          if (res == OpResult.OK ) {
             return res;
+          } else if (res == OpResult.PARENT_SPLIT_REQUIRED) { 
+            return OpResult.SPLIT_REQUIRED;
           } else {
             // Call recursively if SPLIT_REQUIRED or NOT_FOUND (will check next block)
             return deleteInBlock(b, address, key, keyOffset, keyLength, version);
-          } 
+          }
         }
+      } else if (res == OpResult.PARENT_SPLIT_REQUIRED) {
+        return OpResult.SPLIT_REQUIRED;
       } else {
         return res;
       }
     }
-	}
+  }
 	
 	private final void checkPointer(long ptr) {
 		if (ptr == NOT_FOUND) {
@@ -1243,8 +1448,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	}
 
 	/**
-	 * Delete operation. FOR NOW deleting first key in a data block does not affect
-	 * its key in an index block TODO: Is it safe?
+	 * Delete operation.
 	 * 
 	 * @param keyPtr
 	 * @param keyLength
@@ -1264,11 +1468,12 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 
-
 	
-	private OpResult deleteInBlock(DataBlock b, long address, long keyPtr, int keyLength, long version) {
+  private OpResult deleteInBlock(DataBlock b, long address, long keyPtr, int keyLength,
+      long version) {
+    OpResult res = null;
     while (true) {
-      OpResult res = b.delete(keyPtr, keyLength, version);
+      res = b.delete(keyPtr, keyLength, version);
       if (res == OpResult.SPLIT_REQUIRED) {
         if (b.canSplit()) {
           // get split position
@@ -1286,17 +1491,18 @@ public class IndexBlock implements Comparable<IndexBlock> {
           DataBlock right = b.split(false);
           // we do not check result - it must be true
           insertBlock(right);
-          // select which block we should put k-v now
+          // select which block we should delete k-v now
           int r1 = right.compareTo(keyPtr, keyLength, version, Op.DELETE);
           if (r1 >= 0) {
             b = right;
           }
           continue;
         } else {
-          // We can not split block and can not delete directly
-          // we need to *add* delete tomb stone to a new block
-          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + 
-              (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
+          // We can not split block and can delete directly
+          // we need to *add* delete tombstone to a new block
+          int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH
+              + (mustAllocateExternally(keyLength) ? ADDRESS_SIZE : keyLength);
+
           if (dataSize + required > blockSize) {
             // index block split is required
             return OpResult.SPLIT_REQUIRED;
@@ -1313,24 +1519,59 @@ public class IndexBlock implements Comparable<IndexBlock> {
         // if it exists and has the same start key as a given key
         // it returns its address
         address = searchForGet(keyPtr, keyLength, address);
-        if (address ==NOT_FOUND) {
+        if (address == NOT_FOUND) {
           return OpResult.NOT_FOUND;
         } else {
           b.set(this, address - this.dataPtr);
           res = b.delete(keyPtr, keyLength, version);
-          if (res == OpResult.OK) {
+          if (res == OpResult.OK ) {
             return res;
+          } else if (res == OpResult.PARENT_SPLIT_REQUIRED) { 
+            return OpResult.SPLIT_REQUIRED;
           } else {
-            // Call recursively if NOT_FOUND or SPLIT_REQUIRED
-            return deleteInBlock(b, address, keyPtr, keyLength, version);
+            // Call recursively if SPLIT_REQUIRED or NOT_FOUND (will check next block)
+            return deleteInBlock(b, address, keyPtr,  keyLength, version);
           }
         }
+      } else if (res == OpResult.PARENT_SPLIT_REQUIRED) {
+        return OpResult.SPLIT_REQUIRED;
       } else {
         return res;
       }
     }
-	}
-	/**
+
+  }
+	// TODO: delete block when it had one record only
+	private void deleteBlock(DataBlock b) {
+    //*DEBUG*/ System.out.println("DELETE BLOCK STARTS");
+    //*DEBUG*/ System.out.println("Index ="+ dataPtr + " block=" + b.getIndexPtr());
+
+	  long indexPtr = b.getIndexPtr();
+	  int keyLength = keyLength(indexPtr);
+	  int blockKeyLength = blockKeyLength(indexPtr);
+	  
+	  int toMove =  DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
+         blockKeyLength; 
+	  if (mustAllocateExternally(keyLength)) {
+	    long addr = getExternalAllocationAddress(indexPtr);
+	    UnsafeAccess.free(addr);
+	    largeKVs.decrementAndGet();
+	  }
+	  
+	  b.free();
+
+	  UnsafeAccess.copy(indexPtr + toMove, indexPtr, dataSize - indexPtr + dataPtr - toMove);
+	  this.dataSize -= toMove;
+	  this.numDataBlocks -=1;
+    boolean firstBlockInIndex = this.dataPtr == b.getIndexPtr();
+    if (firstBlockInIndex && this.numDataBlocks > 0) {
+      firstKey = null;
+    }
+    ///*DEBUG*/ System.out.println("DELETE BLOCK FINISHED numDataBlocks="+ numDataBlocks);
+  }
+	
+
+  /**
 	 * Get key-value offset in a block
 	 * 
 	 * @param key
@@ -1375,7 +1616,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public long get(byte[] key, int keyOffset, int keyLength, byte[] valueBuf, int valOffset, long version)
 			throws RetryOperationException {
-		// TODO: verify that block is still valid
 		try {
 			readLock();
 			long ptr = search(key, keyOffset, keyLength, version, Op.DELETE);
@@ -1411,28 +1651,28 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @throws RetryOperationException
 	 */
 	public long get(long keyPtr, int keyLength, long version) throws RetryOperationException {
-		try {
-			readLock();
-			long ptr = search(keyPtr, keyLength, version, Op.DELETE);
-			DataBlock b = block.get();
-			b.set(this, ptr - dataPtr);
-			long res = b.get(keyPtr, keyLength, version);
-			if (res != DataBlock.NOT_FOUND) {
-				return res;
-			} else {
-				long address = ptr;
-				while ((address = searchForGet(keyPtr, keyLength, address)) != NOT_FOUND) {
-					b.set(this, address - this.dataPtr);
-					res = b.get(keyPtr, keyLength, version);
-					if (res != DataBlock.NOT_FOUND) {
-						return res;
-					}
-				}
-				return NOT_FOUND;
-			}
-		} finally {
-			readUnlock();
-		}
+    try {
+      readLock();
+      long ptr = search(keyPtr, keyLength, version, Op.DELETE);// TODO: is it right?
+      DataBlock b = block.get();
+      b.set(this, ptr - dataPtr);
+      long res = b.get(keyPtr, keyLength, version);
+      if (res != DataBlock.NOT_FOUND) {
+        return res;
+      } else {
+        long address = ptr;
+        while ((address = searchForGet(keyPtr, keyLength, address)) != NOT_FOUND) {
+          b.set(this, address - this.dataPtr);
+          res = b.get(keyPtr, keyLength, version);
+          if (res != DataBlock.NOT_FOUND) {
+            return res;
+          }
+        }
+        return NOT_FOUND;
+      }
+    } finally {
+      readUnlock();
+    }
 	}
 
 	/**
@@ -1448,28 +1688,28 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public long get(long keyPtr, int keyLength, long valueBuf, int valueBufLength, long version)
 			throws RetryOperationException {
-		try {
-			readLock();
-			long ptr = search(keyPtr, keyLength, version, Op.DELETE);
-			DataBlock b = block.get();
-			b.set(this, ptr - dataPtr);
-			long res = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
-			if (res != DataBlock.NOT_FOUND) {
-				return res;
-			} else {
-				long address = ptr;
-				while ((address = searchForGet(keyPtr, keyLength, address)) != NOT_FOUND) {
-					b.set(this, address - this.dataPtr);
-					res = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
-					if (res != DataBlock.NOT_FOUND) {
-						return res;
-					}
-				}
-				return NOT_FOUND;
-			}
-		} finally {
-			readUnlock();
-		}
+    try {
+      readLock();
+      long ptr = search(keyPtr, keyLength, version, Op.DELETE);
+      DataBlock b = block.get();
+      b.set(this, ptr - dataPtr);
+      long res = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
+      if (res != DataBlock.NOT_FOUND) {
+        return res;
+      } else {
+        long address = ptr;
+        while ((address = searchForGet(keyPtr, keyLength, address)) != NOT_FOUND) {
+          b.set(this, address - this.dataPtr);
+          res = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
+          if (res != DataBlock.NOT_FOUND) {
+            return res;
+          }
+        }
+        return NOT_FOUND;
+      }
+    } finally {
+      readUnlock();
+    }
 
 	}
 
@@ -1532,7 +1772,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			incrSeqNumberSplitOrMerge();
 			long ptr = dataPtr;
 			int recCount = 0;
-
 			// Now we should have zero deleted records
 			while (recCount < this.numDataBlocks/2) {
 				short keylen = (short) blockKeyLength(ptr);
@@ -1610,14 +1849,19 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * Free memory
 	 */
 	public void free() {
+//*DEBUG*/ System.out.println("Free index: " + dataPtr+" num blocks=" + numDataBlocks);
 		// TODO: deallocate data blocks
 	  deallocateBlocks();
 	  // deallocate large keys
 	  deallocateLargeKeys();
 		UnsafeAccess.free(dataPtr);
 		valid = false;
+
 	}
 
+	
+	public static AtomicLong largeKVs = new AtomicLong();
+	
 	private void deallocateLargeKeys() {
     long ptr = dataPtr;
     int count = 0;
@@ -1626,8 +1870,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
         int keylen =  keyLength(ptr);
         
         if (isExternalBlock(ptr)) {
-          long recAddress = UnsafeAccess.toLong(ptr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH);
+          long recAddress = getExternalAllocationAddress(ptr);
           UnsafeAccess.free(recAddress);
+          largeKVs.decrementAndGet();
           keylen = ADDRESS_SIZE;
         }
         ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
@@ -1640,13 +1885,13 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 	//TODO : IS IT SAFE?
   private void deallocateBlocks() {
-	  DataBlock prev = null;
 	  DataBlock curr = null;
-	  while((curr = nextBlock(prev)) != null) {
-	    if (prev != null) {
-	      prev.free();
-	    }
-	    prev = curr;
+	  long ptr = -1;
+	  int count = 0;
+	  while(count++ < numDataBlocks) {
+	    curr = nextBlock(ptr);
+	    ptr = curr.getIndexPtr();
+	    curr.free();
 	  }
   }
 
@@ -1673,11 +1918,12 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	}
 
 	public byte[] getFirstKey() {
-		if (firstKey != null) {
-			return firstKey;
-		}
+		
 		try {
 			readLock();
+			if (firstKey != null) {
+	      return firstKey;
+	    }
 			int keylen =  keyLength(dataPtr);
 			byte[] buf = new byte[keylen];
 			UnsafeAccess.copy(keyAddress(dataPtr), buf, 0, buf.length);

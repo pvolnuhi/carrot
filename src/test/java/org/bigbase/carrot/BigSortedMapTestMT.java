@@ -36,14 +36,19 @@ public class BigSortedMapTestMT {
       getsPs.addAndGet((double) (totalOps * 1000)/(end-start));
       totalOps = 0;
       start = System.currentTimeMillis();
-      runScan();
+      try {
+        runScan();
+      } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
       end = System.currentTimeMillis();
       scanPs.addAndGet((double) (totalOps * 1000)/(end-start));
       totalOps = 0;
     }  
     
     
-    private void runScan() {
+    private void runScan() throws IOException {
         System.out.println(Thread.currentThread().getName()+ "-test SCANs");	
 
       byte[] startKey = getThreadName();

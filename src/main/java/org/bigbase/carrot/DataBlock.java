@@ -1,5 +1,6 @@
 package org.bigbase.carrot;
 
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
 
@@ -73,15 +74,6 @@ public class DataBlock  {
     }
   }
 
-  static ThreadLocal<Long> bufPtr = new ThreadLocal<Long>() {
-
-    @Override
-    protected Long initialValue() {
-      int maxSize = BigSortedMap.getMaxBlockSize() + 80;
-      return UnsafeAccess.malloc(maxSize);
-    }
-
-  };
   /*
    * TODO: make this configurable
    */
@@ -273,6 +265,10 @@ public class DataBlock  {
     this.blockSize = size;
   }
   
+  protected boolean isFirstBlock() {
+    // First key = {0}
+    return keyLength(dataPtr) == 1 && UnsafeAccess.toByte(keyAddress(dataPtr)) == 0;
+  }
   /**
    * Copy constructor
    * @param db
@@ -305,8 +301,8 @@ public class DataBlock  {
     return valid;
   }
 
-  public void setValid(boolean b) {
-    this.valid = b;
+  public void invalidate() {
+    this.valid = false;;
   }
   
   public long getIndexPtr() {
@@ -670,6 +666,7 @@ public class DataBlock  {
     this.dataPtr = newPtr;
     setDataPtr(newPtr);
     setBlockSize((short) nextSize);
+
     return true;
   }
 
@@ -697,6 +694,7 @@ public class DataBlock  {
     this.dataPtr = newPtr;
     setDataPtr(newPtr);
     setBlockSize((short) nextSize);
+
     return true;
   }
 
@@ -706,13 +704,16 @@ public class DataBlock  {
    * @throws InterruptedException
    */
   public void readLock() throws RetryOperationException {
-    
+
     if (isThreadSafe()) return;
     
     long before = getSeqNumberSplitOrMerge();
     int index = (int) (getAddress() % locks.length);
     curLock = locks[index];
     curLock.readLock().lock();
+    if (!isValid()) {
+      throw new RetryOperationException();
+    }
     long after = getSeqNumberSplitOrMerge();
     if (before != after) {
       throw new RetryOperationException();
@@ -734,12 +735,15 @@ public class DataBlock  {
    * @throws InterruptedException
    */
   public void writeLock() throws RetryOperationException {
+
     if (isThreadSafe()) return;
     long before = getSeqNumberSplitOrMerge();
     int index = (int) (getAddress() % locks.length);
     curLock = locks[index];
     curLock.writeLock().lock();
-
+    if (!isValid()) {
+      throw new RetryOperationException();
+    }
     long after = getSeqNumberSplitOrMerge();
     if (before != after) {
       throw new RetryOperationException();
@@ -761,6 +765,15 @@ public class DataBlock  {
 
   }
 
+  
+  private final boolean isForbiddenKey(byte[] key, int off, int len) {
+    return len == 1 && key[off] == 0;
+  }
+  
+  private final boolean isForbiddenKey (long key, int len) {
+    return len == 1 && UnsafeAccess.toByte(key) == 0;
+  }
+  
   /**
    * Put operation
    * @param key
@@ -775,6 +788,11 @@ public class DataBlock  {
   public boolean put(byte[] key, int keyOffset, int keyLength, byte[] value, int valueOffset,
       int valueLength, long version, long expire) throws RetryOperationException {
 
+    if (getNumberOfRecords() > 0 && isForbiddenKey(key, keyOffset, keyLength)) {
+      // Return success silently TODO
+      return true;
+    }
+    
     if (mustStoreExternally(keyLength, valueLength)) {
       return putExternally(key, keyOffset, keyLength, value, valueOffset, 
         valueLength, version, expire);
@@ -929,7 +947,11 @@ public class DataBlock  {
    */
   private long allocateAndCopyExternal(long keyPtr, int keyLength, long valuePtr, int valueLength) {
     long recAddress = UnsafeAccess.malloc(keyLength + valueLength + 2 * INT_SIZE);
-    
+    if (recAddress <=0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
+
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
@@ -950,7 +972,10 @@ public class DataBlock  {
   private long allocateAndCopyExternal(byte[] key, int keyOffset, int keyLength, byte[] value, int valueOffset,
       int valueLength) {
     long recAddress = UnsafeAccess.malloc(keyLength + valueLength + 2 * INT_SIZE);
-
+    if (recAddress < 0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(key, keyOffset, recAddress + 2 * INT_SIZE, keyLength);
@@ -1006,7 +1031,8 @@ public class DataBlock  {
       
       //TODO: update search to support externally allocated K-Vs
       long addr = search(key, keyOffset, keyLength, version);
-      boolean extAddr = isExternalRecord(addr);
+      boolean append = addr == (dataPtr + dataSize);
+      boolean extAddr = !append && isExternalRecord(addr);
       // TODO: verify what search returns if not found
       long foundSeqId = -1;
       if (addr < dataPtr + dataSize) {
@@ -1092,8 +1118,7 @@ public class DataBlock  {
         // Neither insert nor overwrite - delete, then - insert
         // keyOverwrite = true
         // delete existing, put new
-        recAddress = allocateAndCopyExternal(key, keyOffset, keyLength, value, valueOffset, valueLength);
-
+        // TODO check allocation
         int keylen =  keyLength(addr);// must be equal to keyLength
         int vallen =  valueLength(addr);
         existRecLength = keylen + vallen + RECORD_TOTAL_OVERHEAD;
@@ -1103,6 +1128,8 @@ public class DataBlock  {
           // failed to insert, split is required
           return false;
         }
+        recAddress = allocateAndCopyExternal(key, keyOffset, keyLength, value, valueOffset, valueLength);
+
         // move from offset to offset + moveDist
         UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
           dataPtr + dataSize - addr - existRecLength);
@@ -1204,6 +1231,11 @@ public class DataBlock  {
   public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version,
       long expire) throws RetryOperationException {
 
+    if (getNumberOfRecords()  > 0 && isForbiddenKey(keyPtr, keyLength)) {
+      // Return success silently TODO
+      return true;
+    }
+    
     if (mustStoreExternally(keyLength, valueLength)) {
       return putExternally(keyPtr, keyLength, valuePtr, 
         valueLength, version, expire);
@@ -1377,7 +1409,8 @@ public class DataBlock  {
       
       //TODO: update search to support externally allocated K-Vs
       long addr = search(keyPtr,  keyLength, version);
-      boolean extAddr = isExternalRecord(addr);
+      boolean append = addr == (dataPtr + dataSize);
+      boolean extAddr = !append && isExternalRecord(addr);
       // TODO: verify what search returns if not found
       long foundSeqId = -1;
       if (addr < dataPtr + dataSize) {
@@ -1463,7 +1496,6 @@ public class DataBlock  {
         // Neither insert nor overwrite - delete, then - insert
         // keyOverwrite = true
         // delete existing, put new
-        recAddress = allocateAndCopyExternal(keyPtr,  keyLength, valuePtr,  valueLength);
 
         int keylen =  keyLength(addr);// must be equal to keyLength
         int vallen =  valueLength(addr);
@@ -1474,6 +1506,8 @@ public class DataBlock  {
           // failed to insert, split is required
           return false;
         }
+        recAddress = allocateAndCopyExternal(keyPtr,  keyLength, valuePtr,  valueLength);
+
         // move from offset to offset + moveDist
         UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
           dataPtr + dataSize - addr - existRecLength);
@@ -1536,6 +1570,7 @@ public class DataBlock  {
     int dataSize = getDataSize();
     while (count++ < numRecords) {
       int keylen = keyLength(ptr);
+     
       int vallen = valueLength(ptr);
       int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
       if (res < 0 || (res == 0 && version == NO_VERSION)) {
@@ -1570,6 +1605,7 @@ public class DataBlock  {
     int dataSize = getDataSize();
     while (count++ < numRecords) {
       int keylen = keyLength(ptr);
+     
       int vallen = valueLength(ptr);
       int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
       if (res < 0 || (res == 0 && version == NO_VERSION)) {
@@ -1651,6 +1687,11 @@ public class DataBlock  {
 
   public OpResult delete(long keyPtr, int keyLength, long version) throws RetryOperationException {
 
+    if (isForbiddenKey(keyPtr, keyLength)) {
+      // Return NOT FOUND TODO
+      return OpResult.NOT_FOUND;
+    }
+    
     boolean insert = false;
     OpResult result = OpResult.NOT_FOUND;
     int valueLength = 0; // no value in delete op
@@ -1661,22 +1702,22 @@ public class DataBlock  {
       int dataSize = getDataSize();
       int blockSize = getBlockSize();
       long foundSeqId;
-
+      boolean firstKey;
       do {
+        
         // We loop until we delete all eligible records with the same key
         // there can be multiple of them due to ongoing Tx and/or open snapshot scanners
         // TODO: 2 blocks can start (theoretically) with the same key!!!
         foundSeqId = -1;
         insert = false;
         long addr = search(keyPtr, keyLength, version);
-        boolean isExternalRecord = isExternalRecord(addr);
-
+        firstKey = addr == this.dataPtr;
         if (addr < dataPtr + dataSize) {
           int keylen = keyLength(addr);
           if (keylen == keyLength) {
             // Compare keys
             int res =
-                Utils.compareTo(keyPtr, keyLength, keyAddress(addr), keylen);
+                Utils.compareTo(keyPtr , keyLength, keyAddress(addr), keylen);
             if (res == 0) {
               // Get seqId of existing record
               foundSeqId = getRecordSeqId(addr);
@@ -1692,6 +1733,8 @@ public class DataBlock  {
         if (foundSeqId < mostRecentActiveTxId) {
           insert = true; // we can't delete immediately
         }
+        boolean isExternalRecord = isExternalRecord(addr);
+
         if (isExternalRecord && insert) {
           keyLength =0;
           valueLength = INT_SIZE + ADDRESS_SIZE; // 12 bytes
@@ -1716,13 +1759,21 @@ public class DataBlock  {
         }
 
         int moveDist = RECORD_TOTAL_OVERHEAD + keyLength + valueLength;
-
+        
+        if (getNumberOfRecords() > 1) {
+          // If we have single record - no need to check parent index block
+          // The block will be deleted
+          if (firstKey && this.indexBlock.tryUpdateFirstKey(this) == false) {
+            return OpResult.PARENT_SPLIT_REQUIRED;
+          }
+        }
+        
         if (insert) {
           // New K-V INSERT or we can't overwrite because of active Tx or snapshot
           // move from offset to offset + moveDist
           UnsafeAccess.copy(addr, addr + moveDist, dataPtr + dataSize - addr);
           if (!isExternalRecord) {
-            UnsafeAccess.copy(keyPtr, addr + RECORD_PREFIX_LENGTH, keyLength);
+            UnsafeAccess.copy(keyPtr,  addr + RECORD_PREFIX_LENGTH, keyLength);
           }
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) keyLength);
@@ -1748,7 +1799,8 @@ public class DataBlock  {
             // TODO: why is this check?
             BigSortedMap.totalDataSize.addAndGet(moveDist);
           }
-          return OpResult.OK;
+          result = OpResult.OK;
+          
         } else {
 
           // delete existing record with the same key
@@ -1770,7 +1822,22 @@ public class DataBlock  {
           }
           result = OpResult.OK;
         }
+        if (getNumberOfRecords() == 0) {
+          //*DEBUG*/System.out.println("EMPTY BLOCK DETECTED");
+          //System.out.println("dataPtr=" + dataPtr+" indexPtr="+ indexPtr);
+        }
+        // We check that block is empty before
+        // updating first key in a parent index block, because
+        // this call can deallocate current block
+        boolean isEmpty = isEmpty();
+        if (firstKey && result == OpResult.OK) {
+          this.indexBlock.updateFirstKey(this);
+        }
+        if (insert || isEmpty) {
+          return result;
+        }
       } while (foundSeqId >= 0);
+      
       return result;
     } finally {
       writeUnlock();
@@ -1809,8 +1876,14 @@ public class DataBlock  {
     setRecordType(dataPtr, Op.DELETE);
   }
 
+  
+  public boolean isEmpty() {
+    return getNumberOfRecords() == 0;
+  }
   /**
-   * Delete operation TODO: compact on deletion
+   * Delete operation 
+   * TODO: update Index Block start key if we delete start key
+   * TODO: handling deletion with a single k-v
    * @param key
    * @param keyPtr
    * @param keyLength
@@ -1820,6 +1893,10 @@ public class DataBlock  {
    */
   public OpResult delete(byte[] key, int keyOffset, int keyLength, long version)
       throws RetryOperationException {
+    if (isForbiddenKey(key, keyOffset, keyLength)) {
+      // Return NOT FOUND TODO
+      return OpResult.NOT_FOUND;
+    }
     boolean insert = false;
     OpResult result = OpResult.NOT_FOUND;
     int valueLength = 0; // no value in delete op
@@ -1830,16 +1907,16 @@ public class DataBlock  {
       int dataSize = getDataSize();
       int blockSize = getBlockSize();
       long foundSeqId;
-
+      boolean firstKey;
       do {
+        
         // We loop until we delete all eligible records with the same key
         // there can be multiple of them due to ongoing Tx and/or open snapshot scanners
         // TODO: 2 blocks can start (theoretically) with the same key!!!
         foundSeqId = -1;
         insert = false;
         long addr = search(key, keyOffset, keyLength, version);
-        boolean isExternalRecord = isExternalRecord(addr);
-
+        firstKey = addr == this.dataPtr;
         if (addr < dataPtr + dataSize) {
           int keylen = keyLength(addr);
           if (keylen == keyLength) {
@@ -1858,6 +1935,8 @@ public class DataBlock  {
         } else {
           return result;
         }
+        boolean isExternalRecord = isExternalRecord(addr);
+
         if (foundSeqId < mostRecentActiveTxId) {
           insert = true; // we can't delete immediately
         }
@@ -1885,7 +1964,15 @@ public class DataBlock  {
         }
 
         int moveDist = RECORD_TOTAL_OVERHEAD + keyLength + valueLength;
-
+        
+        if (getNumberOfRecords() > 1) {
+          // If we have single record - no need to check parent index block
+          // The block will be deleted
+          if (firstKey && this.indexBlock.tryUpdateFirstKey(this) == false) {
+            return OpResult.PARENT_SPLIT_REQUIRED;
+          }
+        }
+        
         if (insert) {
           // New K-V INSERT or we can't overwrite because of active Tx or snapshot
           // move from offset to offset + moveDist
@@ -1917,7 +2004,8 @@ public class DataBlock  {
             // TODO: why is this check?
             BigSortedMap.totalDataSize.addAndGet(moveDist);
           }
-          return OpResult.OK;
+          result = OpResult.OK;
+          
         } else {
 
           // delete existing record with the same key
@@ -1939,7 +2027,22 @@ public class DataBlock  {
           }
           result = OpResult.OK;
         }
+        if (getNumberOfRecords() == 0) {
+          //*DEBUG*/System.out.println("EMPTY BLOCK DETECTED");
+          //System.out.println("dataPtr=" + dataPtr+" indexPtr="+ indexPtr);
+        }
+        // We check that block is empty before
+        // updating first key in a parent index block, because
+        // this call can deallocate current block
+        boolean isEmpty = isEmpty();
+        if (firstKey && result == OpResult.OK) {
+          this.indexBlock.updateFirstKey(this);
+        }
+        if (insert || isEmpty) {
+          return result;
+        }
       } while (foundSeqId >= 0);
+      
       return result;
     } finally {
       writeUnlock();
@@ -2032,6 +2135,10 @@ public class DataBlock  {
       throws RetryOperationException {
 
     try {
+      if (isForbiddenKey(key, keyOffset, keyLength)) {
+        // Return NOT FOUND TODO
+        return NOT_FOUND;
+      }
       readLock();
       long addr = search(key, keyOffset, keyLength, version);
       int dataSize = getDataSize();
@@ -2072,6 +2179,10 @@ public class DataBlock  {
       long version) throws RetryOperationException {
 
     try {
+      if (isForbiddenKey(key, keyOffset, keyLength)) {
+        // Return NOT FOUND TODO
+        return NOT_FOUND;
+      }
       int maxValueLength = valueBuf.length - valOffset;
       readLock();
       long addr = search(key, keyOffset, keyLength, version);
@@ -2115,6 +2226,10 @@ public class DataBlock  {
   public long get(long keyPtr, int keyLength, long version) throws RetryOperationException {
 
     try {
+      if (isForbiddenKey(keyPtr, keyLength)) {
+        // Return NOT FOUND TODO
+        return NOT_FOUND;
+      }
       readLock();
       long addr = search(keyPtr, keyLength, version);
       int dataSize = getDataSize();
@@ -2155,6 +2270,10 @@ public class DataBlock  {
       throws RetryOperationException {
 
     try {
+      if (isForbiddenKey(keyPtr, keyLength)) {
+        // Return NOT FOUND TODO
+        return NOT_FOUND;
+      }
       readLock();
       long addr = search(keyPtr, keyLength, version);
       int dataSize = getDataSize();
@@ -2316,6 +2435,7 @@ public class DataBlock  {
     }
     int size = keyLength(ptr) + valueLength(ptr) + 2 * INT_SIZE;
     UnsafeAccess.free(getExternalRecordAddress(ptr));
+    largeKVs.decrementAndGet();
     BigSortedMap.totalDataSize.addAndGet(-size);
     BigSortedMap.totalAllocatedMemory.addAndGet(-size);
   }
@@ -2659,11 +2779,14 @@ public class DataBlock  {
     return dataPtr;
   }
 
+  
+  public static AtomicLong largeKVs = new AtomicLong();
+  
   /**
    * Free memory
    */
   public void free() {
-    
+    //*DEBUG*/ System.out.println("DEALLOCATE BLOCK");
     long ptr = dataPtr;
     int count = 0;
     int numRecords = getNumberOfRecords();
@@ -2674,6 +2797,7 @@ public class DataBlock  {
       if (isExternalRecord(ptr)) {
         long addr = getExternalRecordAddress(ptr);
         UnsafeAccess.free(addr);
+        largeKVs.decrementAndGet();
         keylen = 0;
         vallen = INT_SIZE + ADDRESS_SIZE;
       }
@@ -2681,6 +2805,8 @@ public class DataBlock  {
     }
     UnsafeAccess.free(dataPtr);
     valid = false;
+    //*DEBUG*/ System.out.println("DEALLOCATE BLOCK DONE");
+
   }
 
   /**

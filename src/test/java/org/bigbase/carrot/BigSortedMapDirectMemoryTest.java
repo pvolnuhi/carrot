@@ -9,27 +9,26 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class BigSortedMapTest {
+public class BigSortedMapDirectMemoryTest {
 
   static BigSortedMap map;
   static long totalLoaded;
-  
+  static long MAX_ROWS = 1000000;
   @BeforeClass 
   public static void setUp() throws IOException {
-	  BigSortedMap.setMaxBlockSize(4096);
+    BigSortedMap.setMaxBlockSize(4096);
     map = new BigSortedMap(100000000);
     totalLoaded = 0;
     long start = System.currentTimeMillis();
-    while(totalLoaded < 1000000) {
+    while(totalLoaded < MAX_ROWS) {
       totalLoaded++;
-      byte[] key = ("KEY"+ (totalLoaded)).getBytes();
-      byte[] value = ("VALUE"+ (totalLoaded)).getBytes();
-      map.put(key, 0, key.length, value, 0, value.length, 0);
+      load(totalLoaded);
     }
     long end = System.currentTimeMillis();
     map.dumpStats();
@@ -40,7 +39,20 @@ public class BigSortedMapTest {
     System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
     assertEquals(totalLoaded, scanned);
   }
-    
+  
+  private static boolean load(long totalLoaded) {
+    byte[] key = ("KEY"+ (totalLoaded)).getBytes();
+    byte[] value = ("VALUE"+ (totalLoaded)).getBytes();
+    long keyPtr = UnsafeAccess.malloc(key.length);
+    UnsafeAccess.copy(key, 0, keyPtr, key.length);
+    long valPtr = UnsafeAccess.malloc(value.length);
+    UnsafeAccess.copy(value, 0, valPtr, value.length);
+    boolean result = map.put(keyPtr, key.length, valPtr, value.length, 0);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(valPtr);
+    return result;
+  }
+  
   @Test
   public void testDeleteUndeleted() throws IOException {
     System.out.println("testDeleteUndeleted");
@@ -71,19 +83,23 @@ public class BigSortedMapTest {
     System.out.println("testPutGet");
 
     long start = System.currentTimeMillis();    
-    byte[] tmp = ("VALUE"+ totalLoaded).getBytes();
     for(int i=1; i <= totalLoaded; i++) {
       byte[] key = ("KEY"+ (i)).getBytes();
       byte[] value = ("VALUE"+i).getBytes();
-      //System.out.println(Bytes.toString(key));
+      long keyPtr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key, 0, keyPtr, key.length);
+      long valPtr = UnsafeAccess.malloc(value.length);
+      
       try {
-        long size = map.get(key, 0, key.length, tmp, 0, Long.MAX_VALUE) ;
+        long size = map.get(keyPtr,  key.length, valPtr, value.length, Long.MAX_VALUE) ;
         assertEquals(value.length, (int)size);
-        assertTrue(Utils.compareTo(value, 0, value.length, tmp, 0,(int) size) == 0);
+        assertTrue(Utils.compareTo(value, 0, value.length, valPtr, (int) size) == 0);
       } catch(Throwable t) {
         throw t;
-      }
-      
+      } finally {
+        UnsafeAccess.free(keyPtr);
+        UnsafeAccess.free(valPtr);
+      }    
     }    
     long end = System.currentTimeMillis();   
     System.out.println("Time to get "+ totalLoaded+" ="+ (end - start)+"ms");    
@@ -96,31 +112,15 @@ public class BigSortedMapTest {
   
     for(int i=1; i <= totalLoaded; i++) {
       byte[] key = ("KEY"+ (i)).getBytes();
-      boolean res = map.exists(key, 0, key.length) ;
+      long keyPtr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key, 0, keyPtr, key.length);
+      boolean res = map.exists(keyPtr, key.length) ;
+      UnsafeAccess.free(keyPtr);
       assertEquals(true, res);      
     }            
   }
   
-  @Test
-  public void testFirstKey() throws IOException {
-    System.out.println("testFirstKey");
-
-    byte[] firstKey = "KEY1".getBytes();
-    byte[] secondKey = "KEY10".getBytes();
-    byte[] key = map.getFirstKey();
-    System.out.println(Bytes.toString(key));
-    assertTrue(Utils.compareTo(key, 0, key.length, firstKey, 0, firstKey.length) == 0);
-    boolean res = map.delete(firstKey, 0, firstKey.length);
-    assertEquals ( true, res);
-    key = map.getFirstKey();
-    assertTrue(Utils.compareTo(key, 0, key.length, secondKey, 0, secondKey.length) == 0);
-    
-    byte[] value = "VALUE1".getBytes();
-    
-    res = map.put(firstKey, 0, firstKey.length, value, 0, value.length, 0);
-    assertEquals(true, res);
-    
-  }
+ 
   
   @Test  
   public void testFullMapScanner() throws IOException {
@@ -128,22 +128,30 @@ public class BigSortedMapTest {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long start = System.currentTimeMillis();
     long count = 0;
-    byte[] value = new byte[("VALUE"+ totalLoaded).length()];
-    byte[] prev = null;
+    long prev = -1;
+    int prevSize =0;
     while(scanner.hasNext()) {
       count++;
       int keySize = scanner.keySize();
       int valSize = scanner.valueSize();
-      byte[] cur = new byte[keySize];
-      scanner.key(cur, 0);
-      scanner.value(value, 0);
-      if (prev != null) {
-        assertTrue (Utils.compareTo(prev, 0, prev.length, cur, 0, cur.length) < 0);
+      long key = UnsafeAccess.malloc(keySize);
+      long value = UnsafeAccess.malloc(valSize);
+      scanner.key(key, keySize);
+      scanner.value(value, valSize);
+      UnsafeAccess.free(value);
+      if (prev > 0) {
+        assertTrue (Utils.compareTo(prev, prevSize, key,  keySize) < 0);
+        UnsafeAccess.free(prev);
       }
-      prev = cur;
-      //System.out.println( new String(cur, 0, keySize));
-      boolean res = scanner.next();
+      
+      prev = key;
+      prevSize = keySize;
+      scanner.next();
     }   
+    if (prev > 0) {
+      UnsafeAccess.free(prev);
+    }
+    
     long end = System.currentTimeMillis();
     System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
     assertEquals(totalLoaded, count);
@@ -154,23 +162,28 @@ public class BigSortedMapTest {
   private List<byte[]> delete(int num) {
     Random r = new Random();
     int numDeleted = 0;
-    byte[] val = new byte[1];
+    long valPtr = UnsafeAccess.malloc(1);
     List<byte[]> list = new ArrayList<byte[]>();
     int collisions = 0;
     while (numDeleted < num) {
       int i = r.nextInt((int)totalLoaded) + 1;
       byte [] key = ("KEY"+ i).getBytes();
-      long len = map.get(key, 0, key.length, val, 0, Long.MAX_VALUE);
+      long keyPtr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key, 0, keyPtr, key.length);
+      long len = map.get(keyPtr, key.length, valPtr, 1, Long.MAX_VALUE);
       if (len == DataBlock.NOT_FOUND) {
         collisions++;
+        UnsafeAccess.free(keyPtr);
         continue;
       } else {
-        boolean res = map.delete(key, 0, key.length);
+        boolean res = map.delete(keyPtr, key.length);
         assertTrue(res);
         numDeleted++;
         list.add(key);
+        UnsafeAccess.free(keyPtr);
       }
     }
+    UnsafeAccess.free(valPtr);
     System.out.println("Deleted="+ numDeleted +" collisions="+collisions);
     return list;
   }
@@ -178,7 +191,11 @@ public class BigSortedMapTest {
   private void undelete(List<byte[]> keys) {
     for (byte[] key: keys) {
       byte[] value = ("VALUE"+ new String(key).substring(3)).getBytes();
-      boolean res = map.put(key, 0, key.length, value, 0, value.length, 0);
+      long keyPtr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key, 0,  keyPtr, key.length);
+      long valPtr = UnsafeAccess.malloc(value.length);
+      UnsafeAccess.copy(value, 0, valPtr, value.length);
+      boolean res = map.put(keyPtr, key.length, valPtr, value.length, 0);
       assertTrue(res);
     }
   }
@@ -191,21 +208,30 @@ public class BigSortedMapTest {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long start = System.currentTimeMillis();
     long count = 0;
-    byte[] value = new byte[("VALUE"+ totalLoaded).length()];
-    byte[] prev = null;
+    int vallen = ("VALUE" + totalLoaded).length();
+    long value = UnsafeAccess.malloc(vallen);
+    long prev = 0;
+    int prevSize = 0;
     while(scanner.hasNext()) {
       count++;
       int keySize = scanner.keySize();
       int valSize = scanner.valueSize();
-      byte[] cur = new byte[keySize];
-      scanner.key(cur, 0);
-      scanner.value(value, 0);
-      if (prev != null) {
-        assertTrue (Utils.compareTo(prev, 0, prev.length, cur, 0, cur.length) < 0);
+      long key = UnsafeAccess.malloc(keySize);
+      scanner.key(key, keySize);
+      scanner.value(value, vallen);
+      if (prev != 0) {
+        assertTrue (Utils.compareTo(prev, prevSize, key, keySize) < 0);
+        UnsafeAccess.free(prev);
       }
-      prev = cur;
+      prev = key;
+      prevSize = keySize;
       scanner.next();
     }   
+    if (prev > 0) {
+      UnsafeAccess.free(prev);
+    }
+    UnsafeAccess.free(value);
+    
     long end = System.currentTimeMillis();
     System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
     assertEquals(totalLoaded - toDelete, count);
@@ -276,21 +302,30 @@ public class BigSortedMapTest {
   private long countRows(BigSortedMapScanner scanner) throws IOException {
     long start = System.currentTimeMillis();
     long count = 0;
-    byte[] value = new byte[("VALUE"+ totalLoaded).length()];
-    byte[] prev = null;
+    long prev = 0;
+    int prevLen = 0;
+    int vallen = ("VALUE"+ totalLoaded).length();
+    long value = UnsafeAccess.malloc(vallen);
+    
     while(scanner.hasNext()) {
       count++;
       int keySize = scanner.keySize();
-      byte[] cur = new byte[keySize];
-      scanner.key(cur, 0);
-      scanner.value(value, 0);
-      if (prev != null) {
-        assertTrue (Utils.compareTo(prev, 0, prev.length, cur, 0, cur.length) < 0);
+      long key = UnsafeAccess.malloc(keySize);
+      
+      scanner.key(key, keySize);
+      scanner.value(value, vallen);
+      if (prev != 0) {
+        assertTrue (Utils.compareTo(prev,  prevLen, key, keySize) < 0);
+        UnsafeAccess.free(prev);
       }
-      prev = cur;
+      prev = key;
       //System.out.println( new String(cur, 0, keySize));
       scanner.next();
     }   
+    if (prev != 0) {
+      UnsafeAccess.free(prev);
+    }
+    UnsafeAccess.free(value);
     long end = System.currentTimeMillis();
     System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
     return count;
@@ -306,7 +341,11 @@ public class BigSortedMapTest {
     while(true) {
       byte[] key = nextKeySeq(counter);
       byte[] value = nextValueSeq(counter);
-      if(map.put(key, 0, key.length, value, 0, value.length, 0)) {
+      long keyPtr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key,  0,  keyPtr, key.length);
+      long valuePtr = UnsafeAccess.malloc(value.length);
+      UnsafeAccess.copy(value, 0, valuePtr, value.length);
+      if(map.put(keyPtr, key.length, valuePtr, value.length, 0)) {
         counter++;
       } else {
         counter--;
@@ -325,7 +364,11 @@ public class BigSortedMapTest {
     while(true) {
       byte[] key = nextKey(counter);
       byte[] value = nextValue(counter);
-      if(map.put(key, 0, key.length, value, 0, value.length, 0)) {
+      long keyPtr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key,  0,  keyPtr, key.length);
+      long valuePtr = UnsafeAccess.malloc(value.length);
+      UnsafeAccess.copy(value, 0, valuePtr, value.length);
+      if(map.put(keyPtr, key.length, valuePtr, value.length, 0)) {
         counter++;
       } else {
         counter--;

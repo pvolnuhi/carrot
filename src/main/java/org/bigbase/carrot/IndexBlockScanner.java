@@ -198,6 +198,8 @@ public final class IndexBlockScanner implements Closeable{
     // Unlock index block
     if (indexBlock != null) {
       indexBlock.readUnlock();
+    } else {
+      System.out.println("null");
     }
   }
 }

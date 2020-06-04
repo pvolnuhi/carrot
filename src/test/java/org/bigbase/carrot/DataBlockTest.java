@@ -13,20 +13,13 @@ import java.util.Random;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.RetryOperationException;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
 
 
-public class DataBlockTest {
+public class DataBlockTest extends DataBlockTestBase{
   Log LOG = LogFactory.getLog(DataBlockTest.class);
-
-  static IndexBlock ib = new IndexBlock(4096);
-  
-  private DataBlock getDataBlock() {
-    DataBlock b = new DataBlock(4096);
-    b.register(ib, 0);
-    return b;
-  }
   
   @Test
   public void testDataBlockPutGet() throws RetryOperationException {
@@ -60,7 +53,7 @@ public class DataBlockTest {
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
     scanAndVerify(b, keys);
-    byte[] fk = b.getFirstKey();
+    byte[] fk = keys.get(0);
     OpResult res = b.delete(fk, 0, fk.length, Long.MAX_VALUE);
     assertEquals(OpResult.OK, res);
     System.out.println("delete done");
@@ -98,7 +91,8 @@ public class DataBlockTest {
         bs.next();
         count++;
       }
-      assertEquals(keys.size(), count);
+      // First block has hidden system key {0} {0}
+      assertEquals(keys.size() + 1, count);
       bs.close();
 
     }
@@ -117,8 +111,8 @@ public class DataBlockTest {
       OpResult result = b.delete(key, 0, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, result);
     }
-    
-    assertEquals(b.getNumberOfDeletedAndUpdatedRecords(), b.getNumberOfRecords());
+    // Only one system key left
+    assertEquals(1, (int)b.getNumberOfRecords());
     for (byte[] key: keys) {
       long result = b.get(key, 0, key.length, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
@@ -143,7 +137,7 @@ public class DataBlockTest {
     assertEquals(0, (int)bb.numDeletedAndUpdatedRecords);
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
-    assertEquals(totalKVs, (int)(bb.numRecords + b.getNumberOfRecords()));
+    assertEquals(totalKVs +1, (int)(bb.numRecords + b.getNumberOfRecords()));
     assertEquals(totalDataSize, (int)(b.getDataSize() + bb.dataSize));
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
@@ -173,7 +167,7 @@ public class DataBlockTest {
     assertEquals(0, (int)bb.getNumberOfDeletedAndUpdatedRecords());
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
-    assertEquals(totalKVs, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
+    assertEquals(totalKVs +1, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
     assertEquals(totalDataSize, (int)b.getDataSize() + bb.getDataSize());
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
@@ -183,7 +177,7 @@ public class DataBlockTest {
     b.merge(bb, true, true);
     
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(totalKVs, (int)b.getNumberOfRecords());
+    assertEquals(totalKVs+1, (int)b.getNumberOfRecords());
     assertEquals(totalDataSize, (int)b.getDataSize());
     
     scanAndVerify(b);
@@ -203,15 +197,14 @@ public class DataBlockTest {
       assertEquals(OpResult.OK, result);
     }
     
-    assertEquals(b.getNumberOfDeletedAndUpdatedRecords(), b.getNumberOfRecords());
-    assertEquals(0, (int)b.getNumberOfRecords());
+    assertEquals(1, (int)b.getNumberOfRecords());
     
     for (byte[] key: keys) {
       long result = b.get(key, 0, key.length, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
     }    
     b.compact(false);
-    assertTrue (b.getFirstKey() == null);    
+    assertTrue (Bytes.compareTo(new byte[] {0}, b.getFirstKey()) == 0);    
 
   }
   
@@ -234,7 +227,7 @@ public class DataBlockTest {
       }
     }
     
-    assertEquals(keys.size() - deletedKeys.size(), (int)b.getNumberOfRecords());
+    assertEquals(keys.size() - deletedKeys.size() +1, (int)b.getNumberOfRecords());
     
     for (byte[] key: deletedKeys) {
       long result = b.get(key, 0, key.length, Long.MAX_VALUE);
@@ -243,7 +236,7 @@ public class DataBlockTest {
     
     b.compact(true);
     
-    assertEquals( keys.size() - deletedKeys.size(), (int)b.getNumberOfRecords());
+    assertEquals( keys.size() - deletedKeys.size() +1, (int)b.getNumberOfRecords());
     assertEquals( 0, (int) b.getNumberOfDeletedAndUpdatedRecords());
 
   }
@@ -257,30 +250,6 @@ public class DataBlockTest {
     scanAndVerify(b, keys);
   }
   
-  private void scanAndVerify(DataBlock b) throws RetryOperationException, IOException {
-    byte[] buffer = null;
-    byte[] tmp = null;
-
-    DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
-    int count = 0;
-    while (bs.hasNext()) {
-      int len = bs.keySize();
-      buffer = new byte[len];
-      bs.key(buffer, 0);
-      bs.next();
-      count++;
-      if (count > 1) {
-        // compare
-        int res = Utils.compareTo(tmp, 0, tmp.length, buffer, 0, buffer.length);
-        assertTrue (res < 0);
-      }
-      tmp = new byte[buffer.length];
-      System.arraycopy(buffer, 0, tmp, 0, tmp.length);
-    }
-    bs.close();
-    System.out.println("Scanned ="+ count);
-  }
-  
   
   private void scanAndVerify(DataBlock b, List<byte[]> keys) 
       throws RetryOperationException, IOException {
@@ -288,6 +257,10 @@ public class DataBlockTest {
     byte[] tmp = null;
     try (DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);) {
       int count = 0;
+      // skip first system
+      if (b.isFirstBlock()) {
+        bs.next();
+      }
       while (bs.hasNext()) {
         int len = bs.keySize();
         buffer = new byte[len];
@@ -375,7 +348,7 @@ public class DataBlockTest {
       assertTrue(res);
     }
     
-    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
 
     // Delete some
@@ -393,7 +366,7 @@ public class DataBlockTest {
     }
 
     keys =  keys.subList(toDelete, keys.size());
-    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
 
     scanAndVerify(b, keys);
 
@@ -421,7 +394,7 @@ public class DataBlockTest {
       scanAndVerify(b, keys);
       kkeys.add(key);
     }
-    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
     scanAndVerify(b, keys);
     // Now insert existing keys with original value
     for (byte[] key: kkeys) {
@@ -443,10 +416,11 @@ public class DataBlockTest {
       assertTrue(res);
     }    
 
-    assertEquals(keys.size(), (int)b.getNumberOfRecords());
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
     scanAndVerify(b, keys);    
 
   }
+  
   private void verifyGets(DataBlock b, List<byte[]> keys) {
     for(byte[] key: keys) {
       long address = b.get(key, 0, key.length, Long.MAX_VALUE);
@@ -460,6 +434,7 @@ public class DataBlockTest {
       assertEquals(vlen, (int)size);
     }
   }
+  
   private boolean isValidFailure(DataBlock b, byte[] key, int keyLen, int valLen, int oldValLen) {
     int dataSize = b.getDataSize();
     int blockSize = b.getBlockSize();
@@ -495,15 +470,19 @@ public class DataBlockTest {
     scanner.close();
     
     OpResult res = b.delete(kkey, 0, kkey.length, Long.MAX_VALUE);
-    assertEquals( OpResult.OK, res);
+    // We can't delete first system key
+    assertEquals( OpResult.NOT_FOUND, res);
     kkey = b.getFirstKey();   
     scanner = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
-    // It will skip deleted
+    // Skip system key
+    scanner.next();
     keySize = scanner.keySize();    
     key = new byte[keySize];   
-    scanner.key(key, 0);    
-    assertTrue(Utils.compareTo(key, 0, key.length, kkey, 0, kkey.length) == 0); 
+    scanner.key(key, 0);  
     scanner.close();
+    res = b.delete(key, 0, key.length, Long.MAX_VALUE);
+    // We can delete next key
+    assertEquals( OpResult.OK, res);    
   }
     
   

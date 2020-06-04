@@ -4,6 +4,9 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.Utils;
+
 /**
  * Scanner implementation
  * @author jenium65
@@ -27,6 +30,7 @@ public class BigSortedMapScanner implements Closeable{
   };
   
   BigSortedMapScanner(BigSortedMap map, byte[] start, byte[] stop, long snapshotId) {
+    checkArgs(startRow, stopRow);
     this.map = map;
     this.startRow = start;
     this.stopRow = stop;
@@ -34,29 +38,44 @@ public class BigSortedMapScanner implements Closeable{
     init();
   }
   
+  private void checkArgs(byte[] startRow, byte[] stopRow) {
+    if (startRow != null && stopRow != null) {
+      if (Utils.compareTo(startRow, 0, startRow.length, stopRow, 0, stopRow.length) > 0) {
+        throw new IllegalArgumentException("start row is greater than stop row");
+      }
+    }
+  }
+
   private void init() {
     
     ConcurrentSkipListMap<IndexBlock, IndexBlock> cmap = map.getMap();
     IndexBlock key = null;
     if (startRow != null) {
       key = tlKey.get();   
+      key.reset();
       key.putForSearch(startRow, 0, startRow.length, snapshotId);
     }
     while(true) {
       try {
         currentIndexBlock = key != null? cmap.floorKey(key): cmap.firstKey();
-        indexScanner = IndexBlockScanner.getScanner(currentIndexBlock, this.startRow, this.stopRow, snapshotId);
+        indexScanner = IndexBlockScanner.getScanner(currentIndexBlock, this.startRow, 
+          this.stopRow, snapshotId);
         blockScanner = indexScanner.nextBlockScanner(); 
+        
         break;
         // TODO null?
       } catch(RetryOperationException e) {
         continue;
+      } finally {
+        if (key != null) {
+          key.releaseFromSearch();
+        }
       }
     }    
   }
   
   
-  public boolean hasNext() {
+  public boolean hasNext() throws IOException {
     boolean result = blockScanner.hasNext();
     if (!result) {    
       result = nextBlockAndScanner();
@@ -77,8 +96,9 @@ public class BigSortedMapScanner implements Closeable{
    * if split happens 
    * and skip some rows when merge happens
    * @return
+   * @throws IOException 
    */
-  private boolean nextBlockAndScanner() {
+  private boolean nextBlockAndScanner() throws IOException {
     
     this.blockScanner = indexScanner.nextBlockScanner();
     
@@ -87,6 +107,10 @@ public class BigSortedMapScanner implements Closeable{
     }
     
     ConcurrentSkipListMap<IndexBlock, IndexBlock> cmap = map.getMap();
+    if (this.indexScanner != null) {
+      this.indexScanner.close();
+      this.indexScanner = null;
+    }
     while (true) {
       IndexBlock tmp = null;
       try {
@@ -94,7 +118,8 @@ public class BigSortedMapScanner implements Closeable{
         if (tmp == null) {
           return false;
         }
-        this.indexScanner = IndexBlockScanner.getScanner(tmp, startRow, stopRow, snapshotId);
+        // set startRow to null, because it is out of range of a IndexBlockScanner
+        this.indexScanner = IndexBlockScanner.getScanner(tmp, null, stopRow, snapshotId);
         if (this.indexScanner == null) {
           return false;
         }
@@ -194,7 +219,10 @@ public class BigSortedMapScanner implements Closeable{
   @Override
   public void close() throws IOException {
     // do nothing yet
-    this.indexScanner.close();
+    if (this.indexScanner != null) {
+      this.indexScanner.close();
+    }
+    
   }
   
 }

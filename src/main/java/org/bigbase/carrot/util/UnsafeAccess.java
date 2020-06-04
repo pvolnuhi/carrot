@@ -6,16 +6,75 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.bigbase.carrot.util.RangeTree.Range;
 
 import sun.misc.Unsafe;
-import sun.nio.ch.DirectBuffer;
-
+//import sun.nio.ch.DirectBuffer;
 
 public final class UnsafeAccess {
+  public static boolean debug = false; 
+  public static class MallocStats {
+    public AtomicLong allocEvents= new AtomicLong();
+    public AtomicLong freeEvents = new AtomicLong();
+    public AtomicLong allocated = new AtomicLong();
+    public AtomicLong freed = new AtomicLong();
+    private RangeTree allocMap = new RangeTree();
+        
+    
+    public void allocEvent(long address, long alloced) {
+      if (!UnsafeAccess.debug) return;
+      allocEvents.incrementAndGet();
+      allocated.addAndGet(alloced);
+      allocMap.add(new Range(address, (int)alloced));
+    }
+    
+    public void freeEvent(long address) {
+      if (!UnsafeAccess.debug) return;
 
+      Range mem = allocMap.delete(address);
+      if (mem == null) {
+        System.out.println("FATAL: not found address "+ address);
+        System.exit(-1);
+      }
+      freed.addAndGet(mem.size);
+      freeEvents.incrementAndGet();
+    }
+    
+    public void checkAllocation(long address, int size) {
+      if (!UnsafeAccess.debug) return;
+
+      if (!allocMap.inside(address, size)) {
+        System.out.println("Memory corruption: address="+ address +" size="+size);
+        Thread.dumpStack();
+        System.exit(-1);
+      }
+    }
+    
+    public void printStats() {
+      if (!UnsafeAccess.debug) return;
+
+      System.out.println("allocations        ="+ allocEvents.get());
+      System.out.println("allocated memory   ="+ allocated.get());
+      System.out.println("deallocations      ="+ freeEvents.get());
+      System.out.println("deallocated memory ="+ freed.get());
+      System.out.println("leaked             ="+ (allocated.get() - freed.get()));
+      if (allocMap.size() > 0) {
+        System.out.println("Orphaned allocation sizes:");
+        for(Map.Entry<Range, Range> entry: allocMap.entrySet()) {
+          System.out.println(entry.getKey().start +" size="+ entry.getValue().size);
+        }
+      }
+    }
+  }
+  
+  public static MallocStats mallocStats = new MallocStats();
+  
   private static final Log LOG = LogFactory.getLog(UnsafeAccess.class);
   public static final Unsafe theUnsafe;
   
@@ -69,8 +128,9 @@ public final class UnsafeAccess {
       return theUnsafe.getShort(bytes, offset + BYTE_ARRAY_BASE_OFFSET);
     }
   }
-
+  
   public static short toShort(long addr) {
+    mallocStats.checkAllocation(addr, 2);
     if (littleEndian) {
       return Short.reverseBytes(theUnsafe.getShort(addr));
     } else {
@@ -123,6 +183,8 @@ public final class UnsafeAccess {
   }
 
   public static void putShort(long addr, short val) {
+    mallocStats.checkAllocation(addr, 2);
+
     if (littleEndian) {
       val = Short.reverseBytes(val);
     }
@@ -135,6 +197,8 @@ public final class UnsafeAccess {
   }
 
   public static void putByte(long addr, byte val) {
+    mallocStats.checkAllocation(addr, 1);
+
     theUnsafe.putByte(addr,  val);
   }
   /**
@@ -153,6 +217,8 @@ public final class UnsafeAccess {
   }
 
   public static void putInt(long addr, int val) {
+    mallocStats.checkAllocation(addr, 4);
+
     if (littleEndian) {
       val = Integer.reverseBytes(val);
     }
@@ -179,6 +245,8 @@ public final class UnsafeAccess {
    * @param val
    */
   public static void putLong(long addr, long val) {
+    mallocStats.checkAllocation(addr, 8);
+
     if (littleEndian) {
       val = Long.reverseBytes(val);
     }
@@ -194,12 +262,12 @@ public final class UnsafeAccess {
    * @param offset
    * @return short value at offset
    */
-  public static short toShort(ByteBuffer buf, int offset) {
-    if (littleEndian) {
-      return Short.reverseBytes(getAsShort(buf, offset));
-    }
-    return getAsShort(buf, offset);
-  }
+//  public static short toShort(ByteBuffer buf, int offset) {
+//    if (littleEndian) {
+//      return Short.reverseBytes(getAsShort(buf, offset));
+//    }
+//    return getAsShort(buf, offset);
+//  }
 
   /**
    * Reads a short value at the given Object's offset considering it was written in big-endian
@@ -221,12 +289,12 @@ public final class UnsafeAccess {
    * @param offset
    * @return short value at offset
    */
-  static short getAsShort(ByteBuffer buf, int offset) {
-    if (buf.isDirect()) {
-      return theUnsafe.getShort(((DirectBuffer) buf).address() + offset);
-    }
-    return theUnsafe.getShort(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
-  }
+//  static short getAsShort(ByteBuffer buf, int offset) {
+//    if (buf.isDirect()) {
+//      return theUnsafe.getShort(((DirectBuffer) buf).address() + offset);
+//    }
+//    return theUnsafe.getShort(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
+//  }
 
   /**
    * Reads an int value at the given buffer's offset considering it was written in big-endian
@@ -236,12 +304,12 @@ public final class UnsafeAccess {
    * @param offset
    * @return int value at offset
    */
-  public static int toInt(ByteBuffer buf, int offset) {
-    if (littleEndian) {
-      return Integer.reverseBytes(getAsInt(buf, offset));
-    }
-    return getAsInt(buf, offset);
-  }
+//  public static int toInt(ByteBuffer buf, int offset) {
+//    if (littleEndian) {
+//      return Integer.reverseBytes(getAsInt(buf, offset));
+//    }
+//    return getAsInt(buf, offset);
+//  }
 
   /**
    * Reads a int value at the given Object's offset considering it was written in big-endian
@@ -258,6 +326,8 @@ public final class UnsafeAccess {
   }
 
   public static int toInt(long addr) {
+    mallocStats.checkAllocation(addr, 4);
+
     if (littleEndian) {
       return Integer.reverseBytes(theUnsafe.getInt(addr));
     } else {
@@ -270,12 +340,12 @@ public final class UnsafeAccess {
    * @param offset
    * @return int value at offset
    */
-  static int getAsInt(ByteBuffer buf, int offset) {
-    if (buf.isDirect()) {
-      return theUnsafe.getInt(((DirectBuffer) buf).address() + offset);
-    }
-    return theUnsafe.getInt(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
-  }
+//  static int getAsInt(ByteBuffer buf, int offset) {
+//    if (buf.isDirect()) {
+//      return theUnsafe.getInt(((DirectBuffer) buf).address() + offset);
+//    }
+//    return theUnsafe.getInt(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
+//  }
 
   /**
    * Reads a long value at the given buffer's offset considering it was written in big-endian
@@ -285,12 +355,12 @@ public final class UnsafeAccess {
    * @param offset
    * @return long value at offset
    */
-  public static long toLong(ByteBuffer buf, int offset) {
-    if (littleEndian) {
-      return Long.reverseBytes(getAsLong(buf, offset));
-    }
-    return getAsLong(buf, offset);
-  }
+//  public static long toLong(ByteBuffer buf, int offset) {
+//    if (littleEndian) {
+//      return Long.reverseBytes(getAsLong(buf, offset));
+//    }
+//    return getAsLong(buf, offset);
+//  }
 
   /**
    * Reads a long value at the given Object's offset considering it was written in big-endian
@@ -307,6 +377,8 @@ public final class UnsafeAccess {
   }
 
   public static long toLong(long addr) {
+    mallocStats.checkAllocation(addr, 8);
+
     if (littleEndian) {
       return Long.reverseBytes(theUnsafe.getLong(addr));
     } else {
@@ -320,12 +392,12 @@ public final class UnsafeAccess {
    * @param offset
    * @return long value at offset
    */
-  static long getAsLong(ByteBuffer buf, int offset) {
-    if (buf.isDirect()) {
-      return theUnsafe.getLong(((DirectBuffer) buf).address() + offset);
-    }
-    return theUnsafe.getLong(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
-  }
+//  static long getAsLong(ByteBuffer buf, int offset) {
+//    if (buf.isDirect()) {
+//      return theUnsafe.getLong(((DirectBuffer) buf).address() + offset);
+//    }
+//    return theUnsafe.getLong(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
+//  }
 
   /**
    * Put an int value out to the specified ByteBuffer offset in big-endian format.
@@ -334,17 +406,17 @@ public final class UnsafeAccess {
    * @param val int to write out
    * @return incremented offset
    */
-  public static int putInt(ByteBuffer buf, int offset, int val) {
-    if (littleEndian) {
-      val = Integer.reverseBytes(val);
-    }
-    if (buf.isDirect()) {
-      theUnsafe.putInt(((DirectBuffer) buf).address() + offset, val);
-    } else {
-      theUnsafe.putInt(buf.array(), offset + buf.arrayOffset() + BYTE_ARRAY_BASE_OFFSET, val);
-    }
-    return offset + Bytes.SIZEOF_INT;
-  }
+//  public static int putInt(ByteBuffer buf, int offset, int val) {
+//    if (littleEndian) {
+//      val = Integer.reverseBytes(val);
+//    }
+//    if (buf.isDirect()) {
+//      theUnsafe.putInt(((DirectBuffer) buf).address() + offset, val);
+//    } else {
+//      theUnsafe.putInt(buf.array(), offset + buf.arrayOffset() + BYTE_ARRAY_BASE_OFFSET, val);
+//    }
+//    return offset + Bytes.SIZEOF_INT;
+//  }
 
   // APIs to copy data. This will be direct memory location copy and will be much faster
   /**
@@ -355,20 +427,22 @@ public final class UnsafeAccess {
    * @param destOffset
    * @param length
    */
-  public static void copy(byte[] src, int srcOffset, ByteBuffer dest, int destOffset, int length) {
-    long destAddress = destOffset;
-    Object destBase = null;
-    if (dest.isDirect()) {
-      destAddress = destAddress + ((DirectBuffer) dest).address();
-    } else {
-      destAddress = destAddress + BYTE_ARRAY_BASE_OFFSET + dest.arrayOffset();
-      destBase = dest.array();
-    }
-    long srcAddress = srcOffset + BYTE_ARRAY_BASE_OFFSET;
-    unsafeCopy(src, srcAddress, destBase, destAddress, length);
-  }
+//  public static void copy(byte[] src, int srcOffset, ByteBuffer dest, int destOffset, int length) {
+//    long destAddress = destOffset;
+//    Object destBase = null;
+//    if (dest.isDirect()) {
+//      destAddress = destAddress + ((DirectBuffer) dest).address();
+//    } else {
+//      destAddress = destAddress + BYTE_ARRAY_BASE_OFFSET + dest.arrayOffset();
+//      destBase = dest.array();
+//    }
+//    long srcAddress = srcOffset + BYTE_ARRAY_BASE_OFFSET;
+//    unsafeCopy(src, srcAddress, destBase, destAddress, length);
+//  }
 
   public static void copy(byte[] src, int srcOffset, long address, int length) {
+    mallocStats.checkAllocation(address, length);
+
     Object destBase = null;
     long srcAddress = srcOffset + BYTE_ARRAY_BASE_OFFSET;
     unsafeCopy(src, srcAddress, destBase, address, length);
@@ -388,6 +462,10 @@ public final class UnsafeAccess {
   }
 
   public static void copy(long src, long dst, long len) {
+    mallocStats.checkAllocation(src, (int)len);
+    mallocStats.checkAllocation(dst, (int)len);
+    
+
     while (len > 0) {
       long size = (len > UNSAFE_COPY_THRESHOLD) ? UNSAFE_COPY_THRESHOLD : len;
       theUnsafe.copyMemory(src, dst, size);
@@ -417,19 +495,19 @@ public final class UnsafeAccess {
    * @param destOffset
    * @param length
    */
-  public static void copy(ByteBuffer src, int srcOffset, byte[] dest, int destOffset,
-      int length) {
-    long srcAddress = srcOffset;
-    Object srcBase = null;
-    if (src.isDirect()) {
-      srcAddress = srcAddress + ((DirectBuffer) src).address();
-    } else {
-      srcAddress = srcAddress + BYTE_ARRAY_BASE_OFFSET + src.arrayOffset();
-      srcBase = src.array();
-    }
-    long destAddress = destOffset + BYTE_ARRAY_BASE_OFFSET;
-    unsafeCopy(srcBase, srcAddress, dest, destAddress, length);
-  }
+//  public static void copy(ByteBuffer src, int srcOffset, byte[] dest, int destOffset,
+//      int length) {
+//    long srcAddress = srcOffset;
+//    Object srcBase = null;
+//    if (src.isDirect()) {
+//      srcAddress = srcAddress + ((DirectBuffer) src).address();
+//    } else {
+//      srcAddress = srcAddress + BYTE_ARRAY_BASE_OFFSET + src.arrayOffset();
+//      srcBase = src.array();
+//    }
+//    long destAddress = destOffset + BYTE_ARRAY_BASE_OFFSET;
+//    unsafeCopy(srcBase, srcAddress, dest, destAddress, length);
+//  }
 
   /**
    * Copies specified number of bytes from given offset of {@code src} buffer into the {@code dest}
@@ -441,24 +519,24 @@ public final class UnsafeAccess {
    * @param destOffset
    * @param length
    */
-  public static void copy(ByteBuffer src, int srcOffset, ByteBuffer dest, int destOffset,
-      int length) {
-    long srcAddress, destAddress;
-    Object srcBase = null, destBase = null;
-    if (src.isDirect()) {
-      srcAddress = srcOffset + ((DirectBuffer) src).address();
-    } else {
-      srcAddress = srcOffset +  src.arrayOffset() + BYTE_ARRAY_BASE_OFFSET;
-      srcBase = src.array();
-    }
-    if (dest.isDirect()) {
-      destAddress = destOffset + ((DirectBuffer) dest).address();
-    } else {
-      destAddress = destOffset + BYTE_ARRAY_BASE_OFFSET + dest.arrayOffset();
-      destBase = dest.array();
-    }
-    unsafeCopy(srcBase, srcAddress, destBase, destAddress, length);
-  }
+//  public static void copy(ByteBuffer src, int srcOffset, ByteBuffer dest, int destOffset,
+//      int length) {
+//    long srcAddress, destAddress;
+//    Object srcBase = null, destBase = null;
+//    if (src.isDirect()) {
+//      srcAddress = srcOffset + ((DirectBuffer) src).address();
+//    } else {
+//      srcAddress = srcOffset +  src.arrayOffset() + BYTE_ARRAY_BASE_OFFSET;
+//      srcBase = src.array();
+//    }
+//    if (dest.isDirect()) {
+//      destAddress = destOffset + ((DirectBuffer) dest).address();
+//    } else {
+//      destAddress = destOffset + BYTE_ARRAY_BASE_OFFSET + dest.arrayOffset();
+//      destBase = dest.array();
+//    }
+//    unsafeCopy(srcBase, srcAddress, destBase, destAddress, length);
+//  }
 
   // APIs to add primitives to BBs
   /**
@@ -468,17 +546,17 @@ public final class UnsafeAccess {
    * @param val short to write out
    * @return incremented offset
    */
-  public static int putShort(ByteBuffer buf, int offset, short val) {
-    if (littleEndian) {
-      val = Short.reverseBytes(val);
-    }
-    if (buf.isDirect()) {
-      theUnsafe.putShort(((DirectBuffer) buf).address() + offset, val);
-    } else {
-      theUnsafe.putShort(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset, val);
-    }
-    return offset + Bytes.SIZEOF_SHORT;
-  }
+//  public static int putShort(ByteBuffer buf, int offset, short val) {
+//    if (littleEndian) {
+//      val = Short.reverseBytes(val);
+//    }
+//    if (buf.isDirect()) {
+//      theUnsafe.putShort(((DirectBuffer) buf).address() + offset, val);
+//    } else {
+//      theUnsafe.putShort(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset, val);
+//    }
+//    return offset + Bytes.SIZEOF_SHORT;
+//  }
 
   /**
    * Put a long value out to the specified BB position in big-endian format.
@@ -487,17 +565,17 @@ public final class UnsafeAccess {
    * @param val long to write out
    * @return incremented offset
    */
-  public static int putLong(ByteBuffer buf, int offset, long val) {
-    if (littleEndian) {
-      val = Long.reverseBytes(val);
-    }
-    if (buf.isDirect()) {
-      theUnsafe.putLong(((DirectBuffer) buf).address() + offset, val);
-    } else {
-      theUnsafe.putLong(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset, val);
-    }
-    return offset + Bytes.SIZEOF_LONG;
-  }
+//  public static int putLong(ByteBuffer buf, int offset, long val) {
+//    if (littleEndian) {
+//      val = Long.reverseBytes(val);
+//    }
+//    if (buf.isDirect()) {
+//      theUnsafe.putLong(((DirectBuffer) buf).address() + offset, val);
+//    } else {
+//      theUnsafe.putLong(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset, val);
+//    }
+//    return offset + Bytes.SIZEOF_LONG;
+//  }
   /**
    * Put a byte value out to the specified BB position in big-endian format.
    * @param buf the byte buffer
@@ -505,15 +583,15 @@ public final class UnsafeAccess {
    * @param b byte to write out
    * @return incremented offset
    */
-  public static int putByte(ByteBuffer buf, int offset, byte b) {
-    if (buf.isDirect()) {
-      theUnsafe.putByte(((DirectBuffer) buf).address() + offset, b);
-    } else {
-      theUnsafe.putByte(buf.array(),
-          BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset, b);
-    }
-    return offset + 1;
-  }
+//  public static int putByte(ByteBuffer buf, int offset, byte b) {
+//    if (buf.isDirect()) {
+//      theUnsafe.putByte(((DirectBuffer) buf).address() + offset, b);
+//    } else {
+//      theUnsafe.putByte(buf.array(),
+//          BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset, b);
+//    }
+//    return offset + 1;
+//  }
 
   /**
    * Returns the byte at the given offset
@@ -521,13 +599,13 @@ public final class UnsafeAccess {
    * @param offset the offset at which the byte has to be read
    * @return the byte at the given offset
    */
-  public static byte toByte(ByteBuffer buf, int offset) {
-    if (buf.isDirect()) {
-      return theUnsafe.getByte(((DirectBuffer) buf).address() + offset);
-    } else {
-      return theUnsafe.getByte(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
-    }
-  }
+//  public static byte toByte(ByteBuffer buf, int offset) {
+//    if (buf.isDirect()) {
+//      return theUnsafe.getByte(((DirectBuffer) buf).address() + offset);
+//    } else {
+//      return theUnsafe.getByte(buf.array(), BYTE_ARRAY_BASE_OFFSET + buf.arrayOffset() + offset);
+//    }
+//  }
 
   /**
    * Returns the byte at the given offset of the object
@@ -540,6 +618,8 @@ public final class UnsafeAccess {
   }
   
   public static byte toByte(long addr) {
+    mallocStats.checkAllocation(addr, 1);
+
     return theUnsafe.getByte(addr);
   }
   /**
@@ -548,9 +628,15 @@ public final class UnsafeAccess {
    * @return memory pointer
    */
   public static long malloc (long size) {
-    return theUnsafe.allocateMemory(size);
+    long address = theUnsafe.allocateMemory(size);
+    mallocStats.allocEvent(address, size);
+    return address;
   }
   
+  
+  public static void mallocStats() {
+    mallocStats.printStats();
+  }
   /**
    * Reallocate memory
    */
@@ -564,6 +650,7 @@ public final class UnsafeAccess {
    * @param ptr memory pointer
    */
   public static void free(long ptr) {
+    mallocStats.freeEvent(ptr);
     theUnsafe.freeMemory(ptr);
   }
   

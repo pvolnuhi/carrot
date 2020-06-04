@@ -4,6 +4,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import org.bigbase.carrot.Key;
+
 import sun.misc.Unsafe;
 
 public class Utils {
@@ -131,6 +133,7 @@ public class Utils {
   public static int compareTo(byte[] buffer1, int offset1, int length1, long address,
        int length2) {
 
+    UnsafeAccess.mallocStats.checkAllocation(address, length2);
     Unsafe theUnsafe = UnsafeAccess.theUnsafe;
  
     final int minLength = Math.min(length1, length2);
@@ -191,6 +194,8 @@ public class Utils {
    */
   public static int compareTo(long address1, int length1, long address2,
        int length2) {
+    UnsafeAccess.mallocStats.checkAllocation(address1, length1);
+    UnsafeAccess.mallocStats.checkAllocation(address2, length2);
 
     Unsafe theUnsafe = UnsafeAccess.theUnsafe;
  
@@ -425,5 +430,14 @@ public class Utils {
         return Bytes.compareTo(left, right);
       }
     });
-  } 
+  }
+  
+  public static void sortKeys(List<Key> list) {
+    Collections.sort(list, new Comparator<Key> () {
+      @Override
+      public int compare(Key k1, Key k2) {
+        return Utils.compareTo(k1.address, k1.size, k2.address, k2.size);
+      }
+    });
+  }
 }

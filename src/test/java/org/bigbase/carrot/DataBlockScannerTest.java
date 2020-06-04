@@ -15,13 +15,14 @@ import org.slf4j.LoggerFactory;
 
 public class DataBlockScannerTest {
   Logger LOG = LoggerFactory.getLogger(DataBlockScannerTest.class);
-  static IndexBlock ib = new IndexBlock(4096);
   
-  private DataBlock getDataBlock() {
-    DataBlock b = new DataBlock(4096);
-    b.register(ib, 0);
-    return b;
-  }
+  protected DataBlock getDataBlock() {
+    IndexBlock ib = new IndexBlock(4096);
+    ib.setFirstIndexBlock();
+    ib.firstBlock();
+    return ib.firstBlock();
+  } 
+  
   @Test
   public void testFullScan() throws IOException {
     System.out.println("testFullScan");  
@@ -30,6 +31,8 @@ public class DataBlockScannerTest {
     Utils.sort(keys);
     System.out.println("Loaded "+ keys.size()+" kvs");
     DataBlockScanner scanner = DataBlockScanner.getScanner(ib, null, null, Long.MAX_VALUE);
+    // Skip first system key
+    scanner.next();
     verifyScanner(scanner, keys);
     scanner.close();
   }
@@ -47,6 +50,8 @@ public class DataBlockScannerTest {
     keys = keys.subList(0, stopRowIndex);
     System.out.println("Selected "+ keys.size()+" kvs");
     DataBlockScanner scanner = DataBlockScanner.getScanner(ib, null, stopRow, Long.MAX_VALUE);
+    // Skip first system key
+    scanner.next();
     verifyScanner(scanner, keys);
     scanner.close();
   }
@@ -76,8 +81,10 @@ public class DataBlockScannerTest {
     Utils.sort(keys);
     Random r = new Random();
     int startRowIndex = r.nextInt(keys.size());
-    int stopRowIndex = r.nextInt(keys.size() - startRowIndex -1) +1 + startRowIndex;
-
+    int stopRowIndex = r.nextInt(keys.size() - startRowIndex) +1 + startRowIndex;
+    if (stopRowIndex >= keys.size()) {
+      stopRowIndex = keys.size() -1;
+    }
     byte[] startRow = keys.get(startRowIndex);
     byte[] stopRow = keys.get(stopRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");

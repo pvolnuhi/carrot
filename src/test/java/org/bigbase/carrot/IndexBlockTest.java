@@ -2,20 +2,20 @@ package org.bigbase.carrot;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Utils;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class IndexBlockTest {
   Logger LOG = LoggerFactory.getLogger(IndexBlockTest.class);
+  
   
   @Test
   public void testPutGet() {
@@ -41,11 +41,8 @@ public class IndexBlockTest {
     Utils.sort(keys);
     byte[] value = null;
     int found = 0;
-    //System.out.println("INDEX_BLOCK DUMP:");  
     for(byte[] key: keys) {
       value = new byte[key.length];
-      //System.out.println("Get found"+(++found) +" "+ Bytes.toHex(key));  
-
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
       assertTrue(size == value.length);
       int res = Utils.compareTo(key, 0, key.length, value, 0, value.length);
@@ -56,21 +53,23 @@ public class IndexBlockTest {
     // now delete all
 
     found =0;
+    List<byte[]> splitRequired = new ArrayList<byte[]>();
     for(byte[] key: keys) {
       
+      String shortKey = new String(key);
+      shortKey = shortKey.substring(0, Math.min(16, shortKey.length()));
+      System.out.println("Deleting " + shortKey);
       OpResult result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
-      if (result != OpResult.OK) {
-        System.err.println("Not found for delete: "+(++found) +" "+ Bytes.toHex(key));  
-        long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-        if (size != key.length) {
-          fail("Get failed with return=" + size);
-        } else {
-          System.err.println("Get OK with return=" + size);
-        }
-        result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
+      assertTrue(result != OpResult.NOT_FOUND);
+      if (result == OpResult.SPLIT_REQUIRED) {
+        // Index block split may be required if key being deleted is a first key in
+        // a data block and next key is greater in size
+        // TODO: verification of a failure
+        splitRequired.add(key);
+        continue;
       }
       assertEquals(OpResult.OK, result);
-      //System.out.println("Deleted "+(++found) +" "+ Bytes.toHex(key));  
+      System.out.println("Deleted "+(++found) +" total="+ keys.size());  
 
       // try again
       result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
@@ -79,7 +78,11 @@ public class IndexBlockTest {
     // Now try get them
     for(byte[] key: keys) {
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-      assertTrue(size == DataBlock.NOT_FOUND);
+      if (splitRequired.contains(key)) {
+        assertTrue (size > 0);
+      } else {
+        assertTrue(size == DataBlock.NOT_FOUND);
+      }
     }
     System.out.println("testPutGetDeleteFull OK");
   } 
@@ -104,9 +107,18 @@ public class IndexBlockTest {
     
     // now delete some
     List<byte[]> toDelete = keys.subList(0, keys.size()/2);
-    
+    List<byte[]> splitRequired = new ArrayList<byte[]>();
+
     for(byte[] key: toDelete) {
       OpResult result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
+      assertTrue(result != OpResult.NOT_FOUND);
+      if (result == OpResult.SPLIT_REQUIRED) {
+        // Index block split may be required if key being deleted is a first key in
+        // a data block and next key is greater in size
+        // TODO: verification of a failure
+        splitRequired.add(key);
+        continue;
+      }
       assertEquals(OpResult.OK, result);
       // try again
       result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
@@ -116,7 +128,11 @@ public class IndexBlockTest {
     for(byte[] key: toDelete) {
       value = new byte[key.length];
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
-      assertTrue(size == DataBlock.NOT_FOUND);
+      if (splitRequired.contains(key)) {
+        assertTrue (size > 0);
+      } else {
+        assertTrue(size == DataBlock.NOT_FOUND);
+      }
     }
     // Now get the rest
     for(byte[] key: keys.subList(keys.size()/2, keys.size())) {
@@ -132,8 +148,7 @@ public class IndexBlockTest {
   
   private IndexBlock getIndexBlock(int size) {
     IndexBlock ib = new IndexBlock(size);
-    byte[] kk = new byte[] { (byte) 0};
-    ib.put(kk, 0, kk.length, kk, 0, kk.length, Long.MAX_VALUE, Op.DELETE.ordinal());
+    ib.setFirstIndexBlock();
     return ib;
   }
   
