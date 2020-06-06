@@ -15,12 +15,14 @@ import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.RetryOperationException;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Utils;
+import org.junit.Ignore;
 import org.junit.Test;
 
 
 public class DataBlockTest extends DataBlockTestBase{
   Log LOG = LogFactory.getLog(DataBlockTest.class);
   
+  @Ignore
   @Test
   public void testDataBlockPutGet() throws RetryOperationException {
     System.out.println("testDataBlockPutGet");
@@ -46,6 +48,7 @@ public class DataBlockTest extends DataBlockTestBase{
 
   }
   
+  @Ignore
   @Test
   public void testScanAfterDelete() throws RetryOperationException, IOException
   {
@@ -75,6 +78,7 @@ public class DataBlockTest extends DataBlockTestBase{
     return nkeys;
   }
    
+  @Ignore
   @Test
   public void testDataBlockPutScan() throws RetryOperationException, IOException {
     System.out.println("testDataBlockPutScan");
@@ -100,6 +104,7 @@ public class DataBlockTest extends DataBlockTestBase{
 
   }
    
+  @Ignore
   @Test
   public void testDataBlockPutDelete() throws RetryOperationException {
     System.out.println("testDataBlockPutDelete");
@@ -121,6 +126,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
+  @Ignore
   @Test
   public void testDataBlockSplit() throws RetryOperationException, IOException {
     System.out.println("testDataBlockSplit");
@@ -151,6 +157,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
+  @Ignore
   @Test
   public void testDataBlockMerge() throws RetryOperationException, IOException {
     System.out.println("testDataBlockMerge");
@@ -185,6 +192,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
+  @Ignore
   @Test
   public void testCompactionFull() throws RetryOperationException {
     System.out.println("testCompactionFull");
@@ -209,6 +217,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
+  @Ignore
   @Test
   public void testCompactionPartial() throws RetryOperationException {
     System.out.println("testCompactionPartial");
@@ -242,6 +251,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
+  @Ignore
   @Test
   public void testOrderedInsertion() throws RetryOperationException, IOException {
     System.out.println("testOrderedInsertion");
@@ -293,6 +303,7 @@ public class DataBlockTest extends DataBlockTestBase{
   
   
    
+  @Ignore
   @Test
   public void testDataBlockPutAfterDelete() throws RetryOperationException {
     System.out.println("testDataBlockPutAfterDelete");
@@ -374,7 +385,7 @@ public class DataBlockTest extends DataBlockTestBase{
     // Now insert existing keys with val/2
     for (int i = 0; i < keys.size(); i++) {
       byte[] key = keys.get(i);
-
+      System.out.println("key =" + (new String(key)).substring(0,16)+" size="+ key.length);
       long addr = b.get(key, 0, key.length, Long.MAX_VALUE);
       int oldValLen = DataBlock.valueLength(addr);
 
@@ -451,6 +462,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
  
    
+  @Ignore
   @Test
   public void testFirstKey() throws IOException {
     System.out.println("testFirstKey");
@@ -489,7 +501,6 @@ public class DataBlockTest extends DataBlockTestBase{
   protected ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
-
     boolean result = true;
     while(result == true) {
       byte[] key = new byte[32];

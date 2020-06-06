@@ -65,7 +65,11 @@ public class DataBlock  {
   public final static String MAX_BLOCK_SIZE_KEY = "max.block.size";
   public static short MAX_BLOCK_SIZE = 4096;
   public final static long NO_VERSION = -1;
-  public final static int EXTERNALLY_ALLOCATED = 0;
+  // This is stored as key length
+  public final static int EXTERNAL_KEY_VALUE = 0;
+  // This is stored as value length
+  public final static int EXTERNAL_VALUE = -1;
+
   
   static {
     String val = System.getProperty(MAX_BLOCK_SIZE_KEY);
@@ -132,15 +136,23 @@ public class DataBlock  {
     }
     return -1;
   }
-
+  static enum AllocType {
+    EMBEDDED, EXT_VALUE, EXT_KEY_VALUE;
+  }
   /**
    * Checks if K-V must be stored externally
    * @param keySize
    * @param valueSize
    * @return true, if - yes, false - otherwise
    */
-  public static boolean mustStoreExternally(int keySize, int valueSize) {
-    return keySize + valueSize + RECORD_TOTAL_OVERHEAD >= MAX_BLOCK_SIZE/2;
+  public static AllocType getAllocType (int keySize, int valueSize) {
+    if( keySize + valueSize + RECORD_TOTAL_OVERHEAD < MAX_BLOCK_SIZE/2) {
+      return AllocType.EMBEDDED;
+    } else if (keySize + RECORD_TOTAL_OVERHEAD + ADDRESS_SIZE + INT_SIZE < MAX_BLOCK_SIZE/2) {
+      return AllocType.EXT_VALUE;
+    } else {
+      return AllocType.EXT_KEY_VALUE;
+    }
   }
   
   
@@ -336,21 +348,35 @@ public class DataBlock  {
   }
 
   
-  public static boolean isExternalRecord(long ptr) {
-    return UnsafeAccess.toShort(ptr) == EXTERNALLY_ALLOCATED;
+  public static AllocType getRecordAllocationType(long ptr) {
+    if( blockKeyLength(ptr) == EXTERNAL_KEY_VALUE) {
+      return AllocType.EXT_KEY_VALUE;
+    } else if (UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH) == EXTERNAL_VALUE) {
+      return AllocType.EXT_VALUE;
+    } else {
+      return AllocType.EMBEDDED;
+    }
+      
   }
+  
+  public static boolean isExternalAllocatedRecord(long ptr) {
+    AllocType type = getRecordAllocationType(ptr);
+    return type != AllocType.EMBEDDED;
+  }
+  
   
   public static final short blockKeyLength(long ptr) {
     return UnsafeAccess.toShort(ptr);
   }
   
-  public static final int externalKeyLength(long ptr) {
+  // TODO
+  private static final int externalKeyLength(long ptr) {
     long address = getExternalRecordAddress(ptr);
     return UnsafeAccess.toInt(address);
   }
   
   public static final int keyLength(long ptr) {
-    if (isExternalRecord(ptr)) {
+    if (getRecordAllocationType(ptr) == AllocType.EXT_KEY_VALUE) {
       return externalKeyLength(ptr);
     } else {
       return blockKeyLength(ptr);
@@ -358,29 +384,34 @@ public class DataBlock  {
   }
   
   public static final short blockValueLength(long ptr) {
-    return UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH);
+    short len = UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH);
+    if (len == EXTERNAL_VALUE) return INT_SIZE + ADDRESS_SIZE;
+    return len;
   }
   
-  public static final int externalValueLength(long ptr) {
-    long address = getExternalRecordAddress(ptr);
-    return UnsafeAccess.toInt(address + INT_SIZE);
-  }
   
   public static final int valueLength(long ptr) {
-    if (isExternalRecord(ptr)) {
-      return externalValueLength(ptr);
+    AllocType type = getRecordAllocationType(ptr);
+    if (type == AllocType.EXT_KEY_VALUE) {
+      long address = getExternalRecordAddress(ptr);
+      return UnsafeAccess.toInt(address + INT_SIZE);
+    } else if (type == AllocType.EXT_VALUE){
+      long address = getExternalRecordAddress(ptr);
+      return UnsafeAccess.toInt(address);
     } else {
       return blockValueLength(ptr);
     }
   }
   
   public static long getExternalRecordAddress(long ptr) {
-    int off = RECORD_TOTAL_OVERHEAD; // keyLength = 0 if externally allocated
-    return UnsafeAccess.toLong(ptr + off + INT_SIZE);
+    int klen = blockKeyLength(ptr);
+    return UnsafeAccess.toLong(ptr + RECORD_TOTAL_OVERHEAD + klen + INT_SIZE);
   }
   
   public static final long keyAddress(long ptr) {
-    if (!isExternalRecord(ptr)) {
+    AllocType type = getRecordAllocationType(ptr);
+
+    if (type != AllocType.EXT_KEY_VALUE) {
       return ptr + RECORD_PREFIX_LENGTH;
     } else {
       long address = getExternalRecordAddress(ptr);
@@ -394,12 +425,21 @@ public class DataBlock  {
   }
   
   public static final long valueAddress(long ptr) {
-    if (!isExternalRecord(ptr)) {
+    AllocType type = getRecordAllocationType(ptr);
+
+    if (type == AllocType.EMBEDDED) {
       return blockKeyLength(ptr) + keyAddress(ptr) + SEQUENCEID_SIZE + TYPE_SIZE;
-    } else {
+    } else if (type == AllocType.EXT_KEY_VALUE){
       long address = getExternalRecordAddress(ptr);
       return address + 2 * INT_SIZE + UnsafeAccess.toInt(address)/*key length*/;
+    } else {
+      long address = getExternalRecordAddress(ptr);
+      return address + INT_SIZE;
     }
+  }
+  
+  public static boolean mustStoreExternally (int keyLength, int valueLength) {
+    return getAllocType(keyLength, valueLength) != AllocType.EMBEDDED;
   }
   
   public static final Op type(long ptr) {
@@ -824,7 +864,7 @@ public class DataBlock  {
             keyOverwrite = true;
           } else if (res == 0) {
             keyOverwrite = true;
-            foundExternal = isExternalRecord(addr);
+            foundExternal = getRecordAllocationType(addr) != AllocType.EMBEDDED;
           }
           if (keyOverwrite) {
             // Get seqId of existing record
@@ -833,7 +873,7 @@ public class DataBlock  {
         }
       }
 
-      int existRecLen = RECORD_TOTAL_OVERHEAD + keyLength + valueLength;
+      int newRecLen = RECORD_TOTAL_OVERHEAD + keyLength + valueLength;
       // Classical case: the same key is not found
       boolean insert = !keyOverwrite;
       // The same key was found but we have to preserve
@@ -850,7 +890,7 @@ public class DataBlock  {
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
-        UnsafeAccess.copy(addr, addr + existRecLen, dataPtr + dataSize - addr);
+        UnsafeAccess.copy(addr, addr + newRecLen, dataPtr + dataSize - addr);
         UnsafeAccess.copy(key, keyOffset, addr + RECORD_PREFIX_LENGTH, keyLength);
         UnsafeAccess.copy(value, valueOffset, addr + RECORD_TOTAL_OVERHEAD + keyLength,
           valueLength);
@@ -867,13 +907,13 @@ public class DataBlock  {
         setRecordType(addr, Op.PUT);
 
         incrNumberOfRecords((short) 1);
-        incrDataSize((short) existRecLen);
+        incrDataSize((short) newRecLen);
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
         if (isThreadSafe() == false) {
           // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(existRecLen);
+          BigSortedMap.totalDataSize.addAndGet(newRecLen);
         }
       } else if (overwrite) {
         // UPDATE existing
@@ -895,7 +935,7 @@ public class DataBlock  {
 
         int keylen = foundExternal? blockKeyLength(addr): keyLength(addr);// must be equal to keyLength
         int vallen = foundExternal? blockValueLength(addr): valueLength(addr);
-        existRecLen = keylen + vallen + RECORD_TOTAL_OVERHEAD;
+        int existRecLen = keylen + vallen + RECORD_TOTAL_OVERHEAD;
 
                 
         int toMove = foundExternal? (keyLength + valueLength + RECORD_TOTAL_OVERHEAD - existRecLen):
@@ -945,7 +985,7 @@ public class DataBlock  {
    * @param valueLength value length
    * @return address of a record
    */
-  private long allocateAndCopyExternal(long keyPtr, int keyLength, long valuePtr, int valueLength) {
+  private long allocateAndCopyExternalKeyValue(long keyPtr, int keyLength, long valuePtr, int valueLength) {
     long recAddress = UnsafeAccess.malloc(keyLength + valueLength + 2 * INT_SIZE);
     if (recAddress <=0) {
       return UnsafeAccess.MALLOC_FAILED;
@@ -959,6 +999,18 @@ public class DataBlock  {
     return recAddress;
   }
   
+  private long allocateAndCopyExternalValue(long valuePtr, int valueLength) {
+    long recAddress = UnsafeAccess.malloc(valueLength + INT_SIZE);
+    if (recAddress <=0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
+
+    UnsafeAccess.putInt(recAddress , valueLength);
+    UnsafeAccess.copy(valuePtr, recAddress + INT_SIZE, valueLength);
+    return recAddress;
+  }
+  
   /**
    * Returns address of externally allocated record
    * @param key - key array
@@ -969,7 +1021,7 @@ public class DataBlock  {
    * @param valueLength value length
    * @return address of a record
    */
-  private long allocateAndCopyExternal(byte[] key, int keyOffset, int keyLength, byte[] value, int valueOffset,
+  private long allocateAndCopyExternalKeyValue(byte[] key, int keyOffset, int keyLength, byte[] value, int valueOffset,
       int valueLength) {
     long recAddress = UnsafeAccess.malloc(keyLength + valueLength + 2 * INT_SIZE);
     if (recAddress < 0) {
@@ -980,6 +1032,18 @@ public class DataBlock  {
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(key, keyOffset, recAddress + 2 * INT_SIZE, keyLength);
     UnsafeAccess.copy(value, valueOffset, recAddress + 2 * INT_SIZE + keyLength, valueLength);
+    return recAddress;
+  }
+  
+  private long allocateAndCopyExternalValue( byte[] value, int valueOffset,
+      int valueLength) {
+    long recAddress = UnsafeAccess.malloc( valueLength +  INT_SIZE);
+    if (recAddress < 0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
+    UnsafeAccess.putInt(recAddress, valueLength);
+    UnsafeAccess.copy(value, valueOffset, recAddress + INT_SIZE, valueLength);
     return recAddress;
   }
   
@@ -1020,19 +1084,19 @@ public class DataBlock  {
     boolean keyOverwrite = false; // key the same, value is different in size
     // Get the most recent active Tx Id or snapshot Id (scanner)
     long mostRecentActiveTxId = BigSortedMap.getMostRecentActiveTxSeqId();
-    
+    AllocType type = getAllocType(keyLength, valueLength);
     // TODO: result check
-    int extValueLength = INT_SIZE + ADDRESS_SIZE;// 4 - contains overall length, 8 - address 
+    int newKVLength = INT_SIZE + ADDRESS_SIZE +
+        (type == AllocType.EXT_VALUE? keyLength:0);// 4 - contains overall length, 8 - address 
     try {
       writeLock();
-      onlyExactOverwrite = compactExpandIfNecessary(extValueLength);
+      onlyExactOverwrite = compactExpandIfNecessary(newKVLength);
       int dataSize = getDataSize();
       int blockSize = getBlockSize();
       
-      //TODO: update search to support externally allocated K-Vs
       long addr = search(key, keyOffset, keyLength, version);
       boolean append = addr == (dataPtr + dataSize);
-      boolean extAddr = !append && isExternalRecord(addr);
+      boolean extAddr = !append && getRecordAllocationType(addr) != AllocType.EMBEDDED;
       // TODO: verify what search returns if not found
       long foundSeqId = -1;
       if (addr < dataPtr + dataSize) {
@@ -1055,7 +1119,7 @@ public class DataBlock  {
         }
       }
   
-      int existRecLength = RECORD_TOTAL_OVERHEAD + extValueLength;
+      int newRecLength = RECORD_TOTAL_OVERHEAD + newKVLength;
       // Classical case: the same key is not found
       boolean insert = !keyOverwrite;
       // The same key was found but we have to preserve
@@ -1069,19 +1133,33 @@ public class DataBlock  {
         return false;
       }
       long recAddress = 0;
-      int kvSize = keyLength + valueLength + 2 * INT_SIZE;
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
-        recAddress = allocateAndCopyExternal(key, keyOffset, keyLength, value, valueOffset, valueLength);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          int kvSize = keyLength + valueLength + 2 *INT_SIZE;
+          recAddress = allocateAndCopyExternalKeyValue(key, keyOffset, keyLength, value, valueOffset, valueLength);
         
-        UnsafeAccess.copy(addr, addr + existRecLength, dataPtr + dataSize - addr);
-        UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
-        UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
-        // Update key-value length
-        UnsafeAccess.putShort(addr, (short) EXTERNALLY_ALLOCATED /* ==0*/);
-        UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) extValueLength);
-
+          UnsafeAccess.copy(addr, addr + newRecLength, dataPtr + dataSize - addr);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE /* ==0*/);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
+        } else { // AllocType.EXT_VALUE
+          recAddress = allocateAndCopyExternalValue(value, valueOffset, valueLength);
+          
+          UnsafeAccess.copy(addr, addr + newRecLength, dataPtr + dataSize - addr);
+          // copy key
+          UnsafeAccess.copy(key,  keyOffset, addr + RECORD_PREFIX_LENGTH, keyLength);
+          // store value (size + address)
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, valueLength + INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) keyLength);
+          // Set value to external
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) EXTERNAL_VALUE);
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         setRecordEviction(addr, 0L);
@@ -1091,21 +1169,28 @@ public class DataBlock  {
         setRecordType(addr, Op.PUT);
 
         incrNumberOfRecords((short) 1);
-        incrDataSize((short) existRecLength);
+        incrDataSize((short) newRecLength);
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
         if (isThreadSafe() == false) {
           // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(existRecLength);
+          BigSortedMap.totalDataSize.addAndGet(newRecLength);
         }
       } else if (overwrite) {
+        // Keys are the same, values have the same size - both new and old records 
+        // are external allocations of the same type
         // UPDATE existing - both are external records
         // We do overwrite of existing record and use existing external allocation
         recAddress = getExternalRecordAddress(addr);
         
-        UnsafeAccess.copy(value, valueOffset, recAddress + 2 * INT_SIZE + keyLength,
-          valueLength);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          UnsafeAccess.copy(value, valueOffset, recAddress + 2 * INT_SIZE + keyLength,
+            valueLength);
+        } else { // AllocType.EXT_VALUE
+          UnsafeAccess.copy(value, valueOffset, recAddress + INT_SIZE,
+            valueLength);
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         // Do not update eviction, because we overwrite existing record
@@ -1115,31 +1200,54 @@ public class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
       } else if (!extAddr){
+        // Keys are the same, values are not, old k-v is EMBEDDED
         // Neither insert nor overwrite - delete, then - insert
         // keyOverwrite = true
         // delete existing, put new
         // TODO check allocation
         int keylen =  keyLength(addr);// must be equal to keyLength
         int vallen =  valueLength(addr);
-        existRecLength = keylen + vallen + RECORD_TOTAL_OVERHEAD;
-        int externRecLen = extValueLength + RECORD_TOTAL_OVERHEAD;
-        int toMove = (externRecLen - existRecLength);
+        int existRecLength = keylen + vallen + RECORD_TOTAL_OVERHEAD;
+        
+        int toMove = newRecLength - existRecLength;
         if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
           // failed to insert, split is required
           return false;
         }
-        recAddress = allocateAndCopyExternal(key, keyOffset, keyLength, value, valueOffset, valueLength);
-
-        // move from offset to offset + moveDist
-        UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
-          dataPtr + dataSize - addr - existRecLength);
         
-        UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
-        UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
-        // Update key-value length
-        UnsafeAccess.putShort(addr, (short) EXTERNALLY_ALLOCATED);
-        UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) extValueLength);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          recAddress = allocateAndCopyExternalKeyValue(key, keyOffset, keyLength, value, 
+            valueOffset, valueLength);
 
+          // move from offset to offset + moveDist
+          UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
+            dataPtr + dataSize - addr - existRecLength);
+        
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, 
+            keyLength + valueLength + 2 * INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
+        } else { // AlocType.EXT_VALUE
+          
+          recAddress = allocateAndCopyExternalValue(value, 
+            valueOffset, valueLength);
+         
+
+          // move from offset to offset + moveDist
+          UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
+            dataPtr + dataSize - addr - existRecLength);
+          // copy key
+          UnsafeAccess.copy(key,  keyOffset, addr + RECORD_PREFIX_LENGTH, keyLength);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
+            valueLength + INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) keyLength);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) EXTERNAL_VALUE);
+
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         // Do not reset eviction field
@@ -1153,15 +1261,32 @@ public class DataBlock  {
           BigSortedMap.totalDataSize.addAndGet(toMove);
         }
       } else if (extAddr) {
+        // Keys are the same, values are not, but old k-v is EXTERNAL type of allocation
+        // As since keys are the same, both new and old records have the same type of 
+        // external allocation, either EXT_VALUE or EXT_KEY_VALUE
         // Deallocate existing allocation
-        deallocateIfExternalRecord(addr);
-        recAddress = allocateAndCopyExternal(key, keyOffset, keyLength, value, valueOffset, valueLength);
-        UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
-        UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
-        // Update key-value length
-        UnsafeAccess.putShort(addr, (short) EXTERNALLY_ALLOCATED);
-        UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) extValueLength);
 
+        deallocateIfExternalRecord(addr);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          recAddress = allocateAndCopyExternalKeyValue(key, keyOffset, keyLength, value, 
+            valueOffset, valueLength);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, 
+            keyLength + valueLength + 2 * INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
+        } else { // AllocType.EXT_VALUE
+          // As since keys are the same - no need to overwrite existing key
+          recAddress = allocateAndCopyExternalValue(value, 
+            valueOffset, valueLength);         
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
+            valueLength + INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength +INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) keyLength);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) EXTERNAL_VALUE);
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         // Do not reset eviction field
@@ -1231,13 +1356,13 @@ public class DataBlock  {
   public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version,
       long expire) throws RetryOperationException {
 
-    if (getNumberOfRecords()  > 0 && isForbiddenKey(keyPtr, keyLength)) {
+    if (getNumberOfRecords() > 0 && isForbiddenKey(keyPtr, keyLength)) {
       // Return success silently TODO
       return true;
     }
     
     if (mustStoreExternally(keyLength, valueLength)) {
-      return putExternally(keyPtr, keyLength, valuePtr, 
+      return putExternally(keyPtr, keyLength, valuePtr,  
         valueLength, version, expire);
     }
     boolean onlyExactOverwrite = false;
@@ -1252,7 +1377,7 @@ public class DataBlock  {
       int dataSize = getDataSize();
       int blockSize = getBlockSize();
 
-      long addr = search(keyPtr,  keyLength, version);
+      long addr = search(keyPtr, keyLength, version);
       // TODO: verify what search returns if not found
       long foundSeqId = -1;
       boolean foundExternal = false;
@@ -1267,7 +1392,7 @@ public class DataBlock  {
             keyOverwrite = true;
           } else if (res == 0) {
             keyOverwrite = true;
-            foundExternal = isExternalRecord(addr);
+            foundExternal = getRecordAllocationType(addr) != AllocType.EMBEDDED;
           }
           if (keyOverwrite) {
             // Get seqId of existing record
@@ -1276,7 +1401,7 @@ public class DataBlock  {
         }
       }
 
-      int existRecLen = RECORD_TOTAL_OVERHEAD + keyLength + valueLength;
+      int newRecLen = RECORD_TOTAL_OVERHEAD + keyLength + valueLength;
       // Classical case: the same key is not found
       boolean insert = !keyOverwrite;
       // The same key was found but we have to preserve
@@ -1293,7 +1418,7 @@ public class DataBlock  {
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
-        UnsafeAccess.copy(addr, addr + existRecLen, dataPtr + dataSize - addr);
+        UnsafeAccess.copy(addr, addr + newRecLen, dataPtr + dataSize - addr);
         UnsafeAccess.copy(keyPtr, addr + RECORD_PREFIX_LENGTH, keyLength);
         UnsafeAccess.copy(valuePtr, addr + RECORD_TOTAL_OVERHEAD + keyLength,
           valueLength);
@@ -1310,18 +1435,18 @@ public class DataBlock  {
         setRecordType(addr, Op.PUT);
 
         incrNumberOfRecords((short) 1);
-        incrDataSize((short) existRecLen);
+        incrDataSize((short) newRecLen);
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
         if (isThreadSafe() == false) {
           // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(existRecLen);
+          BigSortedMap.totalDataSize.addAndGet(newRecLen);
         }
       } else if (overwrite) {
         // UPDATE existing
         // We do overwrite of existing record
-        UnsafeAccess.copy(valuePtr,  addr + RECORD_TOTAL_OVERHEAD + keyLength,
+        UnsafeAccess.copy(valuePtr, addr + RECORD_TOTAL_OVERHEAD + keyLength,
           valueLength);
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
@@ -1338,7 +1463,7 @@ public class DataBlock  {
 
         int keylen = foundExternal? blockKeyLength(addr): keyLength(addr);// must be equal to keyLength
         int vallen = foundExternal? blockValueLength(addr): valueLength(addr);
-        existRecLen = keylen + vallen + RECORD_TOTAL_OVERHEAD;
+        int existRecLen = keylen + vallen + RECORD_TOTAL_OVERHEAD;
 
                 
         int toMove = foundExternal? (keyLength + valueLength + RECORD_TOTAL_OVERHEAD - existRecLen):
@@ -1398,19 +1523,19 @@ public class DataBlock  {
     boolean keyOverwrite = false; // key the same, value is different in size
     // Get the most recent active Tx Id or snapshot Id (scanner)
     long mostRecentActiveTxId = BigSortedMap.getMostRecentActiveTxSeqId();
-    
+    AllocType type = getAllocType(keyLength, valueLength);
     // TODO: result check
-    int extValueLength = INT_SIZE + ADDRESS_SIZE;// 4 - contains overall length, 8 - address 
+    int newKVLength = INT_SIZE + ADDRESS_SIZE +
+        (type == AllocType.EXT_VALUE? keyLength:0);// 4 - contains overall length, 8 - address 
     try {
       writeLock();
-      onlyExactOverwrite = compactExpandIfNecessary(extValueLength);
+      onlyExactOverwrite = compactExpandIfNecessary(newKVLength);
       int dataSize = getDataSize();
       int blockSize = getBlockSize();
       
-      //TODO: update search to support externally allocated K-Vs
-      long addr = search(keyPtr,  keyLength, version);
+      long addr = search(keyPtr, keyLength, version);
       boolean append = addr == (dataPtr + dataSize);
-      boolean extAddr = !append && isExternalRecord(addr);
+      boolean extAddr = !append && getRecordAllocationType(addr) != AllocType.EMBEDDED;
       // TODO: verify what search returns if not found
       long foundSeqId = -1;
       if (addr < dataPtr + dataSize) {
@@ -1433,7 +1558,7 @@ public class DataBlock  {
         }
       }
   
-      int existRecLength = RECORD_TOTAL_OVERHEAD + extValueLength;
+      int newRecLength = RECORD_TOTAL_OVERHEAD + newKVLength;
       // Classical case: the same key is not found
       boolean insert = !keyOverwrite;
       // The same key was found but we have to preserve
@@ -1447,19 +1572,34 @@ public class DataBlock  {
         return false;
       }
       long recAddress = 0;
-      int kvSize = keyLength + valueLength + 2 * INT_SIZE;
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
-        recAddress = allocateAndCopyExternal(keyPtr, keyLength, valuePtr,  valueLength);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          int kvSize = keyLength + valueLength + 2 *INT_SIZE;
+          recAddress = 
+              allocateAndCopyExternalKeyValue(keyPtr,  keyLength, valuePtr, valueLength);
         
-        UnsafeAccess.copy(addr, addr + existRecLength, dataPtr + dataSize - addr);
-        UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
-        UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
-        // Update key-value length
-        UnsafeAccess.putShort(addr, (short) EXTERNALLY_ALLOCATED /* ==0*/);
-        UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) extValueLength);
-
+          UnsafeAccess.copy(addr, addr + newRecLength, dataPtr + dataSize - addr);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE /* ==0*/);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
+        } else { // AllocType.EXT_VALUE
+          recAddress = allocateAndCopyExternalValue(valuePtr, valueLength);
+          
+          UnsafeAccess.copy(addr, addr + newRecLength, dataPtr + dataSize - addr);
+          // copy key
+          UnsafeAccess.copy(keyPtr,  addr + RECORD_PREFIX_LENGTH, keyLength);
+          // store value (size + address)
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, valueLength + INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) keyLength);
+          // Set value to external
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) EXTERNAL_VALUE);
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         setRecordEviction(addr, 0L);
@@ -1469,21 +1609,28 @@ public class DataBlock  {
         setRecordType(addr, Op.PUT);
 
         incrNumberOfRecords((short) 1);
-        incrDataSize((short) existRecLength);
+        incrDataSize((short) newRecLength);
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
         if (isThreadSafe() == false) {
           // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(existRecLength);
+          BigSortedMap.totalDataSize.addAndGet(newRecLength);
         }
       } else if (overwrite) {
+        // Keys are the same, values have the same size - both new and old records 
+        // are external allocations of the same type
         // UPDATE existing - both are external records
         // We do overwrite of existing record and use existing external allocation
         recAddress = getExternalRecordAddress(addr);
         
-        UnsafeAccess.copy(valuePtr, recAddress + 2 * INT_SIZE + keyLength,
-          valueLength);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          UnsafeAccess.copy(valuePtr, recAddress + 2 * INT_SIZE + keyLength,
+            valueLength);
+        } else { // AllocType.EXT_VALUE
+          UnsafeAccess.copy(valuePtr, recAddress + INT_SIZE,
+            valueLength);
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         // Do not update eviction, because we overwrite existing record
@@ -1493,31 +1640,50 @@ public class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
       } else if (!extAddr){
+        // Keys are the same, values are not, old k-v is EMBEDDED
         // Neither insert nor overwrite - delete, then - insert
         // keyOverwrite = true
         // delete existing, put new
-
+        // TODO check allocation
         int keylen =  keyLength(addr);// must be equal to keyLength
         int vallen =  valueLength(addr);
-        existRecLength = keylen + vallen + RECORD_TOTAL_OVERHEAD;
-        int externRecLen = extValueLength + RECORD_TOTAL_OVERHEAD;
-        int toMove = (externRecLen - existRecLength);
+        int existRecLength = keylen + vallen + RECORD_TOTAL_OVERHEAD;
+        
+        int toMove = newRecLength - existRecLength;
         if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
           // failed to insert, split is required
           return false;
         }
-        recAddress = allocateAndCopyExternal(keyPtr,  keyLength, valuePtr,  valueLength);
-
-        // move from offset to offset + moveDist
-        UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
-          dataPtr + dataSize - addr - existRecLength);
         
-        UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
-        UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
-        // Update key-value length
-        UnsafeAccess.putShort(addr, (short) EXTERNALLY_ALLOCATED);
-        UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) extValueLength);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          recAddress = allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, valueLength);
+          // move from offset to offset + moveDist
+          UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
+            dataPtr + dataSize - addr - existRecLength);
+        
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, 
+            keyLength + valueLength + 2 * INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
+        } else { // AlocType.EXT_VALUE
+          
+          recAddress = allocateAndCopyExternalValue(valuePtr, valueLength);
+         
+          // move from offset to offset + moveDist
+          UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
+            dataPtr + dataSize - addr - existRecLength);
+          // copy key
+          UnsafeAccess.copy(keyPtr, addr + RECORD_PREFIX_LENGTH, keyLength);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
+            valueLength + INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) keyLength);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) EXTERNAL_VALUE);
 
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         // Do not reset eviction field
@@ -1531,15 +1697,30 @@ public class DataBlock  {
           BigSortedMap.totalDataSize.addAndGet(toMove);
         }
       } else if (extAddr) {
+        // Keys are the same, values are not, but old k-v is EXTERNAL type of allocation
+        // As since keys are the same, both new and old records have the same type of 
+        // external allocation, either EXT_VALUE or EXT_KEY_VALUE
         // Deallocate existing allocation
-        deallocateIfExternalRecord(addr);
-        recAddress = allocateAndCopyExternal(keyPtr,  keyLength, valuePtr,  valueLength);
-        UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
-        UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
-        // Update key-value length
-        UnsafeAccess.putShort(addr, (short) EXTERNALLY_ALLOCATED);
-        UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) extValueLength);
 
+        deallocateIfExternalRecord(addr);
+        if (type == AllocType.EXT_KEY_VALUE) {
+          recAddress = allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, valueLength);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, 
+            keyLength + valueLength + 2 * INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
+        } else { // AllocType.EXT_VALUE
+          // As since keys are the same - no need to overwrite existing key
+          recAddress = allocateAndCopyExternalValue(valuePtr,  valueLength);         
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
+            valueLength + INT_SIZE);
+          UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
+          // Update key-value length
+          UnsafeAccess.putShort(addr, (short) keyLength);
+          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) EXTERNAL_VALUE);
+        }
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         // Do not reset eviction field
@@ -1571,7 +1752,7 @@ public class DataBlock  {
     while (count++ < numRecords) {
       int keylen = keyLength(ptr);
      
-      int vallen = valueLength(ptr);
+      int vallen = blockValueLength(ptr);
       int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
       if (res < 0 || (res == 0 && version == NO_VERSION)) {
         return ptr;
@@ -1582,10 +1763,7 @@ public class DataBlock  {
           return ptr;
         }
       }
-      if (isExternalRecord(ptr)) {
-        keylen = 0;
-        vallen = INT_SIZE + ADDRESS_SIZE;
-      }
+      keylen = blockKeyLength(ptr);
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
     // after the last record
@@ -1606,7 +1784,7 @@ public class DataBlock  {
     while (count++ < numRecords) {
       int keylen = keyLength(ptr);
      
-      int vallen = valueLength(ptr);
+      int vallen = blockValueLength(ptr);
       int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
       if (res < 0 || (res == 0 && version == NO_VERSION)) {
         return ptr;
@@ -1617,10 +1795,8 @@ public class DataBlock  {
           return ptr;
         }
       }
-      if (isExternalRecord(ptr)) {
-        keylen = 0;
-        vallen = INT_SIZE + ADDRESS_SIZE;
-      }
+      keylen = blockKeyLength(ptr);
+
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
     // after the last record
@@ -1733,12 +1909,14 @@ public class DataBlock  {
         if (foundSeqId < mostRecentActiveTxId) {
           insert = true; // we can't delete immediately
         }
-        boolean isExternalRecord = isExternalRecord(addr);
+        AllocType type =  getRecordAllocationType(addr);
+        boolean isExternalRecord = type != AllocType.EMBEDDED;
 
-        if (isExternalRecord && insert) {
-          keyLength =0;
-          valueLength = INT_SIZE + ADDRESS_SIZE; // 12 bytes
+        if (type == AllocType.EXT_KEY_VALUE && insert) {
+          keyLength = blockKeyLength(addr);
+          valueLength = blockValueLength(addr); // 12 bytes
         }
+        
         if (insert) {
           if (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize) {
             // try compact first (remove deleted, updated)
@@ -1769,18 +1947,21 @@ public class DataBlock  {
         }
         
         if (insert) {
+          // TODO: test case for this code
+          //TODO: key is must be allocated externally due to size case !!!
+          
           // New K-V INSERT or we can't overwrite because of active Tx or snapshot
           // move from offset to offset + moveDist
           UnsafeAccess.copy(addr, addr + moveDist, dataPtr + dataSize - addr);
-          if (!isExternalRecord) {
+          if (type != AllocType.EXT_KEY_VALUE) {
             UnsafeAccess.copy(keyPtr,  addr + RECORD_PREFIX_LENGTH, keyLength);
-          }
-          // Update key-value length
-          UnsafeAccess.putShort(addr, (short) keyLength);
-          // 0- regular, 12 - for external record
-          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) valueLength);
-
-          if (isExternalRecord) {
+            // Update key length
+            UnsafeAccess.putShort(addr, (short) keyLength);
+            // 0
+            UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) valueLength);
+          } else {
+            // REMEMBER: if record is Op.DELETE - do not deallocate any external allocations
+            // b/c it refers to existing allocation
             long address = getExternalRecordAddress(addr);
             int kvSize = keyLength(addr) + valueLength(addr) + 2 *INT_SIZE;
             UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
@@ -1805,8 +1986,8 @@ public class DataBlock  {
 
           // delete existing record with the same key
           
-          int keylen = isExternalRecord? 0: keyLength;// must be equal to keyLength
-          int vallen = isExternalRecord?INT_SIZE + ADDRESS_SIZE: blockValueLength(addr);
+          int keylen = blockKeyLength(addr);//isExternalRecord? 0: keyLength;// must be equal to keyLength
+          int vallen = blockValueLength(addr);//isExternalRecord?INT_SIZE + ADDRESS_SIZE: blockValueLength(addr);
           moveDist = keylen + vallen + RECORD_TOTAL_OVERHEAD;
 
           // move from offset + moveDist to offset
@@ -1897,6 +2078,7 @@ public class DataBlock  {
       // Return NOT FOUND TODO
       return OpResult.NOT_FOUND;
     }
+    
     boolean insert = false;
     OpResult result = OpResult.NOT_FOUND;
     int valueLength = 0; // no value in delete op
@@ -1922,7 +2104,7 @@ public class DataBlock  {
           if (keylen == keyLength) {
             // Compare keys
             int res =
-                Utils.compareTo(key, keyOffset, keyLength, keyAddress(addr), keylen);
+                Utils.compareTo(key , keyOffset, keyLength, keyAddress(addr), keylen);
             if (res == 0) {
               // Get seqId of existing record
               foundSeqId = getRecordSeqId(addr);
@@ -1935,15 +2117,17 @@ public class DataBlock  {
         } else {
           return result;
         }
-        boolean isExternalRecord = isExternalRecord(addr);
-
         if (foundSeqId < mostRecentActiveTxId) {
           insert = true; // we can't delete immediately
         }
-        if (isExternalRecord && insert) {
-          keyLength =0;
-          valueLength = INT_SIZE + ADDRESS_SIZE; // 12 bytes
+        AllocType type =  getRecordAllocationType(addr);
+        boolean isExternalRecord = type != AllocType.EMBEDDED;
+
+        if (type == AllocType.EXT_KEY_VALUE && insert) {
+          keyLength = blockKeyLength(addr);
+          valueLength = blockValueLength(addr); // 12 bytes
         }
+        
         if (insert) {
           if (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize) {
             // try compact first (remove deleted, updated)
@@ -1974,18 +2158,21 @@ public class DataBlock  {
         }
         
         if (insert) {
+          // TODO: test case for this code
+          //TODO: key is must be allocated externally due to size case !!!
+          
           // New K-V INSERT or we can't overwrite because of active Tx or snapshot
           // move from offset to offset + moveDist
           UnsafeAccess.copy(addr, addr + moveDist, dataPtr + dataSize - addr);
-          if (!isExternalRecord) {
+          if (type != AllocType.EXT_KEY_VALUE) {
             UnsafeAccess.copy(key, keyOffset, addr + RECORD_PREFIX_LENGTH, keyLength);
-          }
-          // Update key-value length
-          UnsafeAccess.putShort(addr, (short) keyLength);
-          // 0- regular, 12 - for external record
-          UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) valueLength);
-
-          if (isExternalRecord) {
+            // Update key length
+            UnsafeAccess.putShort(addr, (short) keyLength);
+            // 0
+            UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) valueLength);
+          } else {
+            // REMEMBER: if record is Op.DELETE - do not deallocate any external allocations
+            // b/c it refers to existing allocation
             long address = getExternalRecordAddress(addr);
             int kvSize = keyLength(addr) + valueLength(addr) + 2 *INT_SIZE;
             UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, kvSize);
@@ -2010,8 +2197,8 @@ public class DataBlock  {
 
           // delete existing record with the same key
           
-          int keylen = isExternalRecord? 0: keyLength;// must be equal to keyLength
-          int vallen = isExternalRecord?INT_SIZE + ADDRESS_SIZE: blockValueLength(addr);
+          int keylen = blockKeyLength(addr);//isExternalRecord? 0: keyLength;// must be equal to keyLength
+          int vallen = blockValueLength(addr);//isExternalRecord?INT_SIZE + ADDRESS_SIZE: blockValueLength(addr);
           moveDist = keylen + vallen + RECORD_TOTAL_OVERHEAD;
 
           // move from offset + moveDist to offset
@@ -2430,10 +2617,12 @@ public class DataBlock  {
   }
   
   private void deallocateIfExternalRecord(long ptr) {
-    if (!isExternalRecord(ptr)) {
+    AllocType type = getRecordAllocationType(ptr);
+    if (type == AllocType.EMBEDDED) {
       return;
     }
-    int size = keyLength(ptr) + valueLength(ptr) + 2 * INT_SIZE;
+    int size = keyLength(ptr) + valueLength(ptr) + 
+        (type == AllocType.EXT_KEY_VALUE?(2 * INT_SIZE): INT_SIZE);
     UnsafeAccess.free(getExternalRecordAddress(ptr));
     largeKVs.decrementAndGet();
     BigSortedMap.totalDataSize.addAndGet(-size);
@@ -2786,7 +2975,6 @@ public class DataBlock  {
    * Free memory
    */
   public void free() {
-    //*DEBUG*/ System.out.println("DEALLOCATE BLOCK");
     long ptr = dataPtr;
     int count = 0;
     int numRecords = getNumberOfRecords();
@@ -2794,18 +2982,18 @@ public class DataBlock  {
     while (count++ < numRecords) {
       int keylen = blockKeyLength(ptr);
       int vallen = blockValueLength(ptr);
-      if (isExternalRecord(ptr)) {
+      AllocType type = getRecordAllocationType(ptr);
+      if (getRecordAllocationType(ptr) != AllocType.EMBEDDED) {
         long addr = getExternalRecordAddress(ptr);
         UnsafeAccess.free(addr);
         largeKVs.decrementAndGet();
-        keylen = 0;
-        vallen = INT_SIZE + ADDRESS_SIZE;
+        //keylen = 0;
+        //vallen = INT_SIZE + ADDRESS_SIZE;
       }
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
     UnsafeAccess.free(dataPtr);
     valid = false;
-    //*DEBUG*/ System.out.println("DEALLOCATE BLOCK DONE");
 
   }
 

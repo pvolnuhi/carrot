@@ -156,10 +156,10 @@ public final class DataBlockScanner implements Closeable{
           }
         }
       }
-      if (DataBlock.isExternalRecord(ptr)) {
-        keylen = 0;
-        vallen = DataBlock.ADDRESS_SIZE + DataBlock.INT_SIZE;
-      }
+      //if (DataBlock.getRecordAllocationType(ptr)) {
+      keylen = DataBlock.blockKeyLength(ptr);
+      vallen = DataBlock.blockValueLength(ptr);
+      //}
       ptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
 
     }
