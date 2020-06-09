@@ -1,8 +1,8 @@
 package org.bigbase.carrot;
 
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -20,7 +20,7 @@ import org.bigbase.carrot.util.Utils;
      blockSize                (2 bytes)
      dataSize                 (2 bytes)
      numRecords               (2 bytes)
-     seqNumberSplitOrMerge    (1 byte)
+     seqNumberSplitOrMerge    (1 byte) - no need for single thread version
      compressed               (1 byte)
      threadSafe               (1 byte)
      numDeletedAndUpdatedRecords (2 bytes)
@@ -144,7 +144,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 	
 	static boolean mustAllocateExternally(int len) {
-	  return len +DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH >= MAX_BLOCK_SIZE/2;
+	  return len + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH >= MAX_BLOCK_SIZE/2;
 	}
 	/*
 	 * Index block address (current)
@@ -236,12 +236,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		putInternal(address, key, off, len, version, Op.DELETE);
 	}
 
-  void releaseFromSearch() {
-//    if (isExternalBlock(dataPtr)) {
-//      UnsafeAccess.free(getExternalAllocationAddress(dataPtr));
-//      largeKVs.decrementAndGet();
-//    }
-  }
 	
   private long allocateKeyExternally(byte[] key, int off, int len) {
     long extAddress = isThreadSafe()? keyBuffer.get(): UnsafeAccess.malloc(len + INT_SIZE);
@@ -253,6 +247,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
     UnsafeAccess.copy(key, off, extAddress + INT_SIZE, len);
     if (!isThreadSafe()) {
       largeKVs.incrementAndGet();
+      BigSortedMap.totalAllocatedMemory.addAndGet(len + INT_SIZE);
+      BigSortedMap.totalIndexSize.addAndGet(len + INT_SIZE);
     }
     return extAddress;
   }
@@ -260,11 +256,13 @@ public class IndexBlock implements Comparable<IndexBlock> {
   private void checkKeyBuffer(int required) {
     if (required > keyBufferSize.get()) {
       // Deallocate existing
+      long oldSize = keyBufferSize.get();
       UnsafeAccess.free(keyBuffer.get());
       // Allocate new
       long ptr = UnsafeAccess.malloc(required);
       keyBuffer.set(ptr);
       keyBufferSize.set(required);
+      BigSortedMap.totalAllocatedMemory.addAndGet(required - oldSize);
     }
   }
   
@@ -316,6 +314,8 @@ public class IndexBlock implements Comparable<IndexBlock> {
     }
     if (!isThreadSafe()) {
       largeKVs.incrementAndGet();
+      BigSortedMap.totalAllocatedMemory.addAndGet(len + INT_SIZE);
+      BigSortedMap.totalIndexSize.addAndGet(len + INT_SIZE);
     }
     UnsafeAccess.putInt(extAddress, len);
     UnsafeAccess.copy(keyPtr, extAddress + INT_SIZE, len);
@@ -552,7 +552,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
 						if (dataSize + required > blockSize) {
 							// index block split is required
-							//*DEBUG*/ System.out.println("dataSize="+ dataSize+" required="+ required+" blockSize=" + blockSize);
 						  return false;
 						}
 						// Do not enforce compaction, it was done already during put
@@ -566,7 +565,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 						}
 						continue;
 					} else {
-						
+						// TODO: what is block can not be split? Is it possible? Seems, NO
 					  int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
 					      (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
 						if (dataSize + required > blockSize) {
@@ -636,7 +635,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 		  // do nothing
 		}
 		bb.register(this, pos - dataPtr);
-		//* DEBUG */ System.out.println("insert NEW block " + bb.getDataPtr());
 		this.dataSize += required;
 		this.numDataBlocks += 1;
 		// set first key
@@ -664,7 +662,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
       // do nothing
     }
     bb.register(this, pos - dataPtr);
-    //* DEBUG */ System.out.println("insert NEW block " + bb.getDataPtr());
     this.dataSize += required;
     this.numDataBlocks += 1;
     // set first key
@@ -747,12 +744,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
    * @param block data block
    */
   boolean updateFirstKey(DataBlock block) {
-    //*DEBUG*/ System.out.println("BEFORE:");
-    //dumpIndexBlock();
+
     if (block.isEmpty()) {
-      //if (!(isFirstIndexBlock() && block.isFirstBlock())) {
-        deleteBlock(block);
-      //}
+      deleteBlock(block);
       return true;
     }
     long indexPtr = block.getIndexPtr();
@@ -785,10 +779,13 @@ public class IndexBlock implements Comparable<IndexBlock> {
         return false;
       }
     }
-    // TODO DEALLOCATE EXISTING LARGE KEY  
     if (isExternalBlock(indexPtr)) {
       long address = getExternalAllocationAddress(indexPtr);
+      // TODO: separate method for deallocation
+      long size = UnsafeAccess.toInt(address) + INT_SIZE;
       UnsafeAccess.free(address);
+      BigSortedMap.totalAllocatedMemory.addAndGet(-size);
+      BigSortedMap.totalIndexSize.addAndGet(-size);
       largeKVs.decrementAndGet();
     }
     int toMove = required; 
@@ -813,13 +810,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
         (byte) type.ordinal());
     this.firstKey = null;
     this.dataSize += toMove;
-    /*DEBUG*/
-//    keyLength = block.getFirstKeyLength();
-//    byte[] buf = new byte[keyLength];
-//    UnsafeAccess.copy(key, buf, 0, keyLength);
-//    System.out.println("Updated First Key="+ Bytes.toString(buf));
-//    /*DEBUG*/ System.out.println("AFTER:");
-//    dumpIndexBlock();
+    BigSortedMap.totalIndexSize.addAndGet(toMove);
     return true;
   }
 	
@@ -962,7 +953,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, long expire)
 			throws RetryOperationException {
     try {
-      // TODO: key-value size check
       // TODO: optimize locking: we do double locking: index block and data block
       writeLock();
 
@@ -991,7 +981,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
             int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + startKeyLength;
             if (dataSize + required > blockSize) {
               // index block split is required
-              //*DEBUG*/ System.out.println("dataSize="+ dataSize+" required="+ required+" blockSize=" + blockSize);
               return false;
             }
             // Do not enforce compaction, it was done already during put
@@ -1055,6 +1044,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
     this.type = (byte) Op.PUT.ordinal();
     this.numDataBlocks++;
     this.dataSize += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+    BigSortedMap.totalIndexSize.addAndGet(DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength);
     return b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
 	}
 
@@ -1199,10 +1189,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 			  return firstBlock();
 			}
 			long ptr = blck != null ? blck.getIndexPtr() : getAddress();
-			int keyLength = blockKeyLength(ptr);// blck.getFirstKeyLength();
-//			if (mustAllocateExternally(keyLength)) {
-//			  keyLength = ADDRESS_SIZE;
-//			}
+			int keyLength = blockKeyLength(ptr);
 			if (ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength >= dataPtr + dataSize) {
 				// last block
 				return null;
@@ -1372,6 +1359,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
     while (true) {
       res = b.delete(key, keyOffset, keyLength, version);
       if (res == OpResult.SPLIT_REQUIRED) {
+        // This is a case when active  Tx or scanner with fixed seqId
         if (b.canSplit()) {
           // get split position
           long addr = b.splitPos(false);
@@ -1543,8 +1531,6 @@ public class IndexBlock implements Comparable<IndexBlock> {
   }
 	// TODO: delete block when it had one record only
 	private void deleteBlock(DataBlock b) {
-    //*DEBUG*/ System.out.println("DELETE BLOCK STARTS");
-    //*DEBUG*/ System.out.println("Index ="+ dataPtr + " block=" + b.getIndexPtr());
 
 	  long indexPtr = b.getIndexPtr();
 	  int keyLength = keyLength(indexPtr);
@@ -1554,6 +1540,9 @@ public class IndexBlock implements Comparable<IndexBlock> {
          blockKeyLength; 
 	  if (mustAllocateExternally(keyLength)) {
 	    long addr = getExternalAllocationAddress(indexPtr);
+	    long size = UnsafeAccess.toInt(addr);
+      BigSortedMap.totalAllocatedMemory.addAndGet(-size - INT_SIZE);
+      BigSortedMap.totalIndexSize.addAndGet(-size - INT_SIZE);
 	    UnsafeAccess.free(addr);
 	    largeKVs.decrementAndGet();
 	  }
@@ -1562,12 +1551,13 @@ public class IndexBlock implements Comparable<IndexBlock> {
 
 	  UnsafeAccess.copy(indexPtr + toMove, indexPtr, dataSize - indexPtr + dataPtr - toMove);
 	  this.dataSize -= toMove;
+    BigSortedMap.totalIndexSize.addAndGet(-toMove);
+
 	  this.numDataBlocks -=1;
     boolean firstBlockInIndex = this.dataPtr == b.getIndexPtr();
     if (firstBlockInIndex && this.numDataBlocks > 0) {
       firstKey = null;
     }
-    ///*DEBUG*/ System.out.println("DELETE BLOCK FINISHED numDataBlocks="+ numDataBlocks);
   }
 	
 
@@ -1804,6 +1794,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	}
 
 	/**
+	 * TODO: Finish it
 	 * Merge two adjacent blocks
 	 * 
 	 * @param left
@@ -1849,12 +1840,13 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * Free memory
 	 */
 	public void free() {
-//*DEBUG*/ System.out.println("Free index: " + dataPtr+" num blocks=" + numDataBlocks);
 		// TODO: deallocate data blocks
 	  deallocateBlocks();
 	  // deallocate large keys
 	  deallocateLargeKeys();
 		UnsafeAccess.free(dataPtr);
+    BigSortedMap.totalIndexSize.addAndGet(-dataSize);
+    BigSortedMap.totalAllocatedMemory.addAndGet(-blockSize);
 		valid = false;
 
 	}
@@ -1871,8 +1863,11 @@ public class IndexBlock implements Comparable<IndexBlock> {
         
         if (isExternalBlock(ptr)) {
           long recAddress = getExternalAllocationAddress(ptr);
+          long size = UnsafeAccess.toInt(recAddress) + INT_SIZE;
           UnsafeAccess.free(recAddress);
           largeKVs.decrementAndGet();
+          BigSortedMap.totalAllocatedMemory.addAndGet(-size);
+          BigSortedMap.totalDataSize.addAndGet(-size);
           keylen = ADDRESS_SIZE;
         }
         ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;

@@ -38,6 +38,7 @@ public class BigSortedMapTest {
     System.out.println("Scanned="+ countRecords());
     System.out.println("Total memory="+BigSortedMap.getMemoryAllocated());
     System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
+    System.out.println("Total  index=" + BigSortedMap.getTotalIndexSize());
     assertEquals(totalLoaded, scanned);
   }
     

@@ -215,64 +215,53 @@ public class BigSortedMap {
     long version = sequenceID.getAndIncrement();
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(key, keyOffset, keyLength, version);
-    try {
-      while (true) {
-        IndexBlock b = null;
-        boolean isSplit = false;
-        try {
-          b = map.floorKey(kvBlock);
-          // TODO: we do a lot of locking
-          lock(b); // to prevent locking from another thread
-          IndexBlock bbb = map.floorKey(kvBlock);
-          if (b != bbb) {
-            continue;
+
+    while (true) {
+      IndexBlock b = null;
+      boolean isSplit = false;
+      try {
+        b = map.floorKey(kvBlock);
+        // TODO: we do a lot of locking
+        lock(b); // to prevent locking from another thread
+        IndexBlock bbb = map.floorKey(kvBlock);
+        if (b != bbb) {
+          continue;
+        }
+        boolean result =
+            b.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
+        if (!result && getMemoryAllocated() < maxMemory) {
+          // In sequential pattern of puts, we do not need to split
+          // but need to add new block with a given K-V
+          IndexBlock bb = null;
+          if (b.isLargerThanMax(key, keyOffset, keyLength, version)) {
+            bb = new IndexBlock(maxIndexBlockSize);
+            // FIXME: if below assumption of a successful operation safe?
+            bb.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
+          } else {
+            bb = b.split();
+            isSplit = true;
           }
-
-          boolean result =
-              b.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
-          if (!result && getMemoryAllocated() < maxMemory) {
-            // In sequential pattern of puts, we do not need to split
-            // but need to add new block with a given K-V
-            IndexBlock bb = null;
-            // *DEBUG*/System.out.println("b: dataBlocks="+
-            // b.getNumberOfDataBlock()+" data size="+ b.getDataSize()+ " KV len="+ (keyLength +
-            // valueLength)
-            // +" First key="+ new String(b.getFirstKey()));
-
-            if (b.isLargerThanMax(key, keyOffset, keyLength, version)) {
-              bb = new IndexBlock(maxIndexBlockSize);
-              // FIXME: if below assumption of a successful operation safe?
-              bb.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
-            } else {
-              // *DEBUG*/ System.out.println("SPLIT");
-              bb = b.split();
-              isSplit = true;
-            }
-            // some records are missing until we put
-            // block into
-            // *DEBUG*/ System.out.println("bb: dataBlocks="+
-            // b.getNumberOfDataBlock()+ " First Key=" + new String(bb.getFirstKey()));
-            putBlock(bb);
-            if (isSplit) {
-              continue;
-            } else {
-              return true;
-            }
-          } else if (!result) {
-            // MAP is FULL
-            return false;
+          // some records are missing until we put
+          // block into
+          putBlock(bb);
+          if (isSplit) {
+            continue;
           } else {
             return true;
           }
-        } catch (RetryOperationException e) {
-          continue;
-        } finally {
-          unlock(b);
+        } else if (!result) {
+          // MAP is FULL
+          return false;
+        } else {
+          return true;
         }
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        unlock(b);
       }
-    } finally {
-      kvBlock.releaseFromSearch();
     }
+
   }
   
   private void putBlock(IndexBlock b) {
@@ -303,51 +292,47 @@ public class BigSortedMap {
     long version = sequenceID.getAndIncrement();
 
     kvBlock.putForSearch(keyPtr, keyLength, version);
-    try {
-      while (true) {
-        IndexBlock b = null;
-        boolean isSplit = false;
+    while (true) {
+      IndexBlock b = null;
+      boolean isSplit = false;
 
-        try {
-          b = map.floorKey(kvBlock);
-          // TODO: we do lot of locking
-          lock(b); // to prevent locking from another thread
-          IndexBlock bbb = map.floorKey(kvBlock);
-          if (b != bbb) {
-            continue;
+      try {
+        b = map.floorKey(kvBlock);
+        // TODO: we do lot of locking
+        lock(b); // to prevent locking from another thread
+        IndexBlock bbb = map.floorKey(kvBlock);
+        if (b != bbb) {
+          continue;
+        }
+        boolean result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
+        if (!result && getMemoryAllocated() < maxMemory) {
+          // In sequential pattern of puts, we do not need to split
+          // but need to add new block with a given K-V
+          IndexBlock bb = null;
+          if (b.isLargerThanMax(keyPtr, keyLength, version)) {
+            bb = new IndexBlock(maxIndexBlockSize);
+            bb.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
+          } else {
+            bb = b.split();
+            isSplit = true;
           }
-          boolean result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
-          if (!result && getMemoryAllocated() < maxMemory) {
-            // In sequential pattern of puts, we do not need to split
-            // but need to add new block with a given K-V
-            IndexBlock bb = null;
-            if (b.isLargerThanMax(keyPtr, keyLength, version)) {
-              bb = new IndexBlock(maxIndexBlockSize);
-              bb.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
-            } else {
-              bb = b.split();
-              isSplit = true;
-            }
-            putBlock(bb);
-            if (isSplit) {
-              continue;
-            } else {
-              return true;
-            }
-          } else if (!result) {
-            // MAP is FULL
-            return false;
+          putBlock(bb);
+          if (isSplit) {
+            continue;
           } else {
             return true;
           }
-        } catch (RetryOperationException e) {
-          continue;
-        } finally {
-          unlock(b);
+        } else if (!result) {
+          // MAP is FULL
+          return false;
+        } else {
+          return true;
         }
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        unlock(b);
       }
-    } finally {
-      kvBlock.releaseFromSearch();
     }
   }
   
@@ -369,52 +354,48 @@ public class BigSortedMap {
     IndexBlock kvBlock = getThreadLocalBlock();
     long version = sequenceID.getAndIncrement();
     kvBlock.putForSearch(key, keyOffset, keyLength, version);
-    try {
-      while (true) {
-        IndexBlock b = null;
-        try {
-          b = map.floorKey(kvBlock);
-          // TODO: lot of locking
-          lock(b); // to prevent
-          IndexBlock bbb = map.floorKey(kvBlock);
-          // TODO: Why do not we compare obj references?
-          if (b.getAddress() != bbb.getAddress()) {
-            continue;
-          }
-          // if (b.getNumberOfDataBlock() == 1) {
-          // System.out.println("b.firstkey="+ b.getFirstKey().length+" keyLength="+keyLength);
-          // }
-          OpResult result = b.delete(key, keyOffset, keyLength, version);
-          if (result == OpResult.OK) {
-            if (b.isEmpty()) {
-              IndexBlock removed = map.remove(b);
-              if (removed == null) {
-                IndexBlock fk = map.floorKey(b);
-                IndexBlock ck = map.ceilingKey(b);
-                boolean contains = map.containsKey(b);
-                /* DEBUG */ System.out.println(
-                  "FATAL Removed IndexBlock " + removed + " firstKey=" + b.getFirstKey().length);
-                System.out.println(
-                  "b=" + b.getAddress() + "ck=" + ck + "fk=" + fk + "contains =" + contains);
-              }
-              b.free();
-            }
-            return true;
-          } else if (result == OpResult.NOT_FOUND) {
-            return false;
-          }
-          // split is required
-          IndexBlock bb = b.split();
-          putBlock(bb);
-          // and continue loop
-        } catch (RetryOperationException e) {
+    while (true) {
+      IndexBlock b = null;
+      try {
+        b = map.floorKey(kvBlock);
+        // TODO: lot of locking
+        lock(b); // to prevent
+        IndexBlock bbb = map.floorKey(kvBlock);
+        // TODO: Why do not we compare obj references?
+        if (b.getAddress() != bbb.getAddress()) {
           continue;
-        } finally {
-          unlock(b);
         }
+        // if (b.getNumberOfDataBlock() == 1) {
+        // System.out.println("b.firstkey="+ b.getFirstKey().length+" keyLength="+keyLength);
+        // }
+        OpResult result = b.delete(key, keyOffset, keyLength, version);
+        if (result == OpResult.OK) {
+          if (b.isEmpty()) {
+            IndexBlock removed = map.remove(b);
+            if (removed == null) {
+              IndexBlock fk = map.floorKey(b);
+              IndexBlock ck = map.ceilingKey(b);
+              boolean contains = map.containsKey(b);
+              /* DEBUG */ System.out.println(
+                "FATAL Removed IndexBlock " + removed + " firstKey=" + b.getFirstKey().length);
+              System.out.println(
+                "b=" + b.getAddress() + "ck=" + ck + "fk=" + fk + "contains =" + contains);
+            }
+            b.free();
+          }
+          return true;
+        } else if (result == OpResult.NOT_FOUND) {
+          return false;
+        }
+        // split is required
+        IndexBlock bb = b.split();
+        putBlock(bb);
+        // and continue loop
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        unlock(b);
       }
-    } finally {
-      kvBlock.releaseFromSearch();
     }
   }
   
@@ -429,39 +410,36 @@ public class BigSortedMap {
     IndexBlock kvBlock = getThreadLocalBlock();
     long version = sequenceID.getAndIncrement();
     kvBlock.putForSearch(keyPtr, keyLength, version);
-    try {
-      while (true) {
-        IndexBlock b = null;
-        try {
-          b = map.floorKey(kvBlock);
-          lock(b); // to prevent
-          IndexBlock bbb = map.floorKey(kvBlock);
-          if (b.getAddress() != bbb.getAddress()) {
-            continue;
-          }
-          OpResult result = b.delete(keyPtr, keyLength, version);
-          if (result == OpResult.OK) {
-            if (b.isEmpty()) {
-              map.remove(b);
-              b.free();
-            }
-            return true;
-          } else if (result == OpResult.NOT_FOUND) {
-            return false;
-          }
-          // split is required
-          IndexBlock bb = b.split();
-          putBlock(bb);
-          // and continue loop
-        } catch (RetryOperationException e) {
+    while (true) {
+      IndexBlock b = null;
+      try {
+        b = map.floorKey(kvBlock);
+        lock(b); // to prevent
+        IndexBlock bbb = map.floorKey(kvBlock);
+        if (b.getAddress() != bbb.getAddress()) {
           continue;
-        } finally {
-          unlock(b);
         }
+        OpResult result = b.delete(keyPtr, keyLength, version);
+        if (result == OpResult.OK) {
+          if (b.isEmpty()) {
+            map.remove(b);
+            b.free();
+          }
+          return true;
+        } else if (result == OpResult.NOT_FOUND) {
+          return false;
+        }
+        // split is required
+        IndexBlock bb = b.split();
+        putBlock(bb);
+        // and continue loop
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        unlock(b);
       }
-    } finally {
-      kvBlock.releaseFromSearch();
     }
+
   }
   
   /**
@@ -480,45 +458,41 @@ public class BigSortedMap {
 
     boolean locked = false;
     IndexBlock b = null;
-    try {
-      while (true) {
-        try {
-          b = map.floorKey(kvBlock);
-          // TODO: index block can be both: split and merged
-          // Race conditions possible?
-          // Split is fine, as since we do not invalidate blocks (free)
-          // Merge can be dangerous unless we check IndexBlock is still valid
-          long result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
-          if (result < 0) {
-            // check one more time with lock
-            // it is possible that we caught split in flight
-            IndexBlock bb = null;
-            while (true) {
-              b = map.floorKey(kvBlock);
-              lock(b);
-              locked = true;
-              bb = map.floorKey(kvBlock);
-              if (bb.getAddress() != b.getAddress()) {
-                unlock(b);
-              } else {
-                break;
-              }
+    while (true) {
+      try {
+        b = map.floorKey(kvBlock);
+        // TODO: index block can be both: split and merged
+        // Race conditions possible?
+        // Split is fine, as since we do not invalidate blocks (free)
+        // Merge can be dangerous unless we check IndexBlock is still valid
+        long result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
+        if (result < 0) {
+          // check one more time with lock
+          // it is possible that we caught split in flight
+          IndexBlock bb = null;
+          while (true) {
+            b = map.floorKey(kvBlock);
+            lock(b);
+            locked = true;
+            bb = map.floorKey(kvBlock);
+            if (bb.getAddress() != b.getAddress()) {
+              unlock(b);
+            } else {
+              break;
             }
-            result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
           }
-          // TODO
-          // check length
-          return result;
-        } catch (RetryOperationException e) {
-          continue;
-        } finally {
-          if (locked) {
-            unlock(b);
-          }
+          result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
+        }
+        // TODO
+        // check length
+        return result;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        if (locked) {
+          unlock(b);
         }
       }
-    } finally {
-      kvBlock.releaseFromSearch();
     }
   }
   
@@ -536,42 +510,37 @@ public class BigSortedMap {
     kvBlock.putForSearch(keyPtr, keyLength, version);
     IndexBlock b = null;
     boolean locked = false;
-    try {
-      while (true) {
-        try {
-          b = map.floorKey(kvBlock);
-          long result = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
-          if (result < 0) {
-            // check one more time with lock
-            // it is possible that we caught split in flight
-            IndexBlock bb = null;
-            while (true) {
-              b = map.floorKey(kvBlock);
-              lock(b);
-              locked = true;
-              bb = map.floorKey(kvBlock);
-              if (bb.getAddress() != b.getAddress()) {
-                unlock(b);
-              } else {
-                break;
-              }
+    while (true) {
+      try {
+        b = map.floorKey(kvBlock);
+        long result = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
+        if (result < 0) {
+          // check one more time with lock
+          // it is possible that we caught split in flight
+          IndexBlock bb = null;
+          while (true) {
+            b = map.floorKey(kvBlock);
+            lock(b);
+            locked = true;
+            bb = map.floorKey(kvBlock);
+            if (bb.getAddress() != b.getAddress()) {
+              unlock(b);
+            } else {
+              break;
             }
-            result = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
-
           }
-          // TODO
-          // check length
-          return result;
-        } catch (RetryOperationException e) {
-          continue;
-        } finally {
-          if (locked) {
-            unlock(b);
-          }
+          result = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
+        }
+        // TODO
+        // check length
+        return result;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        if (locked) {
+          unlock(b);
         }
       }
-    } finally {
-      kvBlock.releaseFromSearch();
     }
   }
   

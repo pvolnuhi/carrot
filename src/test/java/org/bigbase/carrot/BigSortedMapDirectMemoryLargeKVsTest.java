@@ -23,7 +23,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
   long totalLoaded;
   List<Key> keys;
   static {
-    //UnsafeAccess.debug = true;
+    UnsafeAccess.debug = true;
   }
   public  void setUp() throws IOException {
     BigSortedMap.setMaxBlockSize(4096);
@@ -34,6 +34,15 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     System.out.println("Loaded");
     Utils.sortKeys(keys);
     totalLoaded = keys.size();
+    // Delete 20% of keys to guarantee that we will be able
+    // to delete than reinsert
+    List<Key> deleted = delete((int)totalLoaded/5);
+    keys.removeAll(deleted);
+    // Update total loaded
+    System.out.println("Adjusted size by "+ deleted.size() +" keys");    
+    totalLoaded -= deleted.size();
+    deallocate(deleted);
+
     long end = System.currentTimeMillis();
     map.dumpStats();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
@@ -44,6 +53,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     System.out.println("Scanned="+ scanned);
     System.out.println("Total memory="+BigSortedMap.getMemoryAllocated());
     System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
+    System.out.println("Total  index=" + BigSortedMap.getTotalIndexSize());
     assertEquals(totalLoaded, scanned);
   }
   
@@ -61,6 +71,10 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
   public void tearDown() {
     map.dispose();
     // Free keyes
+    deallocate(keys);
+  }
+  
+  private void deallocate(List<Key> keys) {
     for(Key key: keys) {
       UnsafeAccess.free(key.address);
     }
@@ -73,16 +87,20 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     for(int i=0; i < 1000; i++) {
       System.out.println("\n\n\n\n********* " + i+" **********\n\n\n\n");
 
+      // First group does not undelete
       setUp();
-      testDeleteUndeleted();
       testGetAfterLoad();
       testExists();
       testFullMapScanner();
+      testDeleteUndeleted();
       testFullMapScannerWithDeletes();
       tearDown();
       UnsafeAccess.mallocStats();
       System.out.println("DataBlock large KV leak :" +DataBlock.largeKVs.get());
       System.out.println("IndexBlock large KV leak :" +IndexBlock.largeKVs.get());
+      System.out.println("Total memory="+BigSortedMap.getMemoryAllocated());
+      System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
+      System.out.println("Total  index=" + BigSortedMap.getTotalIndexSize());
     }
   }
   
@@ -272,9 +290,22 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     return list;
   }
   
+  /**
+   * Delete X - Undelete X not always work, b/c our map is FULL
+   * before deletion and there is no guarantee that insertion X deleted
+   * rows back will succeed
+   * @param keys
+   */
   private void undelete(List<Key> keys) {
+    /*DEBUG*/ System.out.println("Undelete "+ keys.size()+" keys");
+    int count = 1;
     for (Key key: keys) {
+      count++;
       boolean res = map.put(key.address, key.size, key.address, key.size, 0);
+      if (res == false) {
+        System.out.println("Count = "+count+" total="+ keys.size()+" memory ="+ 
+      BigSortedMap.getMemoryAllocated());
+      }
       assertTrue(res);
     }
   }
@@ -287,7 +318,8 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     long seed = r.nextLong();
     r.setSeed(seed);
     int toDelete = r.nextInt((int)totalLoaded);
-    System.out.println("testFullMapScannerWithDeletes SEED="+ seed+ " toDelete="+toDelete);
+    System.out.println("testFullMapScannerWithDeletes SEED="+ seed +
+      " toDelete="+toDelete);
     List<Key> deletedKeys = delete(toDelete);
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long start = System.currentTimeMillis();

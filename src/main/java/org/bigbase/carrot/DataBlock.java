@@ -252,10 +252,6 @@ public class DataBlock  {
       throw new RuntimeException("Failed to allocate " + size + " bytes");
     }
     BigSortedMap.totalAllocatedMemory.addAndGet(size);
-    // TODO: why is index size the same?
-    // TODO: why we increment index size here?
-    //BigSortedMap.totalDataSize.addAndGet(size);
-
     this.blockSize = (short)size;
   }
 
@@ -272,8 +268,6 @@ public class DataBlock  {
       throw new RuntimeException("Failed to allocate " + size + " bytes");
     }
     BigSortedMap.totalAllocatedMemory.addAndGet(size);
-    //BigSortedMap.totalDataSize.addAndGet(size);
-
     this.blockSize = size;
   }
   
@@ -530,6 +524,9 @@ public class DataBlock  {
   public void incrDataSize(short val) {
     short v = getDataSize();
     setDataSize((short) (v + val));
+    if (!isThreadSafe()) {
+      BigSortedMap.totalDataSize.addAndGet(val);
+    }
   }
 
   /**
@@ -911,10 +908,6 @@ public class DataBlock  {
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
-        if (isThreadSafe() == false) {
-          // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(newRecLen);
-        }
       } else if (overwrite) {
         // UPDATE existing
         // We do overwrite of existing record
@@ -967,9 +960,7 @@ public class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
         incrDataSize((short) toMove);
-        if (isThreadSafe() == false) {
-          BigSortedMap.totalDataSize.addAndGet(toMove);
-        }
+
       }
       return true;
     } finally {
@@ -991,7 +982,8 @@ public class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-
+    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
@@ -1005,7 +997,8 @@ public class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
+    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
     UnsafeAccess.putInt(recAddress , valueLength);
     UnsafeAccess.copy(valuePtr, recAddress + INT_SIZE, valueLength);
     return recAddress;
@@ -1028,6 +1021,9 @@ public class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
+    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(key, keyOffset, recAddress + 2 * INT_SIZE, keyLength);
@@ -1042,6 +1038,8 @@ public class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
+    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
     UnsafeAccess.putInt(recAddress, valueLength);
     UnsafeAccess.copy(value, valueOffset, recAddress + INT_SIZE, valueLength);
     return recAddress;
@@ -1173,10 +1171,6 @@ public class DataBlock  {
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
-        if (isThreadSafe() == false) {
-          // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(newRecLength);
-        }
       } else if (overwrite) {
         // Keys are the same, values have the same size - both new and old records 
         // are external allocations of the same type
@@ -1257,9 +1251,7 @@ public class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
         incrDataSize((short) toMove);
-        if (isThreadSafe() == false) {
-          BigSortedMap.totalDataSize.addAndGet(toMove);
-        }
+
       } else if (extAddr) {
         // Keys are the same, values are not, but old k-v is EXTERNAL type of allocation
         // As since keys are the same, both new and old records have the same type of 
@@ -1439,10 +1431,6 @@ public class DataBlock  {
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
-        if (isThreadSafe() == false) {
-          // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(newRecLen);
-        }
       } else if (overwrite) {
         // UPDATE existing
         // We do overwrite of existing record
@@ -1495,9 +1483,6 @@ public class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
         incrDataSize((short) toMove);
-        if (isThreadSafe() == false) {
-          BigSortedMap.totalDataSize.addAndGet(toMove);
-        }
       }
       return true;
     } finally {
@@ -1613,10 +1598,7 @@ public class DataBlock  {
         if (keyOverwrite) {
           incrNumberDeletedAndUpdatedRecords((short) 1);
         }
-        if (isThreadSafe() == false) {
-          // TODO: why is this check?
-          BigSortedMap.totalDataSize.addAndGet(newRecLength);
-        }
+
       } else if (overwrite) {
         // Keys are the same, values have the same size - both new and old records 
         // are external allocations of the same type
@@ -1693,9 +1675,7 @@ public class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
         incrDataSize((short) toMove);
-        if (isThreadSafe() == false) {
-          BigSortedMap.totalDataSize.addAndGet(toMove);
-        }
+
       } else if (extAddr) {
         // Keys are the same, values are not, but old k-v is EXTERNAL type of allocation
         // As since keys are the same, both new and old records have the same type of 
@@ -1976,10 +1956,6 @@ public class DataBlock  {
           incrNumberOfRecords((short) 1);
           incrDataSize((short) moveDist);
           incrNumberDeletedAndUpdatedRecords((short)1);
-          if (isThreadSafe() == false) {
-            // TODO: why is this check?
-            BigSortedMap.totalDataSize.addAndGet(moveDist);
-          }
           result = OpResult.OK;
           
         } else {
@@ -1997,16 +1973,9 @@ public class DataBlock  {
           incrNumberOfRecords((short) -1);
           // Update data size
           dataSize = getDataSize();
-
-          if (isThreadSafe() == false) {
-            BigSortedMap.totalDataSize.addAndGet(-moveDist);
-          }
           result = OpResult.OK;
         }
-        if (getNumberOfRecords() == 0) {
-          //*DEBUG*/System.out.println("EMPTY BLOCK DETECTED");
-          //System.out.println("dataPtr=" + dataPtr+" indexPtr="+ indexPtr);
-        }
+
         // We check that block is empty before
         // updating first key in a parent index block, because
         // this call can deallocate current block
@@ -2187,10 +2156,7 @@ public class DataBlock  {
           incrNumberOfRecords((short) 1);
           incrDataSize((short) moveDist);
           incrNumberDeletedAndUpdatedRecords((short)1);
-          if (isThreadSafe() == false) {
-            // TODO: why is this check?
-            BigSortedMap.totalDataSize.addAndGet(moveDist);
-          }
+          
           result = OpResult.OK;
           
         } else {
@@ -2208,10 +2174,6 @@ public class DataBlock  {
           incrNumberOfRecords((short) -1);
           // Update data size
           dataSize = getDataSize();
-
-          if (isThreadSafe() == false) {
-            BigSortedMap.totalDataSize.addAndGet(-moveDist);
-          }
           result = OpResult.OK;
         }
         if (getNumberOfRecords() == 0) {
@@ -2566,7 +2528,6 @@ public class DataBlock  {
         incrNumberOfRecords((short)-1);
         incrDataSize((short)-firstRecordLength);
         incrNumberDeletedAndUpdatedRecords((short)-1);
-        BigSortedMap.totalDataSize.addAndGet(-firstRecordLength);
       }
     }
     if (oldRecords != numRecords) {
@@ -2611,7 +2572,6 @@ public class DataBlock  {
       incrNumberOfRecords((short) -count);
       incrDataSize((short) -toDelete);
       incrNumberDeletedAndUpdatedRecords((short) -(count - 1));
-      BigSortedMap.totalDataSize.addAndGet(-toDelete);
     }
     return ptr;
   }
@@ -2666,7 +2626,6 @@ public class DataBlock  {
           incrNumberOfRecords((short) -1);
           incrDataSize((short) -toDelete);
           incrNumberDeletedAndUpdatedRecords((short) - 1);
-          BigSortedMap.totalDataSize.addAndGet(-toDelete);
           // Update data size
           dataSize = getDataSize();
           deallocateIfExternalRecord(ptr);

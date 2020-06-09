@@ -66,10 +66,6 @@ public class BigSortedMapScanner implements Closeable{
         // TODO null?
       } catch(RetryOperationException e) {
         continue;
-      } finally {
-        if (key != null) {
-          key.releaseFromSearch();
-        }
       }
     }    
   }

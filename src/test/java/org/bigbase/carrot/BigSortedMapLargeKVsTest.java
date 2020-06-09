@@ -20,13 +20,22 @@ public class BigSortedMapLargeKVsTest {
   BigSortedMap map;
   long totalLoaded;
   List<byte[]> keys;
-  
+  static {
+    UnsafeAccess.debug = true;
+  }
   public  void setUp() throws IOException {
     BigSortedMap.setMaxBlockSize(4096);
     map = new BigSortedMap(100000000);
     totalLoaded = 0;
     long start = System.currentTimeMillis();
     keys = fillMap(map);
+    totalLoaded = keys.size();
+    // Delete 20% to prevent OOM during test runs 
+    List<byte[]> deleted = delete((int)totalLoaded/5);
+    keys.removeAll(deleted);
+    // Update total loaded
+    System.out.println("Adjusted size by "+ deleted.size() +" keys");    
+    totalLoaded -= deleted.size();
     Utils.sort(keys);
     totalLoaded = keys.size();
     long end = System.currentTimeMillis();
@@ -39,6 +48,7 @@ public class BigSortedMapLargeKVsTest {
     System.out.println("Scanned="+ scanned);
     System.out.println("Total memory="+BigSortedMap.getMemoryAllocated());
     System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
+    System.out.println("Total  index=" + BigSortedMap.getTotalIndexSize());
     assertEquals(totalLoaded, scanned);
   }
   
@@ -79,6 +89,9 @@ public class BigSortedMapLargeKVsTest {
       UnsafeAccess.mallocStats();
       System.out.println("DataBlock large KV leak :" +DataBlock.largeKVs.get());
       System.out.println("IndexBlock large KV leak :" +IndexBlock.largeKVs.get());
+      System.out.println("Total memory="+BigSortedMap.getMemoryAllocated());
+      System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
+      System.out.println("Total  index=" + BigSortedMap.getTotalIndexSize());
 
     }
   }
