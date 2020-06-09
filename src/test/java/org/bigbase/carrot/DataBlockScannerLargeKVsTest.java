@@ -3,7 +3,7 @@ package org.bigbase.carrot;
 import java.util.ArrayList;
 import java.util.Random;
 
-public class DataBlockScaneerLargeKVsTest extends DataBlockScannerTest{
+public class DataBlockScannerLargeKVsTest extends DataBlockScannerTest{
 
   protected ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();

@@ -11,13 +11,15 @@ import org.bigbase.carrot.util.Utils;
  * @author jenium65
  *
  */
-public class BigSortedMapScanner implements Closeable{
+public class BigSortedMapDirectMemoryScanner implements Closeable{
 
   private BigSortedMap map;
-  private byte[] startRow;
-  private byte[] stopRow;
-  private DataBlockScanner blockScanner;
-  private IndexBlockScanner indexScanner;
+  private long startRowPtr;
+  private int startRowLength;
+  private long stopRowPtr;
+  private int stopRowLength;
+  private DataBlockDirectMemoryScanner blockScanner;
+  private IndexBlockDirectMemoryScanner indexScanner;
   private IndexBlock currentIndexBlock;
   private long snapshotId;
   
@@ -28,18 +30,21 @@ public class BigSortedMapScanner implements Closeable{
     }
   };
   
-  BigSortedMapScanner(BigSortedMap map, byte[] start, byte[] stop, long snapshotId) {
-    checkArgs(startRow, stopRow);
+  BigSortedMapDirectMemoryScanner(BigSortedMap map, long startRowPtr, 
+    int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId) {
+    checkArgs(startRowPtr, startRowLength, stopRowPtr, stopRowLength);
     this.map = map;
-    this.startRow = start;
-    this.stopRow = stop;
+    this.startRowPtr = startRowPtr;
+    this.startRowLength = startRowLength;
+    this.stopRowPtr = stopRowPtr;
+    this.stopRowLength = stopRowLength;
     this.snapshotId = snapshotId;
     init();
   }
   
-  private void checkArgs(byte[] startRow, byte[] stopRow) {
-    if (startRow != null && stopRow != null) {
-      if (Utils.compareTo(startRow, 0, startRow.length, stopRow, 0, stopRow.length) > 0) {
+  private void checkArgs(long startRowPtr, int startRowLength, long stopRowPtr, int stopRowLength) {
+    if (startRowPtr != 0 && stopRowPtr != 0) {
+      if (Utils.compareTo(startRowPtr, startRowLength, stopRowPtr, stopRowLength) > 0) {
         throw new IllegalArgumentException("start row is greater than stop row");
       }
     }
@@ -49,16 +54,16 @@ public class BigSortedMapScanner implements Closeable{
     
     ConcurrentSkipListMap<IndexBlock, IndexBlock> cmap = map.getMap();
     IndexBlock key = null;
-    if (startRow != null) {
+    if (startRowPtr != 0) {
       key = tlKey.get();   
       key.reset();
-      key.putForSearch(startRow, 0, startRow.length, snapshotId);
+      key.putForSearch(startRowPtr, startRowLength, snapshotId);
     }
     while(true) {
       try {
         currentIndexBlock = key != null? cmap.floorKey(key): cmap.firstKey();
-        indexScanner = IndexBlockScanner.getScanner(currentIndexBlock, this.startRow, 
-          this.stopRow, snapshotId);
+        indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
+          this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
         blockScanner = indexScanner.nextBlockScanner(); 
         
         break;
@@ -114,7 +119,8 @@ public class BigSortedMapScanner implements Closeable{
           return false;
         }
         // set startRow to null, because it is out of range of a IndexBlockScanner
-        this.indexScanner = IndexBlockScanner.getScanner(tmp, null, stopRow, snapshotId);
+        this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, 0, 0, stopRowPtr, 
+          stopRowLength, snapshotId);
         if (this.indexScanner == null) {
           return false;
         }

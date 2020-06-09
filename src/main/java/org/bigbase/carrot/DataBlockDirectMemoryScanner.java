@@ -10,16 +10,27 @@ import org.bigbase.carrot.util.Utils;
  * Thread unsafe implementation
  * TODO: stopRow logic
  */
-public final class DataBlockScanner implements Closeable{
+public final class DataBlockDirectMemoryScanner implements Closeable{
 
   /*
-   * Start Row
+   * Start Row pointer
    */
-  byte[] startRow; // INCLUSIVE  
+  long startRowPtr = 0; // INCLUSIVE
+  
   /*
-   * Stop Row
+   * Start row length
    */
-  byte[] stopRow; // EXCLUSIVE   
+  int startRowLength;
+  /*
+   * Stop Row pointer
+   */
+  long stopRowPtr = 0; // EXCLUSIVE
+  
+  /*
+   *  Stop row length
+   */
+  int stopRowLength;
+  
   /*
    * Pointer to memory base
    */
@@ -64,20 +75,22 @@ public final class DataBlockScanner implements Closeable{
   /*
    * Thread local for scanner instance
    */
-  static ThreadLocal<DataBlockScanner> scanner = new ThreadLocal<DataBlockScanner>() {
+  static ThreadLocal<DataBlockDirectMemoryScanner> scanner = 
+      new ThreadLocal<DataBlockDirectMemoryScanner>() {
     @Override
-    protected DataBlockScanner initialValue() {
-      return new DataBlockScanner();
+    protected DataBlockDirectMemoryScanner initialValue() {
+      return new DataBlockDirectMemoryScanner();
     }    
   };
       
   
-  public static DataBlockScanner getScanner(DataBlock b, byte[] startRow, byte[] stopRow,
+  public static DataBlockDirectMemoryScanner getScanner(DataBlock b, long startRowPtr, 
+       int startRowLength, long stopRowPtr, int stopRowLength,
       long snapshotId) throws RetryOperationException {
 
     
     try {
-      DataBlockScanner bs = scanner.get();
+      DataBlockDirectMemoryScanner bs = scanner.get();
       bs.reset();
       b.readLock();
       if (!b.isValid()) {
@@ -87,8 +100,8 @@ public final class DataBlockScanner implements Closeable{
       
       bs.setBlock(b);
       bs.setSnapshotId(snapshotId);
-      bs.setStartRow(startRow);
-      bs.setStopRow(stopRow);
+      bs.setStartRow(startRowPtr, startRowLength);
+      bs.setStopRow(stopRowPtr, stopRowLength);
       return bs;
     } finally {
       b.readUnlock(); 
@@ -97,12 +110,14 @@ public final class DataBlockScanner implements Closeable{
   /** 
    * Private ctor
    */
-  private DataBlockScanner() {
+  private DataBlockDirectMemoryScanner() {
   }
   
   private void reset() {
-    this.startRow = null;
-    this.stopRow = null;
+    this.startRowPtr = 0;
+    this.startRowLength = 0;
+    this.stopRowPtr = 0;
+    this.stopRowLength = 0;
     this.ptr = 0;
     this.curPtr = 0;
     this.blockSize = 0;
@@ -113,10 +128,11 @@ public final class DataBlockScanner implements Closeable{
     this.db = null;
   }
   
-  private void setStartRow(byte[] row) {
-    this.startRow = row;
-    if (startRow != null) {
-      search(startRow, 0, startRow.length, snapshotId, Op.DELETE);
+  private void setStartRow(long ptr, int len) {
+    this.startRowPtr = ptr;
+    this.startRowLength = len;
+    if (startRowPtr != 0) {
+      search(startRowPtr, startRowLength, snapshotId, Op.DELETE);
       skipDeletedAndIrrelevantRecords();// One more time
     } else {
       this.curPtr = this.ptr;
@@ -131,14 +147,14 @@ public final class DataBlockScanner implements Closeable{
    * @param snapshotId snapshot Id of a scanner
    * @param type op type 
    */
-  void search(byte[] key, int keyOffset, int keyLength, long snapshotId, Op type) {
+  void search(long key, int keyLength, long snapshotId, Op type) {
     long ptr = this.ptr;
     int count = 0;
     while (count++ < numRecords) {
       int keylen = DataBlock.keyLength(ptr);
       int vallen = DataBlock.valueLength(ptr);
       int res =
-          Utils.compareTo(key, keyOffset, keyLength, DataBlock.keyAddress(ptr), keylen);
+          Utils.compareTo(key, keyLength, DataBlock.keyAddress(ptr), keylen);
       if (res < 0) {
         this.curPtr = ptr;
         return;
@@ -165,8 +181,9 @@ public final class DataBlockScanner implements Closeable{
     this.curPtr = this.ptr + dataSize;
   }
 
-  private void setStopRow(byte[] row) {
-    this.stopRow = row;
+  private void setStopRow(long ptr, int len) {
+    this.stopRowPtr = ptr;
+    this.stopRowLength = len;
   }
   
   /**
@@ -178,38 +195,14 @@ public final class DataBlockScanner implements Closeable{
    */
   private void setBlock(DataBlock b) throws RetryOperationException {
     
-	  //boolean needLock = false;
-    try {
-
       b.readLock();
-      //needLock = b.hasLargeKVs();
-      //if (needLock) {
-        db = b;
-      //  System.out.println("NEED LOCK");
-      //}
+      db = b;
       this.blockSize = BigSortedMap.maxBlockSize;
       this.dataSize = b.getDataSize();
       this.numRecords = b.getNumberOfRecords();
       this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
-//      if (!needLock) {
-//        if (memory.get() == null) {
-//          this.ptr = UnsafeAccess.malloc(this.blockSize);
-//          // TODO handle allocation failure
-//          memory.set(ptr);
-//        } else {
-//          this.ptr = memory.get();
-//        }
-//        UnsafeAccess.copy(b.getAddress(), this.ptr, this.dataSize);
-//      } else {
-        this.ptr = b.getAddress(); 
-//      }
+      this.ptr = b.getAddress(); 
       this.curPtr = this.ptr;
-
-    } finally {
-//      if (!needLock) {
-//        b.readUnlock();
-//      }
-    }
 
   }
   
@@ -229,8 +222,8 @@ public final class DataBlockScanner implements Closeable{
     skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr >= this.dataSize) {
       return false;
-    } else if (stopRow != null) {
-      int res = DataBlock.compareTo(this.curPtr, stopRow, 0, stopRow.length, 0, Op.DELETE);
+    } else if (stopRowPtr != 0) {
+      int res = DataBlock.compareTo(this.curPtr, stopRowPtr, stopRowLength, 0, Op.DELETE);
       if (res > 0) {
         return true;
       } else {
@@ -248,8 +241,7 @@ public final class DataBlockScanner implements Closeable{
    * @return true, false
    */
   public final boolean next() {
-    //*DEBUG*/ System.out.println("next");
-    //Thread.dumpStack();
+
     skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr < this.dataSize) {
       int keylen = DataBlock.blockKeyLength(this.curPtr);
@@ -258,8 +250,8 @@ public final class DataBlockScanner implements Closeable{
       if(this.curPtr - this.ptr >= this.dataSize) {
         return false;
       }
-      if (stopRow != null) {
-        int res = DataBlock.compareTo(this.curPtr, stopRow, 0, stopRow.length, 0, Op.DELETE);
+      if (stopRowPtr != 0) {
+        int res = DataBlock.compareTo(this.curPtr, stopRowPtr, stopRowLength, 0, Op.DELETE);
         if (res > 0) {
           return true;
         } else {
