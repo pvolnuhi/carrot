@@ -56,10 +56,6 @@ public class BigSortedMapTest {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long counter = 0;
     while(scanner.hasNext()) {
-//      int keySize = scanner.keySize();
-//      byte[] buf = new byte[keySize];
-//      scanner.key(buf,  0);
-//      System.out.println(Bytes.toString(buf));
       counter++;
       scanner.next();
     }
@@ -76,7 +72,6 @@ public class BigSortedMapTest {
     for(int i=1; i <= totalLoaded; i++) {
       byte[] key = ("KEY"+ (i)).getBytes();
       byte[] value = ("VALUE"+i).getBytes();
-      //System.out.println(Bytes.toString(key));
       try {
         long size = map.get(key, 0, key.length, tmp, 0, Long.MAX_VALUE) ;
         assertEquals(value.length, (int)size);
@@ -142,7 +137,6 @@ public class BigSortedMapTest {
         assertTrue (Utils.compareTo(prev, 0, prev.length, cur, 0, cur.length) < 0);
       }
       prev = cur;
-      //System.out.println( new String(cur, 0, keySize));
       boolean res = scanner.next();
     }   
     long end = System.currentTimeMillis();

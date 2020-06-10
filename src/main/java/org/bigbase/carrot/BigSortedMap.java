@@ -615,6 +615,16 @@ public class BigSortedMap {
     return new BigSortedMapScanner(this, start, stop, snapshotId);
   }
   
+  /**
+   * Get scanner (direct memory)
+   */
+  public BigSortedMapDirectMemoryScanner getScanner(long startRowPtr, int startRowLength, 
+      long stopRowPtr, int stopRowLength) {
+    long snapshotId = sequenceID.incrementAndGet();
+    return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+      stopRowPtr, stopRowLength, snapshotId); 
+  }
+  
   public void dispose() {
     for(IndexBlock b: map.keySet()) {
       // index block MUST deallocate data blocks

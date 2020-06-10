@@ -67,10 +67,6 @@ public class BigSortedMapDirectMemoryTest {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long counter = 0;
     while(scanner.hasNext()) {
-//      int keySize = scanner.keySize();
-//      byte[] buf = new byte[keySize];
-//      scanner.key(buf,  0);
-//      System.out.println(Bytes.toString(buf));
       counter++;
       scanner.next();
     }
@@ -120,44 +116,71 @@ public class BigSortedMapDirectMemoryTest {
     }            
   }
   
- 
+  @Test  
+  public void testDirectMemoryAllRangesMapScanner() throws IOException {
+    System.out.println("testDirectMemoryAllRangesMapScanner ");
+    Random r = new Random();
+    int startIndex = r.nextInt((int)totalLoaded);
+    int stopIndex = r.nextInt((int)totalLoaded);
+    
+    byte[] key1 = ("KEY" + startIndex).getBytes();
+    byte[] key2 = ("KEY" + stopIndex).getBytes();
+    byte[] startKey, stopKey;
+    if (Utils.compareTo(key1, 0, key1.length, key2, 0, key2.length) > 0) {
+      startKey = key2;
+      stopKey = key1;
+    } else {
+      startKey = key1;
+      stopKey = key2;
+    }
+    
+    long startPtr = UnsafeAccess.malloc(startKey.length);
+    UnsafeAccess.copy(startKey,  0, startPtr, startKey.length);
+    int startLength = startKey.length;
+    long stopPtr = UnsafeAccess.malloc(stopKey.length);
+    UnsafeAccess.copy(stopKey,  0, stopPtr, stopKey.length);
+    int stopLength = stopKey.length;
+    
+    BigSortedMapDirectMemoryScanner scanner = 
+        map.getScanner(0, 0, startPtr, startLength);
+    long count1 = countRows(scanner);
+    scanner.close();
+    scanner = 
+        map.getScanner(startPtr, startLength, stopPtr, stopLength);
+    long count2 = countRows(scanner);
+    scanner.close();
+    scanner = 
+        map.getScanner(stopPtr, stopLength, 0, 0);
+    long count3 = countRows(scanner);
+    scanner.close();
+    assertEquals(totalLoaded, count1 + count2 + count3); 
+    UnsafeAccess.free(startPtr);
+    UnsafeAccess.free(stopPtr);
+  }
   
   @Test  
   public void testFullMapScanner() throws IOException {
     System.out.println("testFullMap ");
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long start = System.currentTimeMillis();
-    long count = 0;
-    long prev = -1;
-    int prevSize =0;
-    while(scanner.hasNext()) {
-      count++;
-      int keySize = scanner.keySize();
-      int valSize = scanner.valueSize();
-      long key = UnsafeAccess.malloc(keySize);
-      long value = UnsafeAccess.malloc(valSize);
-      scanner.key(key, keySize);
-      scanner.value(value, valSize);
-      UnsafeAccess.free(value);
-      if (prev > 0) {
-        assertTrue (Utils.compareTo(prev, prevSize, key,  keySize) < 0);
-        UnsafeAccess.free(prev);
-      }
-      
-      prev = key;
-      prevSize = keySize;
-      scanner.next();
-    }   
-    if (prev > 0) {
-      UnsafeAccess.free(prev);
-    }
-    
+    long count = countRows(scanner);
     long end = System.currentTimeMillis();
     System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
     assertEquals(totalLoaded, count);
     scanner.close();
   }
  
+  @Test  
+  public void testDirectMemoryFullMapScanner() throws IOException {
+    System.out.println("testDirectMemoryFullMapScanner ");
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0,0,0,0);
+    long start = System.currentTimeMillis();
+    long count = countRows(scanner);
+    long end = System.currentTimeMillis();
+    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
+    assertEquals(totalLoaded, count);
+    scanner.close();
+  }
   
   private List<byte[]> delete(int num) {
     Random r = new Random();
@@ -238,7 +261,46 @@ public class BigSortedMapDirectMemoryTest {
     undelete(deletedKeys);
 
   }
+  
+  @Test
+  public void testDirectMemoryFullMapScannerWithDeletes() throws IOException {
+    System.out.println("testDirectMemoryFullMapScannerWithDeletes ");
+    int toDelete = 100000;
+    List<byte[]> deletedKeys = delete(toDelete);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    long start = System.currentTimeMillis();
+    long count = 0;
+    int vallen = ("VALUE" + totalLoaded).length();
+    long value = UnsafeAccess.malloc(vallen);
+    long prev = 0;
+    int prevSize = 0;
+    while(scanner.hasNext()) {
+      count++;
+      int keySize = scanner.keySize();
+      int valSize = scanner.valueSize();
+      long key = UnsafeAccess.malloc(keySize);
+      scanner.key(key, keySize);
+      scanner.value(value, vallen);
+      if (prev != 0) {
+        assertTrue (Utils.compareTo(prev, prevSize, key, keySize) < 0);
+        UnsafeAccess.free(prev);
+      }
+      prev = key;
+      prevSize = keySize;
+      scanner.next();
+    }   
+    if (prev > 0) {
+      UnsafeAccess.free(prev);
+    }
+    UnsafeAccess.free(value);
     
+    long end = System.currentTimeMillis();
+    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
+    assertEquals(totalLoaded - toDelete, count);
+    undelete(deletedKeys);
+
+  }
+  
   @Test
   public void testScannerSameStartStopRow () throws IOException
   {
@@ -259,7 +321,35 @@ public class BigSortedMapDirectMemoryTest {
     assertEquals(0, (int) count);
   }
   
+  @Test
+  public void testDirectMemoryScannerSameStartStopRow () throws IOException
+  {
+    System.out.println("testDirectMemoryScannerSameStartStopRow");
+    Random r = new Random();
+    int startIndex = r.nextInt((int)totalLoaded);
+    byte[] startKey = ("KEY" + startIndex).getBytes();
+    int length = startKey.length;
+    long ptr = UnsafeAccess.malloc(length);
+    UnsafeAccess.copy(startKey,  0, ptr, length);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(ptr, length, ptr, length);
+    long count = countRows(scanner); 
+    scanner.close();
+    assertEquals(0, (int) count);
+    
+    startIndex = r.nextInt((int)totalLoaded);
+    startKey = ("KEY" + startIndex).getBytes();
+    length = startKey.length;
+    UnsafeAccess.free(ptr);
+    
+    ptr = UnsafeAccess.malloc(length);
+    UnsafeAccess.copy(startKey,  0, ptr, length);
+    scanner = map.getScanner(ptr, length, ptr, length);    
+    count = countRows(scanner); 
+    scanner.close();
+    UnsafeAccess.free(ptr);
 
+    assertEquals(0, (int) count);
+  }
   @Ignore
   @Test
   public void loopNext() throws IOException {
@@ -319,7 +409,37 @@ public class BigSortedMapDirectMemoryTest {
         UnsafeAccess.free(prev);
       }
       prev = key;
-      //System.out.println( new String(cur, 0, keySize));
+      scanner.next();
+    }   
+    if (prev != 0) {
+      UnsafeAccess.free(prev);
+    }
+    UnsafeAccess.free(value);
+    long end = System.currentTimeMillis();
+    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
+    return count;
+  }
+  
+  private long countRows(BigSortedMapDirectMemoryScanner scanner) throws IOException {
+    long start = System.currentTimeMillis();
+    long count = 0;
+    long prev = 0;
+    int prevLen = 0;
+    int vallen = ("VALUE"+ totalLoaded).length();
+    long value = UnsafeAccess.malloc(vallen);
+    
+    while(scanner.hasNext()) {
+      count++;
+      int keySize = scanner.keySize();
+      long key = UnsafeAccess.malloc(keySize);
+      
+      scanner.key(key, keySize);
+      scanner.value(value, vallen);
+      if (prev != 0) {
+        assertTrue (Utils.compareTo(prev,  prevLen, key, keySize) < 0);
+        UnsafeAccess.free(prev);
+      }
+      prev = key;
       scanner.next();
     }   
     if (prev != 0) {
