@@ -80,6 +80,7 @@ public class DataBlock  {
 
   /*
    * TODO: make this configurable
+   * TODO: Optimal block ratios (check jemalloc sizes)
    */
 
   static float[] BLOCK_RATIOS = new float[] { 0.25f, 0.5f, 0.75f, 1.0f };
@@ -683,12 +684,12 @@ public class DataBlock  {
    * Expands block
    * @return true if success
    */
-  boolean expand() {
+  boolean expand(int required) {
 
     // Get next size
     int blockSize = getBlockSize();
     int dataSize = getDataSize();
-    int nextSize = getMinSizeGreaterThan(BigSortedMap.maxBlockSize, blockSize);
+    int nextSize = getMinSizeGreaterThan(BigSortedMap.maxBlockSize, required);
     if (nextSize < 0 || nextSize < blockSize) {
       return false;
     }
@@ -1061,7 +1062,7 @@ public class DataBlock  {
       dataSize = getDataSize();
       if (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize) {
         // try to expand block
-        boolean res = expand();
+        boolean res = expand(dataSize + kvLength + RECORD_TOTAL_OVERHEAD);
         blockSize = getBlockSize();
         if (!res || (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize)) {
           // Still not enough room
@@ -1905,7 +1906,7 @@ public class DataBlock  {
             dataSize = getDataSize();
             if (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize) {
               // try to expand block
-              boolean res = expand();
+              boolean res = expand(dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD);
               blockSize = getBlockSize();
               if (!res
                   || (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize)) {
@@ -2105,7 +2106,7 @@ public class DataBlock  {
             dataSize = getDataSize();
             if (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize) {
               // try to expand block
-              boolean res = expand();
+              boolean res = expand(dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD);
               blockSize = getBlockSize();
               if (!res
                   || (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize)) {
@@ -2897,7 +2898,7 @@ public class DataBlock  {
       int leftDataSize = left.getDataSize();
       int blockSize = getBlockSize();
       while (dataSize + leftDataSize >= blockSize) {
-        boolean result = expand();
+        boolean result = expand(dataSize + leftDataSize);
         if (result == false) {
           // expansion failed
           throw new RuntimeException("Can not expand block for merge");
