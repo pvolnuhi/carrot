@@ -1057,54 +1057,58 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @param keyLength
 	 * @return address to insert (or update)
 	 */
-	long search(byte[] key, int keyOffset, int keyLength, long version, Op type) {
-		long ptr = dataPtr;
-		long prevPtr = NOT_FOUND;
-		int count = 0;
-
-		try {
-			while (count++ < numDataBlocks) {
-				int keylen =  keyLength(ptr);
-				int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
-				if (res < 0) {
-					if (prevPtr == NOT_FOUND) {
-						// FATAL error
-						return ptr = NOT_FOUND;
-					} else {
-						return prevPtr;
-					}
-				} else if (res == 0) {
-					// compare versions
-					long ver = version(ptr);
-					if (ver < version) {
-						if (prevPtr == NOT_FOUND && count > 1) {
-							// FATAL error
-							return ptr = NOT_FOUND;
-						}
-						return count > 1? prevPtr: ptr;
-					} else if (ver == version) {
-						byte _type = type(ptr);
-						if (_type > type.ordinal() && count > 1) {
-							if (prevPtr == NOT_FOUND) {
-								// FATAL error
-								return ptr = NOT_FOUND;
-							}
-	            return count > 1? prevPtr: ptr;
-						}
-					}
-				}
-				prevPtr = ptr;
-				if (isExternalBlock(ptr)) {
-				  keylen = ADDRESS_SIZE;
-				}
-				ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
-			}
-			// last data block
-			return prevPtr;
-		} finally {
-			checkPointer(ptr);
-		}
-	}
+  long search(byte[] key, int keyOffset, int keyLength, long version, Op type) {
+    long ptr = dataPtr;
+    long prevPtr = NOT_FOUND;
+    int count = 0;
+    long recentTxId = BigSortedMap.getMostRecentActiveTxSeqId();
+    try {
+      while (count++ < numDataBlocks) {
+        int keylen = keyLength(ptr);
+        int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
+        if (res < 0) {
+          if (prevPtr == NOT_FOUND) {
+            // FATAL error
+            return ptr = NOT_FOUND;
+          } else {
+            return prevPtr;
+          }
+        } else if (res == 0) {
+          // compare versions
+          long ver = version(ptr);
+          if (ver < recentTxId) {
+            if (ver < version) {
+              if (prevPtr == NOT_FOUND && count > 1) {
+                // FATAL error
+                return ptr = NOT_FOUND;
+              }
+              return count > 1 ? prevPtr : ptr;
+            } else if (ver == version) {
+              byte _type = type(ptr);
+              if (_type > type.ordinal() && count > 1) {
+                if (prevPtr == NOT_FOUND) {
+                  // FATAL error
+                  return ptr = NOT_FOUND;
+                }
+                return count > 1 ? prevPtr : ptr;
+              }
+            }
+          } else {
+            return ptr;
+          }
+        }
+        prevPtr = ptr;
+        if (isExternalBlock(ptr)) {
+          keylen = ADDRESS_SIZE;
+        }
+        ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+      }
+      // last data block
+      return prevPtr;
+    } finally {
+      checkPointer(ptr);
+    }
+  }
 
 	/**
 	 * TODO: handle not found (new block) Search position of a block, which can
@@ -1228,14 +1232,15 @@ public class IndexBlock implements Comparable<IndexBlock> {
 	 * @param keyLength
 	 * @return address to insert (or update)
 	 */
-	long search(long keyPtr, int keyLength, long version, Op type) {
+  long search(long keyPtr, int keyLength, long version, Op type) {
     long ptr = dataPtr;
     long prevPtr = NOT_FOUND;
     int count = 0;
+    long recentTxId = BigSortedMap.getMostRecentActiveTxSeqId();
 
     try {
       while (count++ < numDataBlocks) {
-        int keylen =  keyLength(ptr);
+        int keylen = keyLength(ptr);
         int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
         if (res < 0) {
           if (prevPtr == NOT_FOUND) {
@@ -1247,21 +1252,25 @@ public class IndexBlock implements Comparable<IndexBlock> {
         } else if (res == 0) {
           // compare versions
           long ver = version(ptr);
-          if (ver < version) {
-            if (prevPtr == NOT_FOUND && count > 1) {
-              // FATAL error
-              return ptr = NOT_FOUND;
-            }
-            return count > 1? prevPtr: ptr;
-          } else if (ver == version) {
-            byte _type = type(ptr);
-            if (_type > type.ordinal() && count > 1) {
-              if (prevPtr == NOT_FOUND) {
+          if (ver < recentTxId) {
+            if (ver < version) {
+              if (prevPtr == NOT_FOUND && count > 1) {
                 // FATAL error
                 return ptr = NOT_FOUND;
               }
-              return count > 1? prevPtr: ptr;
+              return count > 1 ? prevPtr : ptr;
+            } else if (ver == version) {
+              byte _type = type(ptr);
+              if (_type > type.ordinal() && count > 1) {
+                if (prevPtr == NOT_FOUND) {
+                  // FATAL error
+                  return ptr = NOT_FOUND;
+                }
+                return count > 1 ? prevPtr : ptr;
+              }
             }
+          } else {
+            return ptr;
           }
         }
         prevPtr = ptr;
@@ -1276,7 +1285,7 @@ public class IndexBlock implements Comparable<IndexBlock> {
       checkPointer(ptr);
     }
 
-	}
+  }
 
 	/**
 	 * TODO: handle not found (new block) Search position of a block, which can

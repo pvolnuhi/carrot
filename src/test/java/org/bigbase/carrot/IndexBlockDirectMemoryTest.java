@@ -3,6 +3,7 @@ package org.bigbase.carrot;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -130,8 +131,126 @@ public class IndexBlockDirectMemoryTest {
     }
   } 
   
+  @Test
+  public void testOverwriteSameValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSameValueSize");
+    Random r = new Random();
+    IndexBlock b = getIndexBlock(4096);
+    List<Key> keys = fillIndexBlock(b);
+    for( Key key: keys) {
+      byte[] value = new byte[key.size];
+      r.nextBytes(value);
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      long buf = UnsafeAccess.malloc(value.length);
+      boolean res = b.put(key.address, key.size, valuePtr, value.length, Long.MAX_VALUE, 0);
+      assertTrue(res);
+      long size = b.get(key.address, key.size, buf, value.length, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
+      UnsafeAccess.free(valuePtr);
+      UnsafeAccess.free(buf);
+    }
+    scanAndVerify(b, keys);    
+  }
   
-  private IndexBlock getIndexBlock(int size) {
+  @Test
+  public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSmallerValueSize");
+    Random r = new Random();
+    IndexBlock b = getIndexBlock(4096);
+    List<Key> keys = fillIndexBlock(b);
+    for( Key key: keys) {
+      byte[] value = new byte[key.size-2];
+      r.nextBytes(value);
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      long buf = UnsafeAccess.malloc(value.length);
+      boolean res = b.put(key.address, key.size, valuePtr, value.length, Long.MAX_VALUE, 0);
+      assertTrue(res);
+      long size = b.get(key.address, key.size, buf, value.length, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
+      UnsafeAccess.free(valuePtr);
+      UnsafeAccess.free(buf);
+    }
+    scanAndVerify(b, keys);    
+
+  }
+  
+  @Test
+  public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteLargerValueSize");
+    Random r = new Random();
+    IndexBlock b = getIndexBlock(4096);
+    List<Key> keys = fillIndexBlock(b);
+    // Delete half keys
+    int toDelete = keys.size()/2;
+    for(int i=0; i < toDelete; i++) {
+      /*DEBUG*/ System.out.println(i);
+      Key key = keys.remove(0);
+      OpResult res = b.delete(key.address, key.size, Long.MAX_VALUE);
+      assertEquals(OpResult.OK, res);
+    }
+
+    for( Key key: keys) {
+      byte[] value = new byte[key.size + 2];
+      r.nextBytes(value);      
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      long buf = UnsafeAccess.malloc(value.length);
+      boolean res = b.put(key.address, key.size, valuePtr, value.length, Long.MAX_VALUE, 0);
+      assertTrue(res);
+      long size = b.get(key.address, key.size, buf, value.length, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
+      UnsafeAccess.free(valuePtr);
+      UnsafeAccess.free(buf);
+    }
+    scanAndVerify(b, keys);    
+  }
+  
+  protected void scanAndVerify(IndexBlock b, List<Key> keys)
+      throws RetryOperationException, IOException {
+    long buffer = 0;
+    long tmp = 0;
+    int prevLength = 0;
+    IndexBlockScanner is = IndexBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+    DataBlockScanner bs = null;
+    int count = 0;
+    while ((bs = is.nextBlockScanner()) != null) {
+      while (bs.hasNext()) {
+        int len = bs.keySize();
+        buffer = UnsafeAccess.malloc(len);
+        bs.key(buffer, len);
+
+        boolean result = contains(buffer, len, keys);
+        assertTrue(result);
+        bs.next();
+        count++;
+        if (count > 1) {
+          // compare
+          int res = Utils.compareTo(tmp,  prevLength, buffer, len);
+          assertTrue(res < 0);
+          UnsafeAccess.free(tmp);
+        }
+        tmp = buffer;
+        prevLength = len;
+      }
+      bs.close();
+    }
+    UnsafeAccess.free(tmp);
+    is.close();
+    assertEquals(keys.size(), count);
+
+  }
+  private boolean contains(long key, int size, List<Key> keys) {
+    for (Key k : keys) {
+      if (Utils.compareTo(k.address, k.size, key, size) == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  protected IndexBlock getIndexBlock(int size) {
     IndexBlock ib = new IndexBlock(size);
     ib.setFirstIndexBlock();
     return ib;

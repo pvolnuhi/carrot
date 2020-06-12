@@ -484,7 +484,13 @@ public final class UnsafeAccess {
       destAddr += size;
     }
   }
-
+  
+  public static long allocAndCopy(byte[] arr, int off, int len) {
+    long ptr = malloc(len);
+    copy(arr, 0, ptr, len);
+    return ptr;
+  }
+  
   /**
    * Copies specified number of bytes from given offset of {@code src} ByteBuffer to the
    * {@code dest} array.

@@ -404,6 +404,92 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
   }
   
   @Test
+  public void testOverwriteSameValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSameValueSize");
+    Random r = new Random();
+    DataBlock b = getDataBlock();
+    List<Key> keys = fillDataBlock(b);
+    for( Key key: keys) {
+      byte[] value = new byte[key.size];
+      r.nextBytes(value);
+      long bufPtr = UnsafeAccess.malloc(value.length);
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      boolean res = b.put(key.address, key.size, valuePtr, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(bufPtr, value.length,  valuePtr, value.length) == 0);
+      UnsafeAccess.free(valuePtr);
+      UnsafeAccess.free(bufPtr);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+
+   
+    scanAndVerify(b, keys);    
+  }
+  
+  @Test
+  public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSmallerValueSize");
+    Random r = new Random();
+    DataBlock b = getDataBlock();
+    List<Key> keys = fillDataBlock(b);
+    for( Key key: keys) {
+      byte[] value = new byte[key.size-2]; // smaller values
+      r.nextBytes(value);
+      long bufPtr = UnsafeAccess.malloc(value.length);
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      boolean res = b.put(key.address, key.size, valuePtr, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(bufPtr, value.length,  valuePtr, value.length) == 0);
+      UnsafeAccess.free(valuePtr);
+      UnsafeAccess.free(bufPtr);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+
+   
+    scanAndVerify(b, keys);    
+
+  }
+  
+  @Test
+  public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteLargerValueSize");
+    Random r = new Random();
+    DataBlock b = getDataBlock();
+    List<Key> keys = fillDataBlock(b);
+    // Delete half keys
+    int toDelete = keys.size()/2;
+    for(int i=0; i < toDelete; i++) {
+      Key key = keys.remove(0);
+      OpResult res = b.delete(key.address, key.size, Long.MAX_VALUE);
+      assertEquals(OpResult.OK, res);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+
+    for( Key key: keys) {
+      byte[] value = new byte[key.size+2]; // large values
+      r.nextBytes(value);
+      long bufPtr = UnsafeAccess.malloc(value.length);
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      boolean res = b.put(key.address,  key.size, valuePtr, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+   
+    scanAndVerify(b, keys);    
+
+  }
+  
+  @Test
   public void testOverwriteOnUpdateEnabled() throws RetryOperationException, IOException {
     System.out.println("testOverwriteOnUpdateEnabled");
 
@@ -479,7 +565,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
       r.nextBytes(key);
       long ptr = UnsafeAccess.malloc(keyLength);
       UnsafeAccess.copy(key, 0, ptr, keyLength);
-      result = b.put(key, 0, key.length, key, 0, key.length, Long.MAX_VALUE, 0);
+      result = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
       if(result) {
         keys.add(new Key(ptr, keyLength));
       }

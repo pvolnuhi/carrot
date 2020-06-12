@@ -3,12 +3,12 @@ package org.bigbase.carrot;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.util.Utils;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,8 +145,77 @@ public class IndexBlockTest {
     }
   } 
   
+  @Test
+  public void testOverwriteSameValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSameValueSize");
+    Random r = new Random();
+    IndexBlock b = getIndexBlock(4096);
+    List<byte[]> keys = fillIndexBlock(b);
+    for( byte[] key: keys) {
+      byte[] value = new byte[key.length];
+      r.nextBytes(value);
+      byte[] buf = new byte[value.length];
+      boolean res = b.put(key, 0, key.length, value, 0, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key, 0, key.length, buf, 0, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+    }
+    
+   
+    scanAndVerify(b, keys);    
+
+  }
   
-  private IndexBlock getIndexBlock(int size) {
+  @Test
+  public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSmallerValueSize");
+    Random r = new Random();
+    IndexBlock b = getIndexBlock(4096);
+    List<byte[]> keys = fillIndexBlock(b);
+    for( byte[] key: keys) {
+      byte[] value = new byte[key.length-2];
+      r.nextBytes(value);
+      byte[] buf = new byte[value.length];
+      boolean res = b.put(key, 0, key.length, value, 0, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key, 0, key.length, buf, 0, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+    }
+    scanAndVerify(b, keys);    
+
+  }
+  
+  @Test
+  public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteLargerValueSize");
+    Random r = new Random();
+    IndexBlock b = getIndexBlock(4096);
+    List<byte[]> keys = fillIndexBlock(b);
+    // Delete half keys
+    int toDelete = keys.size()/2;
+    for(int i=0; i < toDelete; i++) {
+      byte[] key = keys.remove(0);
+      OpResult res = b.delete(key, 0, key.length, Long.MAX_VALUE);
+      assertEquals(OpResult.OK, res);
+    }
+
+    for( byte[] key: keys) {
+      byte[] value = new byte[key.length+2];
+      r.nextBytes(value);
+      byte[] buf = new byte[value.length];
+      boolean res = b.put(key, 0, key.length, value, 0, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key, 0, key.length, buf, 0, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+    }
+    
+    scanAndVerify(b, keys);    
+
+  }
+  protected IndexBlock getIndexBlock(int size) {
     IndexBlock ib = new IndexBlock(size);
     ib.setFirstIndexBlock();
     return ib;
@@ -172,4 +241,44 @@ public class IndexBlockTest {
     return keys;
   }
   
+  protected void scanAndVerify(IndexBlock b, List<byte[]> keys)
+      throws RetryOperationException, IOException {
+    byte[] buffer = null;
+    byte[] tmp = null;
+    IndexBlockScanner is = IndexBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+    DataBlockScanner bs = null;
+    int count = 0;
+    while ((bs = is.nextBlockScanner()) != null) {
+      while (bs.hasNext()) {
+        int len = bs.keySize();
+        buffer = new byte[len];
+        bs.key(buffer, 0);
+
+        boolean result = contains(buffer, keys);
+        assertTrue(result);
+        bs.next();
+        count++;
+        if (count > 1) {
+          // compare
+          int res = Utils.compareTo(tmp, 0, tmp.length, buffer, 0, buffer.length);
+          assertTrue(res < 0);
+        }
+        tmp = new byte[len];
+        System.arraycopy(buffer, 0, tmp, 0, tmp.length);
+      }
+      bs.close();
+    }
+    is.close();
+    assertEquals(keys.size(), count);
+
+  }
+  
+  private boolean contains(byte[] key, List<byte[]> keys) {
+    for (byte[] k : keys) {
+      if (Utils.compareTo(k, 0, k.length, key, 0, key.length) == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
 }

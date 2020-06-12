@@ -22,7 +22,6 @@ import org.junit.Test;
 public class DataBlockTest extends DataBlockTestBase{
   Log LOG = LogFactory.getLog(DataBlockTest.class);
   
-  @Ignore
   @Test
   public void testDataBlockPutGet() throws RetryOperationException {
     System.out.println("testDataBlockPutGet");
@@ -48,7 +47,7 @@ public class DataBlockTest extends DataBlockTestBase{
 
   }
   
-  @Ignore
+  
   @Test
   public void testScanAfterDelete() throws RetryOperationException, IOException
   {
@@ -78,7 +77,7 @@ public class DataBlockTest extends DataBlockTestBase{
     return nkeys;
   }
    
-  @Ignore
+  
   @Test
   public void testDataBlockPutScan() throws RetryOperationException, IOException {
     System.out.println("testDataBlockPutScan");
@@ -86,7 +85,7 @@ public class DataBlockTest extends DataBlockTestBase{
     ArrayList<byte[]> keys = fillDataBlock(b);
     long start = System.currentTimeMillis();
     byte[] buffer = new byte[keys.get(0).length * 2];
-    int N = 1000000;
+    int N = 100000;
     for(int i = 0 ; i < N; i++) {
       DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
       int count =0;
@@ -104,7 +103,6 @@ public class DataBlockTest extends DataBlockTestBase{
 
   }
    
-  @Ignore
   @Test
   public void testDataBlockPutDelete() throws RetryOperationException {
     System.out.println("testDataBlockPutDelete");
@@ -126,7 +124,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
-  @Ignore
+  
   @Test
   public void testDataBlockSplit() throws RetryOperationException, IOException {
     System.out.println("testDataBlockSplit");
@@ -157,7 +155,6 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
-  @Ignore
   @Test
   public void testDataBlockMerge() throws RetryOperationException, IOException {
     System.out.println("testDataBlockMerge");
@@ -192,7 +189,6 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
-  @Ignore
   @Test
   public void testCompactionFull() throws RetryOperationException {
     System.out.println("testCompactionFull");
@@ -217,7 +213,6 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
-  @Ignore
   @Test
   public void testCompactionPartial() throws RetryOperationException {
     System.out.println("testCompactionPartial");
@@ -251,7 +246,6 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
    
-  @Ignore
   @Test
   public void testOrderedInsertion() throws RetryOperationException, IOException {
     System.out.println("testOrderedInsertion");
@@ -261,7 +255,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
   
-  private void scanAndVerify(DataBlock b, List<byte[]> keys) 
+  protected void scanAndVerify(DataBlock b, List<byte[]> keys) 
       throws RetryOperationException, IOException {
     byte[] buffer = null;
     byte[] tmp = null;
@@ -301,9 +295,7 @@ public class DataBlockTest extends DataBlockTestBase{
     return false;
   }
   
-  
-   
-  @Ignore
+     
   @Test
   public void testDataBlockPutAfterDelete() throws RetryOperationException {
     System.out.println("testDataBlockPutAfterDelete");
@@ -349,8 +341,8 @@ public class DataBlockTest extends DataBlockTestBase{
   
    
   @Test
-  public void testOverwriteOnUpdateEnabled() throws RetryOperationException, IOException {
-    System.out.println("testOverwriteOnUpdateEnabled");
+  public void testOverwriteOnUpdateSmallerEnabled() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteOnUpdateSmallerEnabled");
 
     DataBlock b = getDataBlock();
     List<byte[]> keys = fillDataBlock(b);
@@ -385,7 +377,6 @@ public class DataBlockTest extends DataBlockTestBase{
     // Now insert existing keys with val/2
     for (int i = 0; i < keys.size(); i++) {
       byte[] key = keys.get(i);
-      System.out.println("key =" + (new String(key)).substring(0,16)+" size="+ key.length);
       long addr = b.get(key, 0, key.length, Long.MAX_VALUE);
       int oldValLen = DataBlock.valueLength(addr);
 
@@ -432,6 +423,86 @@ public class DataBlockTest extends DataBlockTestBase{
 
   }
   
+  @Test
+  public void testOverwriteSameValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSameValueSize");
+    Random r = new Random();
+    DataBlock b = getDataBlock();
+    List<byte[]> keys = fillDataBlock(b);
+    for( byte[] key: keys) {
+      byte[] value = new byte[key.length];
+      r.nextBytes(value);
+      byte[] buf = new byte[value.length];
+      boolean res = b.put(key, 0, key.length, value, 0, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key, 0, key.length, buf, 0, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+
+   
+    scanAndVerify(b, keys);    
+
+  }
+  
+  @Test
+  public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSmallerValueSize");
+    Random r = new Random();
+    DataBlock b = getDataBlock();
+    List<byte[]> keys = fillDataBlock(b);
+    for( byte[] key: keys) {
+      byte[] value = new byte[key.length-2];
+      r.nextBytes(value);
+      byte[] buf = new byte[value.length];
+      boolean res = b.put(key, 0, key.length, value, 0, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key, 0, key.length, buf, 0, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+
+   
+    scanAndVerify(b, keys);    
+
+  }
+  
+  @Test
+  public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
+    System.out.println("testOverwriteLargerValueSize");
+    Random r = new Random();
+    DataBlock b = getDataBlock();
+    List<byte[]> keys = fillDataBlock(b);
+    // Delete half keys
+    int toDelete = keys.size()/2;
+    for(int i=0; i < toDelete; i++) {
+      byte[] key = keys.remove(0);
+      OpResult res = b.delete(key, 0, key.length, Long.MAX_VALUE);
+      assertEquals(OpResult.OK, res);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+
+    for( byte[] key: keys) {
+      byte[] value = new byte[key.length+2];
+      r.nextBytes(value);
+      byte[] buf = new byte[value.length];
+      boolean res = b.put(key, 0, key.length, value, 0, value.length, 0, 0);
+      assertTrue(res);
+      long size = b.get(key, 0, key.length, buf, 0, Long.MAX_VALUE);
+      assertEquals(value.length, (int)size);
+      assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+    }
+    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+   
+    scanAndVerify(b, keys);    
+
+  }
+  
   private void verifyGets(DataBlock b, List<byte[]> keys) {
     for(byte[] key: keys) {
       long address = b.get(key, 0, key.length, Long.MAX_VALUE);
@@ -462,7 +533,6 @@ public class DataBlockTest extends DataBlockTestBase{
   }
  
    
-  @Ignore
   @Test
   public void testFirstKey() throws IOException {
     System.out.println("testFirstKey");

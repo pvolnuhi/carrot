@@ -136,7 +136,7 @@ public class DataBlock  {
     }
     return -1;
   }
-  static enum AllocType {
+  public static enum AllocType {
     EMBEDDED, EXT_VALUE, EXT_KEY_VALUE;
   }
   /**
