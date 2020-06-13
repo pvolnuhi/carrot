@@ -58,7 +58,6 @@ public class IndexBlockTest {
       
       String shortKey = new String(key);
       shortKey = shortKey.substring(0, Math.min(16, shortKey.length()));
-      System.out.println("Deleting " + shortKey);
       OpResult result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
       assertTrue(result != OpResult.NOT_FOUND);
       if (result == OpResult.SPLIT_REQUIRED) {
@@ -69,7 +68,6 @@ public class IndexBlockTest {
         continue;
       }
       assertEquals(OpResult.OK, result);
-      System.out.println("Deleted "+(++found) +" total="+ keys.size());  
 
       // try again
       result = ib.delete(key, 0, key.length, Long.MAX_VALUE);

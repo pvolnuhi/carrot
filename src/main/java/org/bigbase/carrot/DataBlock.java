@@ -81,9 +81,12 @@ public class DataBlock  {
   /*
    * TODO: make this configurable
    * TODO: Optimal block ratios (check jemalloc sizes)
+   * 512-4096 with step 256 - this is jemalloc specific
+   * sizes of allocation 
+   * 256 * 2, 3, 4, ... 16
    */
-
-  static float[] BLOCK_RATIOS = new float[] { 0.25f, 0.5f, 0.75f, 1.0f };
+  static int BASE_SIZE = 256;
+  static int[] BASE_MULTIPLIERS = new int[] {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   /*
    * Read-Write Lock TODO: StampedLock (Java 8)
    */
@@ -117,8 +120,8 @@ public class DataBlock  {
    * @return min size or -1;
    */
   static int getMinSizeGreaterThan(int max, int current) {
-    for (int i = 0; i < BLOCK_RATIOS.length; i++) {
-      int size = Math.round(max * BLOCK_RATIOS[i]);
+    for (int i = 0; i < BASE_MULTIPLIERS.length; i++) {
+      int size = BASE_SIZE * BASE_MULTIPLIERS[i];
       if (size > current) return size;
     }
     return -1;
@@ -131,8 +134,8 @@ public class DataBlock  {
    * @return min size or -1;
    */
   static int getMinSizeGreaterOrEqualsThan(int max, int current) {
-    for (int i = 0; i < BLOCK_RATIOS.length; i++) {
-      int size = Math.round(max * BLOCK_RATIOS[i]);
+    for (int i = 0; i < BASE_MULTIPLIERS.length; i++) {
+      int size = BASE_SIZE * BASE_MULTIPLIERS[i];
       if (size >= current) return size;
     }
     return -1;
