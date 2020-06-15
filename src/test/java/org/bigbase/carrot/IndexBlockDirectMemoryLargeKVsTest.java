@@ -10,11 +10,18 @@ import java.util.Random;
 
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTest{
 
   
+ 
+  @Ignore
+  @Test 
+  public void testAutomaticDataBlockMerge() {
+  
+  }
   /**
    * 
    * 1. K & V are both in data block - we do not test this

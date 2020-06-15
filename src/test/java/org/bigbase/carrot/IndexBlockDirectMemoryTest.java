@@ -31,7 +31,26 @@ public class IndexBlockDirectMemoryTest {
     }
     
   }
-
+  @Test 
+  public void testAutomaticDataBlockMerge() {
+    System.out.println("testAutomaticDataBlockMerge");  
+    IndexBlock ib = getIndexBlock(4096);
+    ArrayList<Key> keys = fillIndexBlock(ib);
+    int before = ib.getNumberOfDataBlock();
+    
+    // Delete half of records
+    
+    List<Key> toDelete = keys.subList(0, keys.size()/2);
+    for(Key key : toDelete) {
+      OpResult res = ib.delete(key.address,  key.size, Long.MAX_VALUE);
+      assertTrue(res == OpResult.OK);
+    }
+    int after = ib.getNumberOfDataBlock();
+    
+    System.out.println("Before =" + before + " After=" + after);
+    assertTrue(before > after);
+  }
+  
   @Test
   public void testPutGetDeleteFull() {
     System.out.println("testPutGetDeleteFull");  
@@ -185,7 +204,7 @@ public class IndexBlockDirectMemoryTest {
     // Delete half keys
     int toDelete = keys.size()/2;
     for(int i=0; i < toDelete; i++) {
-      /*DEBUG*/ System.out.println(i);
+      ///*DEBUG*/ System.out.println(i);
       Key key = keys.remove(0);
       OpResult res = b.delete(key.address, key.size, Long.MAX_VALUE);
       assertEquals(OpResult.OK, res);

@@ -10,6 +10,7 @@ import java.util.Random;
 
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Utils;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class IndexBlockLargeKVsTest extends IndexBlockTest{
@@ -34,7 +35,7 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
       System.out.println("KEYS ="+ keys.size());
       int count=0;
       for (byte[] key : keys) {
-        System.out.println(++count);
+        //System.out.println(++count);
         int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
@@ -100,13 +101,17 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
     }
   }
   
-  
+  @Ignore
+  @Test 
+  public void testAutomaticDataBlockMerge() {
+    
+  }
   protected ArrayList<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
-    //long seed = r.nextLong();
-    //r.setSeed(seed);
-    //System.out.println("FILL SEED="+seed);
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("FILL SEED="+seed);
     int maxSize = 2048;
     boolean result = true;
     while(true) {
@@ -120,7 +125,7 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
       } else {
         break;
       }
-      System.out.println("rec=" + (2*len));
+      //System.out.println("rec=" + (2*len));
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 
         b.getDataSize()+" num records=" + keys.size());

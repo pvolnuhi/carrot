@@ -8,15 +8,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
 public class IndexBlockTest {
   Logger LOG = LoggerFactory.getLogger(IndexBlockTest.class);
   
-  
+  static {
+    UnsafeAccess.debug = true;
+  }  
   @Test
   public void testPutGet() {
     System.out.println("testPutGet");  
@@ -33,6 +38,26 @@ public class IndexBlockTest {
     }
   }
 
+  @Test 
+  public void testAutomaticDataBlockMerge() {
+    System.out.println("testAutomaticDataBlockMerge");  
+    IndexBlock ib = getIndexBlock(4096);
+    ArrayList<byte[]> keys = fillIndexBlock(ib);
+    int before = ib.getNumberOfDataBlock();
+    
+    // Delete half of records
+    
+    List<byte[]> toDelete = keys.subList(0, keys.size()/2);
+    for(byte[] key : toDelete) {
+      OpResult res = ib.delete(key, 0, key.length, Long.MAX_VALUE);
+      assertTrue(res == OpResult.OK);
+    }
+    int after = ib.getNumberOfDataBlock();
+    
+    System.out.println("Before =" + before + " After=" + after);
+    assertTrue(before > after);
+  }
+  
   @Test
   public void testPutGetDeleteFull() {
     System.out.println("testPutGetDeleteFull");  
@@ -40,7 +65,6 @@ public class IndexBlockTest {
     ArrayList<byte[]> keys = fillIndexBlock(ib);
     Utils.sort(keys);
     byte[] value = null;
-    int found = 0;
     for(byte[] key: keys) {
       value = new byte[key.length];
       long size = ib.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
@@ -52,10 +76,10 @@ public class IndexBlockTest {
     
     // now delete all
 
-    found =0;
     List<byte[]> splitRequired = new ArrayList<byte[]>();
+    //int count = 1;
     for(byte[] key: keys) {
-      
+      //System.out.println("Deleting " + (count++) +" of " + keys.size());
       String shortKey = new String(key);
       shortKey = shortKey.substring(0, Math.min(16, shortKey.length()));
       OpResult result = ib.delete(key, 0, key.length, Long.MAX_VALUE);
@@ -222,6 +246,9 @@ public class IndexBlockTest {
   protected ArrayList<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("SEED="+seed);
     int kvSize = 32;
     boolean result = true;
     while(true) {

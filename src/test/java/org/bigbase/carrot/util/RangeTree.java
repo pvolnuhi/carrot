@@ -48,9 +48,11 @@ public class RangeTree {
     search.size = size;
     Range r = map.floorKey(search);
     boolean result = r != null && start >= r.start && (start + size) <= r.start + r.size;
-    if (!result) {
+    if (!result && r != null) {
       System.out.println("Check FAILED for range [" + start+","+size+ "] Found allocation ["+ 
     r.start+","+ r.size+"]");
+    } else if (!result) {
+      System.out.println("Check FAILED for range [" + start+","+size+ "] No allocation found.");
     }
     return result;
   }

@@ -178,7 +178,7 @@ public class DataBlockTest extends DataBlockTestBase{
     assertNotNull(f1); 
     assertNotNull(f2);
     assertTrue (Utils.compareTo(f1, 0, f1.length, f2, 0, f2.length) < 0);
-    b.merge(bb, true, true);
+    b.merge(bb, true);
     
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     assertEquals(totalKVs+1, (int)b.getNumberOfRecords());

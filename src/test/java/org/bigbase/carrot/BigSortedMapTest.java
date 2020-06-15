@@ -22,14 +22,17 @@ public class BigSortedMapTest {
   @BeforeClass 
   public static void setUp() throws IOException {
 	  BigSortedMap.setMaxBlockSize(4096);
-    map = new BigSortedMap(1000000000);
+    map = new BigSortedMap(100000000L);
     totalLoaded = 0;
     long start = System.currentTimeMillis();
-    while(totalLoaded < 10000000) {
+    while(totalLoaded < 1000000) {
       totalLoaded++;
       byte[] key = ("KEY"+ (totalLoaded)).getBytes();
       byte[] value = ("VALUE"+ (totalLoaded)).getBytes();
       map.put(key, 0, key.length, value, 0, value.length, 0);
+      if (totalLoaded % 1000000 == 0) {
+        System.out.println("Loaded = " + totalLoaded+" of "+ 100000000);
+      }
     }
     long end = System.currentTimeMillis();
     map.dumpStats();

@@ -60,7 +60,6 @@ public class DataBlock  {
       RECORD_PREFIX_LENGTH + TYPE_SIZE + SEQUENCEID_SIZE;
   public final static byte DELETED_MASK = (byte) (1 << 7);
   public final static double MIN_COMPACT_RATIO = 0.25d;
-  public final static double MAX_MERGE_RATIO = 0.25d;
 
   public final static String MAX_BLOCK_SIZE_KEY = "max.block.size";
   public static short MAX_BLOCK_SIZE = 4096;
@@ -77,7 +76,7 @@ public class DataBlock  {
       MAX_BLOCK_SIZE = Short.parseShort(val);
     }
   }
-
+  private static double MIN_MERGE_FACTOR = 0.5; 
   /*
    * TODO: make this configurable
    * TODO: Optimal block ratios (check jemalloc sizes)
@@ -86,7 +85,7 @@ public class DataBlock  {
    * 256 * 2, 3, 4, ... 16
    */
   static int BASE_SIZE = 256;
-  static int[] BASE_MULTIPLIERS = new int[] {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  static int[] BASE_MULTIPLIERS = new int[] {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   /*
    * Read-Write Lock TODO: StampedLock (Java 8)
    */
@@ -97,6 +96,10 @@ public class DataBlock  {
     }
   }
 
+  static int getMaximumBlockSize() {
+    return BASE_SIZE * BASE_MULTIPLIERS[BASE_MULTIPLIERS.length -1];
+  }
+  
   /**
    * Get total allocated memory
    * @return memory
@@ -1730,12 +1733,12 @@ public class DataBlock  {
    */
   long search(byte[] key, int keyOffset, int keyLength, long version) {
     long ptr = dataPtr;
-    int count = 0;
+    long stopAddress =0;
     int numRecords = getNumberOfRecords();
     int dataSize = getDataSize();
-    while (count++ < numRecords) {
-      int keylen = keyLength(ptr);
-     
+    stopAddress = dataPtr + dataSize;
+    while (ptr < stopAddress) {
+      int keylen = keyLength(ptr);     
       int vallen = blockValueLength(ptr);
       int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
       if (res < 0 || (res == 0 && version == NO_VERSION)) {
@@ -1751,9 +1754,35 @@ public class DataBlock  {
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
     // after the last record
-    return dataPtr + dataSize;
+    return stopAddress;
   }
-
+  
+  long search(long startAddress, byte[] key, int keyOffset, int keyLength, long version) {
+    long ptr = startAddress;
+    long stopAddress =0;
+    int numRecords = getNumberOfRecords();
+    int dataSize = getDataSize();
+    stopAddress = dataPtr + dataSize;
+    while (ptr < stopAddress) {
+      int keylen = keyLength(ptr);     
+      int vallen = blockValueLength(ptr);
+      int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
+      if (res < 0 || (res == 0 && version == NO_VERSION)) {
+        return ptr;
+      } else if (res == 0) {
+        // check versions
+        long ver = getRecordSeqId(ptr);
+        if (ver <= version) {
+          return ptr;
+        }
+      }
+      keylen = blockKeyLength(ptr);
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    }
+    // after the last record
+    return stopAddress;
+  }
+  
   /**
    * Search position of a first key which is greater or equals to a given key
    * @param keyPtr
@@ -1787,6 +1816,8 @@ public class DataBlock  {
     return dataPtr + dataSize;
   }
 
+
+  
   /**
    * Checks if a given key is larger than maximum key 
    * in this data block
@@ -2851,14 +2882,6 @@ public class DataBlock  {
   }
 
   /**
-   * Should merge this block
-   * @return true, false
-   */
-  public boolean shouldMerge() {
-    return (double) getDataSize() / getBlockSize() < MAX_MERGE_RATIO;
-  }
-
-  /**
    * Should compact this block
    * @return true, false
    */
@@ -2869,56 +2892,52 @@ public class DataBlock  {
     return (double) numDeletedRecords / numRecords > MIN_COMPACT_RATIO;
   }
 
+  public boolean shouldMerge() {
+    return ((double)getDataSize())/getBlockSize() < MIN_MERGE_FACTOR;
+  }
   /**
    * TODO: FINISH
    * Merge two adjacent blocks
-   * @param left
+   * @param right
    * @param forceCompact
    * @param forceMerge
    * @return true, if merge successful, false - otherwise
    * @throws RetryOperationException
    */
-  public boolean merge(DataBlock left, boolean forceCompact, boolean forceMerge)
+  public boolean merge(DataBlock right, boolean forceCompact)
       throws RetryOperationException {
 
     try {
       writeLock();
-      left.writeLock();
+      right.writeLock();
       // Increment sequence numbers
 
       incrSeqNumberSplitOrMerge();
-      left.incrSeqNumberSplitOrMerge();
+      right.incrSeqNumberSplitOrMerge();
 
-      if (!forceMerge && (!shouldMerge() || !left.shouldMerge())) {
-        return false;
-      }
       if (forceCompact) {
         compact(true);
-        left.compact(true);
+        right.compact(true);
       }
       // Check total size
       int dataSize = getDataSize();
-      int leftDataSize = left.getDataSize();
+      int rightDataSize = right.getDataSize();
       int blockSize = getBlockSize();
-      while (dataSize + leftDataSize >= blockSize) {
-        boolean result = expand(dataSize + leftDataSize);
+      while (dataSize + rightDataSize >= blockSize) {
+        boolean result = expand(dataSize + rightDataSize);
         if (result == false) {
-          // expansion failed
-          throw new RuntimeException("Can not expand block for merge");
+          return result;
         }
         blockSize = getBlockSize();
       }
-      UnsafeAccess.copy(left.dataPtr, this.dataPtr + dataSize, leftDataSize);
+      UnsafeAccess.copy(right.dataPtr, this.dataPtr + dataSize, rightDataSize);
 
-      incrNumberOfRecords(left.getNumberOfRecords());
+      incrNumberOfRecords(right.getNumberOfRecords());
       setNumberOfDeletedAndUpdatedRecords((short)0);
-      incrDataSize(left.getDataSize());
-
-      // After merge left block becomes invalid
-      // TODO
+      incrDataSize(right.getDataSize());
       return true;
     } finally {
-      left.writeUnlock();
+      right.writeUnlock();
       writeUnlock();
     }
   }
@@ -2938,6 +2957,15 @@ public class DataBlock  {
    * Free memory
    */
   public void free() {
+    free(true);
+  }
+
+  
+  /**
+   * Free block memory and ext alloc (true/false) 
+   * @param freeExternalAllocs
+   */
+  public void free(boolean freeExternalAllocs) {
     long ptr = dataPtr;
     int count = 0;
     int numRecords = getNumberOfRecords();
@@ -2946,12 +2974,10 @@ public class DataBlock  {
       int keylen = blockKeyLength(ptr);
       int vallen = blockValueLength(ptr);
       AllocType type = getRecordAllocationType(ptr);
-      if (getRecordAllocationType(ptr) != AllocType.EMBEDDED) {
+      if (freeExternalAllocs && getRecordAllocationType(ptr) != AllocType.EMBEDDED) {
         long addr = getExternalRecordAddress(ptr);
         UnsafeAccess.free(addr);
         largeKVs.decrementAndGet();
-        //keylen = 0;
-        //vallen = INT_SIZE + ADDRESS_SIZE;
       }
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
@@ -2960,6 +2986,7 @@ public class DataBlock  {
 
   }
 
+  
   /**
    * Used for testing only
    */
