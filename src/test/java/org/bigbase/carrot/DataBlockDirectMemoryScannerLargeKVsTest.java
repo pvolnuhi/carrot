@@ -23,7 +23,7 @@ public class DataBlockDirectMemoryScannerLargeKVsTest extends DataBlockDirectMem
         keys.add( new Key(ptr, len));
       }
     }
-    System.out.println("records="+b.getNumberOfRecords()  + "  data size=" + b.getDataSize());
+    System.out.println("records="+b.getNumberOfRecords()  + "  data size=" + b.getDataInBlockSize());
     return keys;
   }
 }

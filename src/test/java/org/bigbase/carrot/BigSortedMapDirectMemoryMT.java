@@ -9,27 +9,29 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
 
 import com.google.common.util.concurrent.AtomicDouble;
 
-public class BigSortedMapTestMT {
+public class BigSortedMapDirectMemoryMT {
   static int totalThreads = 8;
-	static AtomicDouble putsPs = new AtomicDouble();
-	static AtomicDouble comboPs = new AtomicDouble();
-	static AtomicDouble scanPs = new AtomicDouble();
-	static AtomicLong totalLoaded = new AtomicLong(0);
-	static AtomicLong totalDeleted = new AtomicLong(0);
-	static CyclicBarrier barrier = new CyclicBarrier(totalThreads);
-	
+  static AtomicDouble putsPs = new AtomicDouble();
+  static AtomicDouble comboPs = new AtomicDouble();
+  static AtomicDouble scanPs = new AtomicDouble();
+  static AtomicLong totalLoaded = new AtomicLong(0);
+  static AtomicLong totalDeleted = new AtomicLong(0);
+  static CyclicBarrier barrier = new CyclicBarrier(totalThreads);
+  
   static class Worker extends Thread {
     BigSortedMap map;
     long totalOps = 0;
     int keySize  = 16;
     int maxValueSize = 10000;
-    byte[] key = new byte[16];
-    byte[] value = new byte[maxValueSize];
+    long key;
+    long value;
+    byte[] keyBuf = new byte[keySize];
     int[] valueSizeDistribution = new int[] {10 /*p0*/,  100 /*p50*/, 220 /*p90*/, 450 /*p95*/, 
         3000 /*p99*/, 9500 /*p100*/};
     double[] pp = new double[] {0, 0.5, 0.9, 0.95, 0.99, 1.0};
@@ -43,7 +45,10 @@ public class BigSortedMapTestMT {
     public void run() {
       try {
         // init value
-        r.nextBytes(value);
+        byte[] buf = new byte[maxValueSize];
+        r.nextBytes(buf);
+        value = UnsafeAccess.allocAndCopy(buf, 0, maxValueSize);
+        key = UnsafeAccess.malloc(keySize);
         long start = System.currentTimeMillis();
         runPuts();
         long end = System.currentTimeMillis();
@@ -71,7 +76,7 @@ public class BigSortedMapTestMT {
     }
     
     private void runPutDeleteGetsScans() throws IOException {
-        System.out.println(Thread.currentThread().getName()+ "-test runPutDeleteGetsScans ");	
+        System.out.println(Thread.currentThread().getName()+ "-test runPutDeleteGetsScans "); 
 
       int num = (int) totalLoaded.get();
       long start = System.currentTimeMillis();
@@ -91,7 +96,7 @@ public class BigSortedMapTestMT {
           } else if (d < 0.5) {
             result = overwrite();
             assertTrue(result);
-          }  
+          } 
           else if (d < 0.8) {
             result = delete();
             if (!result) {
@@ -149,7 +154,7 @@ public class BigSortedMapTestMT {
         if(i % 1000000 == 0) {
             System.out.println(Thread.currentThread().getName()+ "- " + i + " allocated=" +
             BigSortedMap.getTotalAllocatedMemory() + " data=" + BigSortedMap.getTotalDataSize() + 
-            " index=" + BigSortedMap.getTotalIndexSize() + " max=" + map.getMaxMemory());	
+            " index=" + BigSortedMap.getTotalIndexSize() + " max=" + map.getMaxMemory()); 
         }
       }
 
@@ -165,16 +170,10 @@ public class BigSortedMapTestMT {
 
     }
     
-    private final void getKey(byte[] key, long v) {    	
+    private final void getKey(long v) {     
       r.setSeed(v);
-      r.nextBytes(key);
-    }
-    
-    private byte[] getValue() {
-      //int size = getValueSize();
-      //byte[] value = new byte[size];
-      r.nextBytes(value);
-      return value;
+      r.nextBytes(keyBuf);
+      UnsafeAccess.copy(keyBuf,  0,  key, keySize);
     }
     
     private final int getValueSize() {
@@ -212,7 +211,7 @@ public class BigSortedMapTestMT {
       return size;
     }
     private void runPuts() {
-      System.out.println(Thread.currentThread().getName()+ "-test PUTs");	
+      System.out.println(Thread.currentThread().getName()+ "-test PUTs"); 
       long start = System.currentTimeMillis();
       long totalSize=0;
       while (true) {    
@@ -220,10 +219,10 @@ public class BigSortedMapTestMT {
           break;
         }
         long n = totalLoaded.incrementAndGet();
-        getKey(key, n);
+        getKey(n);
         int valueSize = getValueSize();
-        totalSize += key.length + value.length;
-        boolean res = map.put(key, 0, key.length, value, 0, valueSize, 0);
+        totalSize += keySize+ valueSize;
+        boolean res = map.put(key, keySize, value, valueSize, 0);
         if (res == false) {
           totalLoaded.decrementAndGet();
           break;
@@ -231,7 +230,7 @@ public class BigSortedMapTestMT {
 
         totalOps ++;
         if(n % 1000000 == 0) {
-            System.out.println(Thread.currentThread().getName()+ "- " + n);	
+            System.out.println(Thread.currentThread().getName()+ "- " + n); 
         }
       }
       
@@ -241,9 +240,9 @@ public class BigSortedMapTestMT {
     
     private boolean put() {
       long n = totalLoaded.incrementAndGet();
-      getKey(key, n);
+      getKey(n);
       int valueSize = getValueSize();
-      return map.put(key, 0, key.length, value, 0, valueSize, 0);
+      return map.put(key, keySize, value, valueSize, 0);
     }
     
     private boolean overwrite() {
@@ -251,46 +250,48 @@ public class BigSortedMapTestMT {
       long k = totalDeleted.get();
       int m = r.nextInt((int)(n - k));
       m += k;
-      getKey(key, m);
+      getKey(m);
       int valueSize = getValueSize();
-      return map.put(key, 0, key.length, value, 0, valueSize, 0);
+      return map.put(key, keySize, value, valueSize, 0);
     }
     
     private boolean delete() {
       long n = totalDeleted.incrementAndGet();
-      getKey(key, n);
-      return map.delete(key, 0, key.length);
+      getKey(n);
+      return map.delete(key, keySize);
     }
     
     private long get(long n) {
-      getKey(key, n);
-      return map.get(key, 0, key.length, value, 0, Long.MAX_VALUE);
+      getKey(n);
+      return map.get(key, keySize, value, maxValueSize, Long.MAX_VALUE);
     }
     
     /*
      * Short scan operation
      */
     private void scan (long n) throws IOException {
-      getKey(key, n);
+      getKey(n);
       int toScan = 221;
       
-      BigSortedMapScanner scanner = map.getScanner(key, null);
+      BigSortedMapDirectMemoryScanner scanner = map.getScanner(key, keySize, 0, 0);
       int count = 0;
-      byte[] prev = new byte[key.length] ;
-      byte[] current = new byte[key.length];
+      long prev = UnsafeAccess.malloc(keySize) ;
+      long current = UnsafeAccess.malloc(keySize);
       while(scanner.hasNext() && count++ < toScan) {
-        scanner.key(current, 0);
+        scanner.key(current, keySize);
         if (count > 1) {
-          int result = Utils.compareTo(current, 0, current.length, prev, 0, prev.length);
-          if (result <= 0) {
-            System.out.println(result+" **********************************************************************************");
-          }
+          int result = Utils.compareTo(current, keySize, prev,  keySize);
           assertTrue(result > 0);
         }
-        System.arraycopy(current, 0, prev, 0, prev.length);
+        UnsafeAccess.copy(current, prev, keySize);
         scanner.next();
       }
       scanner.close();
+      UnsafeAccess.free(current);
+      if (prev != current) {
+        UnsafeAccess.free(prev);
+      }
+  
     }
     
     private void scanAll () throws IOException, InterruptedException, BrokenBarrierException {
@@ -301,16 +302,16 @@ public class BigSortedMapTestMT {
       
       BigSortedMapScanner scanner = map.getScanner(null, null);
       int count = 0;
-      byte[] prev = new byte[key.length] ;
+      long prev = UnsafeAccess.malloc(keySize) ;
       long prevVersion = 0;
       Op prevType = null;
-      byte[] current = new byte[key.length];
+      long current = UnsafeAccess.malloc(keySize);
       long start = System.currentTimeMillis();
       while(scanner.hasNext()) {
         count++;
-        scanner.key(current, 0);
+        scanner.key(current, keySize);
         if (count > 1) {
-          int result = Utils.compareTo(current, 0, current.length, prev, 0, prev.length);
+          int result = Utils.compareTo(current, keySize, prev, keySize);
           if (result <= 0) {
             System.out.println(result +" prevVersion="+prevVersion +" prevType="+prevType + 
               " curVersion=" + scanner.keyVersion() + " curType=" + scanner.keyOpType());
@@ -319,10 +320,14 @@ public class BigSortedMapTestMT {
         }
         prevVersion = scanner.keyVersion();
         prevType = scanner.keyOpType();
-        System.arraycopy(current, 0, prev, 0, prev.length);
+        UnsafeAccess.copy(current, prev, keySize);
         scanner.next();
       }
       scanner.close();
+      UnsafeAccess.free(current);
+      if (prev != current) {
+        UnsafeAccess.free(prev);
+      }
       long end = System.currentTimeMillis();
       System.out.println(Thread.currentThread().getName() + " scanned " + count +" in " + (end -start)+"ms");
     }
@@ -332,47 +337,47 @@ public class BigSortedMapTestMT {
 
   
   @Test
-	public void testPerf() throws IOException {
+  public void testPerf() throws IOException {
 
-		BigSortedMap.setMaxBlockSize(4096);
-		//int numThreads = 8;
+    BigSortedMap.setMaxBlockSize(4096);
+    //int numThreads = 8;
 
-		int totalCycles = 1000;
-		int cycle = 0;
-		while (cycle++ < totalCycles) {
-		  totalLoaded.set(0);
-		  totalDeleted.set(0);
-			System.out.println("LOOP="+ cycle);
-			BigSortedMap map = new BigSortedMap((long)  1 * 1024 * 1024 * 1024);
+    int totalCycles = 1000;
+    int cycle = 0;
+    while (cycle++ < totalCycles) {
+      totalLoaded.set(0);
+      totalDeleted.set(0);
+      System.out.println("LOOP="+ cycle);
+      BigSortedMap map = new BigSortedMap((long)  1 * 1024 * 1024 * 1024);
 
-			Worker[] workers = new Worker[totalThreads];
-			for (int i = 0; i < totalThreads; i++) {
-				workers[i] = new Worker(map, getName(i));
-				workers[i].start();
-			}
+      Worker[] workers = new Worker[totalThreads];
+      for (int i = 0; i < totalThreads; i++) {
+        workers[i] = new Worker(map, getName(i));
+        workers[i].start();
+      }
 
-			for (int i = 0; i < totalThreads; i++) {
-				try {
-					workers[i].join();
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
+      for (int i = 0; i < totalThreads; i++) {
+        try {
+          workers[i].join();
+        } catch (InterruptedException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+      }
 
-			System.out.println("MEM=" + BigSortedMap.getTotalAllocatedMemory() + "\nDATA=" + BigSortedMap.getTotalDataSize()
-					+ "\nUTILIZATION=" + (((double) BigSortedMap.getTotalDataSize()) / BigSortedMap.getTotalAllocatedMemory()));
-			System.out.println("num threads=" + totalThreads + " PUT=" + putsPs.get() + " GET=" + comboPs.get() + " SCAN="
-					+ scanPs.get());
-			map.dispose();
-			putsPs.set(0);
-			comboPs.set(0);
-			scanPs.set(0);
-		}
-	}
+      System.out.println("MEM=" + BigSortedMap.getTotalAllocatedMemory() + "\nDATA=" + BigSortedMap.getTotalDataSize()
+          + "\nUTILIZATION=" + (((double) BigSortedMap.getTotalDataSize()) / BigSortedMap.getTotalAllocatedMemory()));
+      System.out.println("num threads=" + totalThreads + " PUT=" + putsPs.get() + " GET=" + comboPs.get() + " SCAN="
+          + scanPs.get());
+      map.dispose();
+      putsPs.set(0);
+      comboPs.set(0);
+      scanPs.set(0);
+    }
+  }
 
   private String getName(int i) {
-	  return Integer.toString(i);
+    return Integer.toString(i);
   }
         
 }

@@ -19,7 +19,7 @@ public class DataBlockScannerLargeKVsTest extends DataBlockScannerTest{
         keys.add(key);
       }
     }
-    System.out.println("records="+b.getNumberOfRecords()  + "  data size=" + b.getDataSize());
+    System.out.println("records="+b.getNumberOfRecords()  + "  data size=" + b.getDataInBlockSize());
     return keys;
   }
 }

@@ -61,17 +61,6 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
    * We consider only records with sequenceId < snapshotId
    */
   long snapshotId;
-  
-  /*
-   * Data block reference we need if we keep
-   * read lock 
-   */
-  DataBlock db;
-  
-  /*
-   * Thread local for memory buffer
-   */
-  //static ThreadLocal<Long> memory = new ThreadLocal<Long>(); 
   /*
    * Thread local for scanner instance
    */
@@ -84,28 +73,21 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
   };
       
   
-  public static DataBlockDirectMemoryScanner getScanner(DataBlock b, long startRowPtr, 
-       int startRowLength, long stopRowPtr, int stopRowLength,
-      long snapshotId) throws RetryOperationException {
+  public static DataBlockDirectMemoryScanner getScanner(DataBlock b, long startRowPtr,
+      int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId)
+      throws RetryOperationException {
 
-    
-    try {
-      DataBlockDirectMemoryScanner bs = scanner.get();
-      bs.reset();
-      b.readLock();
-      if (!b.isValid()) {
-        // Return null for now
-        return null;
-      }
-      
-      bs.setBlock(b);
-      bs.setSnapshotId(snapshotId);
-      bs.setStartRow(startRowPtr, startRowLength);
-      bs.setStopRow(stopRowPtr, stopRowLength);
-      return bs;
-    } finally {
-      b.readUnlock(); 
+    DataBlockDirectMemoryScanner bs = scanner.get();
+    bs.reset();
+    if (!b.isValid()) {
+      // Return null for now
+      return null;
     }
+    bs.setBlock(b);
+    bs.setSnapshotId(snapshotId);
+    bs.setStartRow(startRowPtr, startRowLength);
+    bs.setStopRow(stopRowPtr, stopRowLength);
+    return bs;
   }
   /** 
    * Private ctor
@@ -125,7 +107,6 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     this.numRecords = 0;
     this.numDeletedRecords = 0;
     this.snapshotId = Long.MAX_VALUE;
-    this.db = null;
   }
   
   private void setStartRow(long ptr, int len) {
@@ -195,15 +176,12 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
    */
   private void setBlock(DataBlock b) throws RetryOperationException {
     
-      b.readLock();
-      db = b;
       this.blockSize = BigSortedMap.maxBlockSize;
-      this.dataSize = b.getDataSize();
+      this.dataSize = b.getDataInBlockSize();
       this.numRecords = b.getNumberOfRecords();
       this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
       this.ptr = b.getAddress(); 
       this.curPtr = this.ptr;
-
   }
   
   protected void setSnapshotId(long snapshotId) {
@@ -456,9 +434,35 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
   
   @Override
   public void close() throws IOException {
-    if (db != null) {
-      db.readUnlock();
-      db = null;
+  }
+  /**
+   *  Get current key address
+   * @return key address
+   */
+  public final long valueAddress() {
+    if (this.curPtr - this.ptr >= this.dataSize) {
+      return -1;
     }
+    return DataBlock.valueAddress(this.curPtr);
+  }
+
+  /**
+   *  Get current key address
+   * @return key address
+   */
+  public final long keyAddress() {
+    if (this.curPtr - this.ptr >= this.dataSize) {
+      return -1;
+    }
+    return DataBlock.keyAddress(this.curPtr);
+  }
+  
+  public long keyVersion() {
+    // TODO Auto-generated method stub
+    return DataBlock.version(curPtr);
+  }
+  
+  public Op keyOpType() {
+    return DataBlock.getRecordType(curPtr);
   }
 }

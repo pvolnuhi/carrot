@@ -151,7 +151,7 @@ public class DataBlockDirectMemoryScannerTest {
         keys.add( new Key(ptr, length));
       }
     }
-    System.out.println(b.getNumberOfRecords() + " " + b.getNumberOfDeletedAndUpdatedRecords() + " " + b.getDataSize());
+    System.out.println(b.getNumberOfRecords() + " " + b.getNumberOfDeletedAndUpdatedRecords() + " " + b.getDataInBlockSize());
     return keys;
   }
   

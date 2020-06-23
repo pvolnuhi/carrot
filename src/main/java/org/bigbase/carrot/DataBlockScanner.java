@@ -50,17 +50,7 @@ public final class DataBlockScanner implements Closeable{
    * We consider only records with sequenceId < snapshotId
    */
   long snapshotId;
-  
-  /*
-   * Data block reference we need if we keep
-   * read lock 
-   */
-  DataBlock db;
-  
-  /*
-   * Thread local for memory buffer
-   */
-  //static ThreadLocal<Long> memory = new ThreadLocal<Long>(); 
+    
   /*
    * Thread local for scanner instance
    */
@@ -75,24 +65,17 @@ public final class DataBlockScanner implements Closeable{
   public static DataBlockScanner getScanner(DataBlock b, byte[] startRow, byte[] stopRow,
       long snapshotId) throws RetryOperationException {
 
-    
-    try {
-      DataBlockScanner bs = scanner.get();
-      bs.reset();
-      b.readLock();
-      if (!b.isValid()) {
-        // Return null for now
-        return null;
-      }
-      
-      bs.setBlock(b);
-      bs.setSnapshotId(snapshotId);
-      bs.setStartRow(startRow);
-      bs.setStopRow(stopRow);
-      return bs;
-    } finally {
-      b.readUnlock(); 
+    DataBlockScanner bs = scanner.get();
+    bs.reset();
+    if (!b.isValid()) {
+      // Return null for now
+      return null;
     }
+    bs.setBlock(b);
+    bs.setSnapshotId(snapshotId);
+    bs.setStartRow(startRow);
+    bs.setStopRow(stopRow);
+    return bs;
   }
   /** 
    * Private ctor
@@ -110,7 +93,6 @@ public final class DataBlockScanner implements Closeable{
     this.numRecords = 0;
     this.numDeletedRecords = 0;
     this.snapshotId = Long.MAX_VALUE;
-    this.db = null;
   }
   
   private void setStartRow(byte[] row) {
@@ -177,40 +159,13 @@ public final class DataBlockScanner implements Closeable{
    * @throws RetryOperationException 
    */
   private void setBlock(DataBlock b) throws RetryOperationException {
-    
-	  //boolean needLock = false;
-    try {
 
-      b.readLock();
-      //needLock = b.hasLargeKVs();
-      //if (needLock) {
-        db = b;
-      //  System.out.println("NEED LOCK");
-      //}
-      this.blockSize = BigSortedMap.maxBlockSize;
-      this.dataSize = b.getDataSize();
-      this.numRecords = b.getNumberOfRecords();
-      this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
-//      if (!needLock) {
-//        if (memory.get() == null) {
-//          this.ptr = UnsafeAccess.malloc(this.blockSize);
-//          // TODO handle allocation failure
-//          memory.set(ptr);
-//        } else {
-//          this.ptr = memory.get();
-//        }
-//        UnsafeAccess.copy(b.getAddress(), this.ptr, this.dataSize);
-//      } else {
-        this.ptr = b.getAddress(); 
-//      }
-      this.curPtr = this.ptr;
-
-    } finally {
-//      if (!needLock) {
-//        b.readUnlock();
-//      }
-    }
-
+    this.blockSize = BigSortedMap.maxBlockSize;
+    this.dataSize = b.getDataInBlockSize();
+    this.numRecords = b.getNumberOfRecords();
+    this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
+    this.ptr = b.getAddress();
+    this.curPtr = this.ptr;
   }
   
   protected void setSnapshotId(long snapshotId) {
@@ -248,8 +203,6 @@ public final class DataBlockScanner implements Closeable{
    * @return true, false
    */
   public final boolean next() {
-    //*DEBUG*/ System.out.println("next");
-    //Thread.dumpStack();
     skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr < this.dataSize) {
       int keylen = DataBlock.blockKeyLength(this.curPtr);
@@ -293,6 +246,17 @@ public final class DataBlockScanner implements Closeable{
   }
   
   /**
+   *  Get current key address
+   * @return key address
+   */
+  public final long keyAddress() {
+    if (this.curPtr - this.ptr >= this.dataSize) {
+      return -1;
+    }
+    return DataBlock.keyAddress(this.curPtr);
+  }
+  
+  /**
    * Get current value size (in bytes)
    * @return value size
    */
@@ -302,6 +266,17 @@ public final class DataBlockScanner implements Closeable{
     }
     return DataBlock.valueLength(this.curPtr);
   }  
+
+  /**
+   *  Get current key address
+   * @return key address
+   */
+  public final long valueAddress() {
+    if (this.curPtr - this.ptr >= this.dataSize) {
+      return -1;
+    }
+    return DataBlock.valueAddress(this.curPtr);
+  }
   
   /**
    * Skips deleted records
@@ -338,7 +313,7 @@ public final class DataBlockScanner implements Closeable{
     }
   }
   
-  private long advanceByOneRecord(long ptr) {
+  private final long advanceByOneRecord(long ptr) {
     short vlen = DataBlock.blockValueLength(ptr);
     int klen = DataBlock.blockKeyLength(ptr);
     return ptr + klen + vlen + DataBlock.RECORD_TOTAL_OVERHEAD;
@@ -464,9 +439,14 @@ public final class DataBlockScanner implements Closeable{
   
   @Override
   public void close() throws IOException {
-    if (db != null) {
-      db.readUnlock();
-      db = null;
-    }
+  }
+  
+  public long keyVersion() {
+    // TODO Auto-generated method stub
+    return DataBlock.version(curPtr);
+  }
+  
+  public Op keyOpType() {
+    return DataBlock.getRecordType(curPtr);
   }
 }

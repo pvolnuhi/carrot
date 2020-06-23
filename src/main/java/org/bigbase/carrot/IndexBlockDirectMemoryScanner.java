@@ -92,10 +92,9 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
       IndexBlockDirectMemoryScanner bs = getScanner(b, snapshotId);
       bs.setStartStopRows(startRowPtr, startRowLength, stopRowPtr, stopRowLength);
       return bs;
-    }catch (Throwable t) {
-      //TODO log error
+    } catch(RetryOperationException e) {
       b.readUnlock();
-      throw new RuntimeException(t);
+      throw e;
     }
   }
   /** 
@@ -214,8 +213,6 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     // Unlock index block
     if (indexBlock != null) {
       indexBlock.readUnlock();
-    } else {
-      System.out.println("null");
-    }
+    } 
   }
 }

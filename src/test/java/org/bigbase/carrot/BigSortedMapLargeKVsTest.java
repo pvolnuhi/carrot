@@ -46,9 +46,9 @@ public class BigSortedMapLargeKVsTest {
     long scanned = verifyScanner(scanner, keys);
     scanner.close();
     System.out.println("Scanned="+ scanned);
-    System.out.println("Total memory="+BigSortedMap.getMemoryAllocated());
-    System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
-    System.out.println("Total  index=" + BigSortedMap.getTotalIndexSize());
+    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
+    System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
+    System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
     assertEquals(totalLoaded, scanned);
   }
   
@@ -89,9 +89,9 @@ public class BigSortedMapLargeKVsTest {
       UnsafeAccess.mallocStats();
       System.out.println("DataBlock large KV leak :" +DataBlock.largeKVs.get());
       System.out.println("IndexBlock large KV leak :" +IndexBlock.largeKVs.get());
-      System.out.println("Total memory="+BigSortedMap.getMemoryAllocated());
-      System.out.println("Total   data="+BigSortedMap.getTotalDataSize());
-      System.out.println("Total  index=" + BigSortedMap.getTotalIndexSize());
+      System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
+      System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
+      System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
 
     }
   }

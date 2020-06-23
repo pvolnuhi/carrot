@@ -3,6 +3,7 @@ package org.bigbase.carrot;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.bigbase.carrot.util.Utils;
 
@@ -16,6 +17,7 @@ public class BigSortedMapScanner implements Closeable{
   private BigSortedMap map;
   private byte[] startRow;
   private byte[] stopRow;
+  private byte[] nextBlockFirstKey;
   private DataBlockScanner blockScanner;
   private IndexBlockScanner indexScanner;
   private IndexBlock currentIndexBlock;
@@ -60,16 +62,27 @@ public class BigSortedMapScanner implements Closeable{
         indexScanner = IndexBlockScanner.getScanner(currentIndexBlock, this.startRow, 
           this.stopRow, snapshotId);
         blockScanner = indexScanner.nextBlockScanner(); 
-        
+        updateNextFirstKey();
         break;
-        // TODO null?
       } catch(RetryOperationException e) {
+        if(indexScanner != null) {
+          try {
+            indexScanner.close();
+          } catch (IOException e1) {
+            // TODO Auto-generated catch block
+          }
+        }
         continue;
       }
-    }    
+    } 
   }
-  
-  
+  //TODO: is it safe?
+  private void updateNextFirstKey() {
+    IndexBlock next = map.getMap().higherKey(this.currentIndexBlock);
+    if(next != null) {
+      this.nextBlockFirstKey = next.getFirstKey();
+    }
+  }
   public boolean hasNext() throws IOException {
     boolean result = blockScanner.hasNext();
     if (!result) {    
@@ -113,15 +126,31 @@ public class BigSortedMapScanner implements Closeable{
         if (tmp == null) {
           return false;
         }
-        // set startRow to null, because it is out of range of a IndexBlockScanner
-        this.indexScanner = IndexBlockScanner.getScanner(tmp, null, stopRow, snapshotId);
-        if (this.indexScanner == null) {
-          return false;
+        // set startRow to nextBlockFirstKey, because it is out of range of a IndexBlockScanner
+        try {
+          tmp.readLock();
+          // We need this lock to get current first key,
+          // because previous one could have been deleted
+          byte[] firstKey = tmp.getFirstKey();
+          if (Utils.compareTo(firstKey, 0, firstKey.length, 
+            nextBlockFirstKey, 0, nextBlockFirstKey.length) > 0) {
+            nextBlockFirstKey = firstKey;
+          }
+          this.indexScanner = IndexBlockScanner.getScanner(tmp, nextBlockFirstKey, stopRow, snapshotId);
+          if (this.indexScanner == null) {
+            return false;
+          }
+        } finally {
+          tmp.readUnlock();
         }
         this.currentIndexBlock = tmp;
         this.blockScanner = this.indexScanner.nextBlockScanner();
+        updateNextFirstKey();
         return true;
       } catch (RetryOperationException e) {
+        if (this.indexScanner != null) {
+          this.indexScanner.close();
+        }
         continue;
       }
     }
@@ -136,6 +165,22 @@ public class BigSortedMapScanner implements Closeable{
   }
   
   /**
+   * Returns key address
+   * @return key address
+   */
+  public long keyAddress() {
+    return blockScanner.keyAddress();
+  }
+  
+  public long keyVersion() {
+    return blockScanner.keyVersion();
+  }
+  
+  public Op keyOpType() {
+    return blockScanner.keyOpType();
+  }
+  
+  /**
    * Get current value size. Make sure, that hasNext() returned true
    * @return value size (-1 if scanner is invalid)
    */
@@ -143,7 +188,13 @@ public class BigSortedMapScanner implements Closeable{
     return blockScanner.valueSize();
   }
   
-  
+  /**
+   * Returns value address
+   * @return value address
+   */
+  public long valueAddress() {
+    return blockScanner.valueAddress();
+  }
   /**
    * Get key into buffer. 
    * @param buffer buffer where to store 
@@ -217,7 +268,23 @@ public class BigSortedMapScanner implements Closeable{
     if (this.indexScanner != null) {
       this.indexScanner.close();
     }
-    
+    //checkOrphanLocks();
+  }
+
+  @SuppressWarnings("unused")
+  private void checkOrphanLocks() {
+    // TODO Auto-generated method stub
+    for (ReentrantReadWriteLock lock: IndexBlock.locks) {
+      if(lock.isWriteLockedByCurrentThread()) {
+        System.out.println("Orphan Write Lock found "+ lock);
+        Thread.dumpStack();
+      }
+      if (lock.getReadHoldCount() > 0) {
+        System.out.println("Orphan Read Lock found "+ lock + " count=" + lock.getReadLockCount() + " indexScanner=" +
+            this.indexScanner);
+        Thread.dumpStack();
+      }
+    }
   }
   
 }

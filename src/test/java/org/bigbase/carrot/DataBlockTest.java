@@ -132,7 +132,7 @@ public class DataBlockTest extends DataBlockTestBase{
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
     int totalKVs = keys.size();
-    int totalDataSize = b.getDataSize();
+    int totalDataSize = b.getDataInBlockSize();
     DataBlock bb = b.split(true);
     // Register new DataBlock with a index block
     IndexBlock ib = new IndexBlock(4096);
@@ -142,7 +142,7 @@ public class DataBlockTest extends DataBlockTestBase{
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
     assertEquals(totalKVs +1, (int)(bb.numRecords + b.getNumberOfRecords()));
-    assertEquals(totalDataSize, (int)(b.getDataSize() + bb.dataSize));
+    assertEquals(totalDataSize, (int)(b.getDataInBlockSize() + bb.dataInBlockSize));
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -162,7 +162,7 @@ public class DataBlockTest extends DataBlockTestBase{
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
     int totalKVs = keys.size();
-    int totalDataSize = b.getDataSize();
+    int totalDataSize = b.getDataInBlockSize();
     DataBlock bb = b.split(true);
     
     IndexBlock ib = new IndexBlock(4096);
@@ -172,7 +172,7 @@ public class DataBlockTest extends DataBlockTestBase{
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
     assertEquals(totalKVs +1, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
-    assertEquals(totalDataSize, (int)b.getDataSize() + bb.getDataSize());
+    assertEquals(totalDataSize, (int)b.getDataInBlockSize() + bb.getDataInBlockSize());
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -182,7 +182,7 @@ public class DataBlockTest extends DataBlockTestBase{
     
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     assertEquals(totalKVs+1, (int)b.getNumberOfRecords());
-    assertEquals(totalDataSize, (int)b.getDataSize());
+    assertEquals(totalDataSize, (int)b.getDataInBlockSize());
     
     scanAndVerify(b);
     
@@ -303,7 +303,7 @@ public class DataBlockTest extends DataBlockTestBase{
     DataBlock b = getDataBlock();
     ArrayList<byte[]> keys = fillDataBlock(b);
     
-    int dataSize = b.getDataSize();
+    int dataSize = b.getDataInBlockSize();
     int blockSize = b.getBlockSize();
     int avail = blockSize - dataSize - DataBlock.RECORD_TOTAL_OVERHEAD;
     if (avail >= blockSize/2) {
@@ -324,7 +324,7 @@ public class DataBlockTest extends DataBlockTestBase{
     byte[] oneKey = keys.get(0);
         
     OpResult res = b.delete(oneKey, 0, oneKey.length, Long.MAX_VALUE);
-    dataSize = b.getDataSize();
+    dataSize = b.getDataInBlockSize();
     blockSize = b.getBlockSize();
     avail = blockSize - dataSize;
     assertEquals(OpResult.OK, res);
@@ -518,7 +518,7 @@ public class DataBlockTest extends DataBlockTestBase{
   }
   
   private boolean isValidFailure(DataBlock b, byte[] key, int keyLen, int valLen, int oldValLen) {
-    int dataSize = b.getDataSize();
+    int dataSize = b.getDataInBlockSize();
     int blockSize = b.getBlockSize();
     int newRecSize = keyLen + valLen + DataBlock.RECORD_TOTAL_OVERHEAD;
     if (DataBlock.mustStoreExternally(keyLen, valLen)) {
@@ -580,7 +580,7 @@ public class DataBlockTest extends DataBlockTestBase{
         keys.add(key);
       }
     }
-    System.out.println(b.getNumberOfRecords() + " " + b.getNumberOfDeletedAndUpdatedRecords() + " " + b.getDataSize());
+    System.out.println(b.getNumberOfRecords() + " " + b.getNumberOfDeletedAndUpdatedRecords() + " " + b.getDataInBlockSize());
     return keys;
   }
   

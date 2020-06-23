@@ -19,8 +19,37 @@ public class BigSortedMap {
   static int maxBlockSize = DataBlock.MAX_BLOCK_SIZE;
   static int maxIndexBlockSize = IndexBlock.MAX_BLOCK_SIZE;
   static AtomicLong totalAllocatedMemory = new AtomicLong(0);
+  /*
+   * This tracks total data blocks size (memory allocated for data blocks)
+   */
+  static AtomicLong totalBlockDataSize = new AtomicLong(0);
+  /*
+   * This tracks total data size in data blocks (data can be allocated outside
+   * data blocks)
+   */
+  static AtomicLong totalDataInDataBlocksSize = new AtomicLong(0);
+
+  /*
+   * This tracks total data size  (total data size >= total data in block size)
+   */
   static AtomicLong totalDataSize = new AtomicLong(0);
+  
+  /*
+   * This tracks total index blocks size (memory allocated for index blocks) 
+   */
+  static AtomicLong totalBlockIndexSize = new AtomicLong(0);
+  
+  /*
+   * This tracks total data size in index blocks (data can be allocated outside
+   * index blocks)
+   */
+  static AtomicLong totalDataInIndexBlocksSize = new AtomicLong(0);
+  /*
+   * This tracks total index size (total index size >= total data in index blocks  size)
+   */
+  
   static AtomicLong totalIndexSize = new AtomicLong(0);
+  
   // For k-v versioning
   static AtomicLong sequenceID = new AtomicLong(0);
 
@@ -95,16 +124,57 @@ public class BigSortedMap {
     return maxBlockSize;
   }
   
-  public static long getMemoryAllocated() {
+  /**
+   * Get total allocated memory
+   * @return total allocated memory
+   */
+  public static long getTotalAllocatedMemory() {
     return totalAllocatedMemory.get();
   }
+  /**
+   * Get total memory allocated for data blocks
+   * @return memory allocated for data blocks
+   */
+  public static long getTotalBlockDataSize() {
+    return totalBlockDataSize.get();
+  }
   
+  /**
+   * Get total memory which data occupies in data blocks
+   * @return memory
+   */
+  public static long getDataInDataBlocksSize() {
+    return totalDataInDataBlocksSize.get();
+  }
+  
+  /**
+   * Get memory allocated for index blocks
+   * @return memory
+   */
+  public static long getTotalBlockIndexSize() {
+	  return totalBlockIndexSize.get();
+  }
+  
+  /**
+   * Get total data size
+   * @return size
+   */
   public static long getTotalDataSize() {
     return totalDataSize.get();
   }
-  
+  /**
+   * Get total index size
+   * @return size
+   */
   public static long getTotalIndexSize() {
-	  return totalIndexSize.get();
+    return totalIndexSize.get();
+  }
+  /**
+   * Get total memory which index occupies in index blocks
+   * @return size
+   */
+  public static long getDataInIndexBlocksSize() {
+    return totalDataInIndexBlocksSize.get();
   }
   
   public long getMaxMemory() {
@@ -148,7 +218,7 @@ public class BigSortedMap {
     	System.out.println("Unexpected unlock attempt");
     	//TODO
     	Thread.dumpStack();
-    	//System.exit(-1);
+    	System.exit(-1);
     }
   }
 
@@ -196,6 +266,15 @@ public class BigSortedMap {
 
 	  }
   }
+  
+  private long getSequenceId() {
+    return sequenceID.get();
+  }
+  
+  private long incrementSequenceId() {
+    return sequenceID.incrementAndGet();
+  }
+  
   /**
    * Put operation
    * @param key
@@ -212,7 +291,7 @@ public class BigSortedMap {
 
     verifyArgs(key, keyOffset, keyLength);
     verifyArgs(value, valueOffset, valueLength);
-    long version = sequenceID.getAndIncrement();
+    long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(key, keyOffset, keyLength, version);
 
@@ -223,31 +302,24 @@ public class BigSortedMap {
         b = map.floorKey(kvBlock);
         // TODO: we do a lot of locking
         lock(b); // to prevent locking from another thread
-        IndexBlock bbb = map.floorKey(kvBlock);
-        if (b != bbb) {
-          continue;
+        // TODO: optimize - last time split? what is the safest threshold? 100ms
+        if(b.hasRecentUnsafeModification()) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
+            continue;
+          }
         }
         boolean result =
             b.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
-        if (!result && getMemoryAllocated() < maxMemory) {
+        if (!result && getTotalAllocatedMemory() < maxMemory) {
           // In sequential pattern of puts, we do not need to split
           // but need to add new block with a given K-V
           IndexBlock bb = null;
-          if (b.isLargerThanMax(key, keyOffset, keyLength, version)) {
-            bb = new IndexBlock(maxIndexBlockSize);
-            // FIXME: if below assumption of a successful operation safe?
-            bb.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
-          } else {
-            bb = b.split();
-            isSplit = true;
-          }
-          // some records are missing until we put
+          bb = b.split();
           // block into
           putBlock(bb);
           if (isSplit) {
             continue;
-          } else {
-            return true;
           }
         } else if (!result) {
           // MAP is FULL
@@ -267,10 +339,7 @@ public class BigSortedMap {
   private void putBlock(IndexBlock b) {
     while(true) {
        try {
-         IndexBlock bb = map.put(b, b);
-         if(bb != null) {
-           throw new RuntimeException("Unexpected put return value");
-         }
+         map.put(b, b);
          return;
        } catch (RetryOperationException e) {
          continue;
@@ -278,6 +347,7 @@ public class BigSortedMap {
     }
   }
   
+
   /**
    * Put k-v operation
    * @param keyPtr
@@ -288,39 +358,35 @@ public class BigSortedMap {
    */
   public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long expire) {
 
+    long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
-    long version = sequenceID.getAndIncrement();
-
     kvBlock.putForSearch(keyPtr, keyLength, version);
+
     while (true) {
       IndexBlock b = null;
       boolean isSplit = false;
-
       try {
         b = map.floorKey(kvBlock);
-        // TODO: we do lot of locking
+        // TODO: we do a lot of locking
         lock(b); // to prevent locking from another thread
-        IndexBlock bbb = map.floorKey(kvBlock);
-        if (b != bbb) {
-          continue;
+        // TODO: optimize - last time split? what is the safest threshold? 100ms
+        if(b.hasRecentUnsafeModification()) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
+            continue;
+          }
         }
-        boolean result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
-        if (!result && getMemoryAllocated() < maxMemory) {
+        boolean result =
+            b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
+        if (!result && getTotalAllocatedMemory() < maxMemory) {
           // In sequential pattern of puts, we do not need to split
           // but need to add new block with a given K-V
           IndexBlock bb = null;
-          if (b.isLargerThanMax(keyPtr, keyLength, version)) {
-            bb = new IndexBlock(maxIndexBlockSize);
-            bb.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
-          } else {
-            bb = b.split();
-            isSplit = true;
-          }
+          bb = b.split();
+          // block into
           putBlock(bb);
           if (isSplit) {
             continue;
-          } else {
-            return true;
           }
         } else if (!result) {
           // MAP is FULL
@@ -352,22 +418,19 @@ public class BigSortedMap {
 
     verifyArgs(key, keyOffset, keyLength);
     IndexBlock kvBlock = getThreadLocalBlock();
-    long version = sequenceID.getAndIncrement();
+    long version = getSequenceId();
     kvBlock.putForSearch(key, keyOffset, keyLength, version);
     while (true) {
       IndexBlock b = null;
       try {
         b = map.floorKey(kvBlock);
-        // TODO: lot of locking
         lock(b); // to prevent
-        IndexBlock bbb = map.floorKey(kvBlock);
-        // TODO: Why do not we compare obj references?
-        if (b.getAddress() != bbb.getAddress()) {
-          continue;
+        if (b.hasRecentUnsafeModification()) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
+            continue;
+          }
         }
-        // if (b.getNumberOfDataBlock() == 1) {
-        // System.out.println("b.firstkey="+ b.getFirstKey().length+" keyLength="+keyLength);
-        // }
         OpResult result = b.delete(key, keyOffset, keyLength, version);
         if (result == OpResult.OK) {
           if (b.isEmpty()) {
@@ -380,6 +443,7 @@ public class BigSortedMap {
                 "FATAL Removed IndexBlock " + removed + " firstKey=" + b.getFirstKey().length);
               System.out.println(
                 "b=" + b.getAddress() + "ck=" + ck + "fk=" + fk + "contains =" + contains);
+              System.exit(-1);
             }
             b.free();
           }
@@ -408,21 +472,33 @@ public class BigSortedMap {
    */
   public boolean delete(long keyPtr, int keyLength) {
     IndexBlock kvBlock = getThreadLocalBlock();
-    long version = sequenceID.getAndIncrement();
+    long version = getSequenceId();
     kvBlock.putForSearch(keyPtr, keyLength, version);
     while (true) {
       IndexBlock b = null;
       try {
         b = map.floorKey(kvBlock);
         lock(b); // to prevent
-        IndexBlock bbb = map.floorKey(kvBlock);
-        if (b.getAddress() != bbb.getAddress()) {
-          continue;
+        if (b.hasRecentUnsafeModification()) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
+            continue;
+          }
         }
         OpResult result = b.delete(keyPtr, keyLength, version);
         if (result == OpResult.OK) {
           if (b.isEmpty()) {
-            map.remove(b);
+            IndexBlock removed = map.remove(b);
+            if (removed == null) {
+              IndexBlock fk = map.floorKey(b);
+              IndexBlock ck = map.ceilingKey(b);
+              boolean contains = map.containsKey(b);
+              /* DEBUG */ System.out.println(
+                "FATAL Removed IndexBlock " + removed + " firstKey=" + b.getFirstKey().length);
+              System.out.println(
+                "b=" + b.getAddress() + "ck=" + ck + "fk=" + fk + "contains =" + contains);
+              System.exit(-1);
+            }
             b.free();
           }
           return true;
@@ -439,7 +515,6 @@ public class BigSortedMap {
         unlock(b);
       }
     }
-
   }
   
   /**
@@ -461,22 +536,20 @@ public class BigSortedMap {
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        // TODO: index block can be both: split and merged
-        // Race conditions possible?
-        // Split is fine, as since we do not invalidate blocks (free)
-        // Merge can be dangerous unless we check IndexBlock is still valid
         long result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
-        if (result < 0) {
+        if (result < 0 && b.hasRecentUnsafeModification()) {
           // check one more time with lock
-          // it is possible that we caught split in flight
+          // - we caught split in flight
           IndexBlock bb = null;
           while (true) {
             b = map.floorKey(kvBlock);
             lock(b);
             locked = true;
             bb = map.floorKey(kvBlock);
-            if (bb.getAddress() != b.getAddress()) {
+            if (bb != b) {
               unlock(b);
+              locked = false;
+              continue;
             } else {
               break;
             }
@@ -508,28 +581,31 @@ public class BigSortedMap {
   public long get(long keyPtr, int keyLength, long valueBuf, int valueBufLength, long version) {
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(keyPtr, keyLength, version);
-    IndexBlock b = null;
+
     boolean locked = false;
+    IndexBlock b = null;
     while (true) {
       try {
         b = map.floorKey(kvBlock);
         long result = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
-        if (result < 0) {
+        if (result < 0 && b.hasRecentUnsafeModification()) {
           // check one more time with lock
-          // it is possible that we caught split in flight
+          // - we caught split in flight
           IndexBlock bb = null;
           while (true) {
             b = map.floorKey(kvBlock);
             lock(b);
             locked = true;
             bb = map.floorKey(kvBlock);
-            if (bb.getAddress() != b.getAddress()) {
+            if (bb != b) {
               unlock(b);
+              locked = false;
+              continue;
             } else {
               break;
             }
           }
-          result = b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
+          result =  b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
         }
         // TODO
         // check length
@@ -583,8 +659,7 @@ public class BigSortedMap {
             scanner = IndexBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
             DataBlockScanner sc = null;
             while ((sc = scanner.nextBlockScanner()) != null) {
-              if (!sc.hasNext()) {
-                
+              if (!sc.hasNext()) {                
                 continue;
               }
               int keySize = sc.keySize();
@@ -611,8 +686,14 @@ public class BigSortedMap {
    *  @param stop stop row (exclusive)
    */
   public BigSortedMapScanner getScanner(byte[] start, byte[] stop) {
-    long snapshotId = sequenceID.incrementAndGet();
-    return new BigSortedMapScanner(this, start, stop, snapshotId);
+    long snapshotId = getSequenceId();
+    while(true) {
+      try {
+        return new BigSortedMapScanner(this, start, stop, snapshotId);
+      }catch (RetryOperationException e) {
+        continue;
+      }
+    }
   }
   
   /**
@@ -620,19 +701,28 @@ public class BigSortedMap {
    */
   public BigSortedMapDirectMemoryScanner getScanner(long startRowPtr, int startRowLength, 
       long stopRowPtr, int stopRowLength) {
-    long snapshotId = sequenceID.incrementAndGet();
-    return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
-      stopRowPtr, stopRowLength, snapshotId); 
+    long snapshotId = getSequenceId();
+    while(true) {
+      try {
+        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+          stopRowPtr, stopRowLength, snapshotId); 
+      } catch (RetryOperationException e) {
+        continue;
+      }
+    }
   }
   
   public void dispose() {
     for(IndexBlock b: map.keySet()) {
-      // index block MUST deallocate data blocks
     	b.free();
     }
     map.clear();
     totalAllocatedMemory.set(0);
+    totalBlockDataSize.set(0);
+    totalBlockIndexSize.set(0);
     totalDataSize.set(0);
     totalIndexSize.set(0);
+    totalDataInDataBlocksSize.set(0);
+    totalDataInIndexBlocksSize.set(0);
   }
 }

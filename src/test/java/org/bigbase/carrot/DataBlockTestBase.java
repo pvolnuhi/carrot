@@ -29,7 +29,7 @@ public class DataBlockTestBase {
   
  
   protected boolean isValidFailure(DataBlock b,  Key key, int valLen, int oldValLen) {
-    int dataSize = b.getDataSize();
+    int dataSize = b.getDataInBlockSize();
     int blockSize = b.getBlockSize();
     int newRecSize = key.size + valLen + DataBlock.RECORD_TOTAL_OVERHEAD;
     if (DataBlock.mustStoreExternally(key.size, valLen)) {

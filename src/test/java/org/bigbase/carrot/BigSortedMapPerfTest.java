@@ -30,7 +30,7 @@ public class BigSortedMapPerfTest {
     }
     long end = System.currentTimeMillis();
     System.out.println("Time to load="+ totalLoaded+" ="+(end -start)+"ms");
-    System.out.println("Total memory="+map.getMemoryAllocated());
+    System.out.println("Total memory="+map.getTotalAllocatedMemory());
   }
   
   @Test

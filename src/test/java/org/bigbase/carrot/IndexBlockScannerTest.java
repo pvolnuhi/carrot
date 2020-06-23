@@ -128,7 +128,7 @@ public class IndexBlockScannerTest {
       }
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 
-        b.getDataSize()+" num records=" + keys.size());
+        b.getDataInBlockSize()+" num records=" + keys.size());
     return keys;
   }
   

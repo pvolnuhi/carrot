@@ -31,7 +31,7 @@ public class DataBlockDirectMemoryLargeKVsTest extends DataBlockDirectMemoryTest
         keys.add(new Key(ptr, len));
       }
     }
-    System.out.println("M: "+ DataBlock.getTotalAllocatedMemory() +" D:"+DataBlock.getTotalDataSize());
+    System.out.println("M: "+ BigSortedMap.getTotalAllocatedMemory() +" D:"+BigSortedMap.getTotalDataSize());
     return keys;
   }
   

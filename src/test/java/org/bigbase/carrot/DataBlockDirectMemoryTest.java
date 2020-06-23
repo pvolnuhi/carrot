@@ -164,7 +164,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     ArrayList<Key> keys = fillDataBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     int totalKVs = keys.size();
-    int totalDataSize = b.getDataSize();
+    int totalDataSize = b.getDataInBlockSize();
     DataBlock bb = b.split(true);
     
     IndexBlock ib = new IndexBlock(4096);
@@ -174,7 +174,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
     assertEquals(totalKVs +1, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
-    assertEquals(totalDataSize, (int)b.getDataSize() + bb.getDataSize());
+    assertEquals(totalDataSize, (int)b.getDataInBlockSize() + bb.getDataInBlockSize());
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -198,7 +198,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     ArrayList<Key> keys = fillDataBlock(b);
     System.out.println("Total inserted ="+ keys.size());
     int totalKVs = keys.size();
-    int totalDataSize = b.getDataSize();
+    int totalDataSize = b.getDataInBlockSize();
     DataBlock bb = b.split(true);
     IndexBlock ib = new IndexBlock(4096);
     bb.register(ib, 0);
@@ -208,7 +208,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     
     // +1 is system key in a first block
     assertEquals(totalKVs +1, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
-    assertEquals(totalDataSize, (int)b.getDataSize() + bb.getDataSize());
+    assertEquals(totalDataSize, (int)b.getDataInBlockSize() + bb.getDataInBlockSize());
     byte[] f1 = b.getFirstKey();
     byte[] f2 = bb.getFirstKey();
     assertNotNull(f1); 
@@ -218,7 +218,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     assertEquals(totalKVs +1, (int)b.getNumberOfRecords());
-    assertEquals(totalDataSize, (int)b.getDataSize());
+    assertEquals(totalDataSize, (int)b.getDataInBlockSize());
     
     scanAndVerify(b);
     System.out.println("testBlockMerge after scanAndVerify");
@@ -323,7 +323,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     DataBlock b = getDataBlock();
     ArrayList<Key> keys = fillDataBlock(b);
     
-    int dataSize = b.getDataSize();
+    int dataSize = b.getDataInBlockSize();
     int blockSize = b.getBlockSize();
     int avail = blockSize - dataSize - DataBlock.RECORD_TOTAL_OVERHEAD;
     if (avail >= blockSize/2) {
@@ -343,7 +343,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     Key oneKey = keys.get(0);
         
     OpResult res = b.delete(oneKey.address, oneKey.size, Long.MAX_VALUE);
-    dataSize = b.getDataSize();
+    dataSize = b.getDataInBlockSize();
     blockSize = b.getBlockSize();
     avail = blockSize - dataSize;
     assertEquals(OpResult.OK, res);
@@ -570,7 +570,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
         keys.add(new Key(ptr, keyLength));
       }
     }
-    System.out.println("M: "+ DataBlock.getTotalAllocatedMemory() +" D:"+DataBlock.getTotalDataSize());
+    System.out.println("M: "+ BigSortedMap.getTotalAllocatedMemory() +" D:"+BigSortedMap.getTotalDataSize());
     return keys;
   }
   

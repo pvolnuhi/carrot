@@ -82,10 +82,9 @@ public final class IndexBlockScanner implements Closeable{
       IndexBlockScanner bs = getScanner(b, snapshotId);
       bs.setStartStopRows(startRow, stopRow);
       return bs;
-    }catch (Throwable t) {
-      //TODO log error
+    } catch(RetryOperationException e) {
       b.readUnlock();
-      throw new RuntimeException(t);
+      throw e;
     }
   }
   /** 
@@ -114,6 +113,7 @@ public final class IndexBlockScanner implements Closeable{
           snapshotId, Op.DELETE)
         : indexBlock.firstBlock();
         
+    // It can not be null
     this.currentDataBlock = b;
     if (b == null) {
       // FATAL
@@ -198,8 +198,6 @@ public final class IndexBlockScanner implements Closeable{
     // Unlock index block
     if (indexBlock != null) {
       indexBlock.readUnlock();
-    } else {
-      System.out.println("null");
-    }
+    } 
   }
 }
