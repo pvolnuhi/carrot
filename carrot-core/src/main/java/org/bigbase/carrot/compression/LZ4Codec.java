@@ -75,7 +75,16 @@ public class LZ4Codec implements Codec {
 		int total = LZ4.decompress(src, dst);
 		return total;
 	}
+  @Override
+  public int compress(long src, int srcSize, long dst, int dstCapacity) {
+    return LZ4.compressDirectAddress(src, srcSize, dst, dstCapacity);
+  }
 
+  @Override
+  public int decompress(long src, int compressedSize, long dst, int dstCapacity) {
+    return LZ4.decompressDirectAddress(src, compressedSize, dst, dstCapacity);
+  }
+  
 	/* (non-Javadoc)
 	 * @see com.koda.compression.Codec#getCompressionThreshold()
 	 */
@@ -168,4 +177,6 @@ public class LZ4Codec implements Codec {
     System.out.println("Size="+ str.length() +" decompressed ="+decSize);        
     
   }
+
+
 }

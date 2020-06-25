@@ -52,7 +52,7 @@ public class LZ4HCCodec implements Codec {
   private int level = 1;
   
   /**
-   * Instantiates a new quick lz codec.
+   * Instantiates a new lz4hc codec.
    */
   public LZ4HCCodec() {
     minCompSize = Integer.parseInt(System.getProperty(COMPRESSION_THRESHOLD, "100"));
@@ -79,7 +79,16 @@ public class LZ4HCCodec implements Codec {
     int total = LZ4.decompressHC(src, dst);
     return total;
   }
+  
+  @Override
+  public int compress(long src, int srcSize, long dst, int dstCapacity) {
+    return LZ4.compressDirectAddressHC(src, srcSize, dst, dstCapacity, dstCapacity);
+  }
 
+  @Override
+  public int decompress(long src, int compressedSize, long dst, int dstCapacity) {
+    return LZ4.decompressDirectAddressHC(src, compressedSize, dst, dstCapacity);
+  }
   /* (non-Javadoc)
    * @see com.koda.compression.Codec#getCompressionThreshold()
    */
@@ -172,4 +181,6 @@ public class LZ4HCCodec implements Codec {
     System.out.println("Size="+ str.length() +" decompressed ="+decSize);        
     
   }
+
+
 }

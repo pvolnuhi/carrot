@@ -19,60 +19,60 @@
 #include <jni.h>
 #include "lz4.h"
 #include "lz4hc.h"
-/* Header for class com_koda_compression_lz4_LZ4 */
+/* Header for class org_bigbase_compression_lz4_LZ4 */
 
-#ifndef _Included_com_koda_compression_lz4_LZ4
-#define _Included_com_koda_compression_lz4_LZ4
+#ifndef _Included_org_bigbase_compression_lz4_LZ4
+#define _Included_org_bigbase_compression_lz4_LZ4
 #ifdef __cplusplus
 extern "C" {
 #endif
 /*
- * Class:     com_koda_compression_lz4_LZ4
+ * Class:     org_bigbase_compression_lz4_LZ4
  * Method:    compress
  * Signature: ([B)[B
  */
-JNIEXPORT jbyteArray JNICALL Java_com_koda_compression_lz4_LZ4_compress
+JNIEXPORT jbyteArray JNICALL Java_org_bigbase_compression_lz4_LZ4_compress
   (JNIEnv *, jclass, jbyteArray);
 
 /*
- * Class:     com_koda_compression_lz4_LZ4
+ * Class:     org_bigbase_compression_lz4_LZ4
  * Method:    decompress
  * Signature: ([B)[B
  */
-JNIEXPORT jbyteArray JNICALL Java_com_koda_compression_lz4_LZ4_decompress
+JNIEXPORT jbyteArray JNICALL Java_org_bigbase_compression_lz4_LZ4_decompress
   (JNIEnv *, jclass, jbyteArray);
 
 /*
- * Class:     com_koda_compression_lz4_LZ4
+ * Class:     org_bigbase_compression_lz4_LZ4
  * Method:    compressDirect
  * Signature: (Ljava/nio/ByteBuffer;IILjava/nio/ByteBuffer;II)I
  */
-JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_compressDirect
+JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_compressDirect
   (JNIEnv *, jclass, jobject, jint, jint, jobject, jint, jint);
 
-JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_compressDirectHC
+JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_compressDirectHC
   (JNIEnv *, jclass, jobject, jint, jint, jobject, jint, jint, jint);
 
-    JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_compressDirectAddress
+    JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_compressDirectAddress
     (JNIEnv *, jclass, jlong, jint, jlong, jint); 
     
-    JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_compressDirectAddressHC
+    JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_compressDirectAddressHC
     (JNIEnv *, jclass, jlong, jint, jlong, jint, jint); 
 /*
- * Class:     com_koda_compression_lz4_LZ4
+ * Class:     org_bigbase_compression_lz4_LZ4
  * Method:    decompressDirect
  * Signature: (Ljava/nio/ByteBuffer;ILjava/nio/ByteBuffer;I)I
  */
-JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_decompressDirect
+JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_decompressDirect
   (JNIEnv *, jclass, jobject, jint, jint, jobject, jint, jint);
 
-JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_decompressDirectHC
+JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_decompressDirectHC
   (JNIEnv *, jclass, jobject, jint, jint, jobject, jint, jint);
     
-    JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_decompressDirectAddress
+    JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_decompressDirectAddress
     (JNIEnv *, jclass, jlong, jint, jlong, jint);
     
-    JNIEXPORT jint JNICALL Java_com_koda_compression_lz4_LZ4_decompressDirectAddressHC
+    JNIEXPORT jint JNICALL Java_org_bigbase_compression_lz4_LZ4_decompressDirectAddressHC
     (JNIEnv *, jclass, jlong, jint, jlong, jint);
 
 #ifdef __cplusplus

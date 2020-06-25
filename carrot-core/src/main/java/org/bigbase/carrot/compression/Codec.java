@@ -58,6 +58,27 @@ public interface Codec {
 	 */
 	public int decompress(ByteBuffer src, ByteBuffer dst) throws IOException;
 	
+	
+	/**
+	 * Compress memory directly
+	 * @param src source address
+	 * @param srcSize source size
+	 * @param dst destination address
+	 * @param dstCapacity destination capacity
+	 * @return compressed size or 0 if capacity was not enough
+	 */
+	public int compress(long src, int srcSize, long dst, int dstCapacity);
+	  
+	 /**
+   * Decompress memory directly
+   * @param src source address
+   * @param srcSize source size
+   * @param dst destination address
+   * @param dstCapacity destination capacity
+   * @return compressed size or 0 if capacity was not enough
+   */
+	public int decompress(long src, int srcSize, long dst, int dstCapacity);
+	
 	/**
 	 * Gets the compression threshold.
 	 *

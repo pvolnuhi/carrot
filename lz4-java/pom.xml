@@ -44,7 +44,7 @@
                                     <destFileName>liblz4.${lib.packaging}</destFileName>
                                 </artifactItem>
                             </artifactItems>
-                            <outputDirectory>${project.build.directory}/classes/org/bigbase/compression/lz4/native/${lib.path.plaftorm.suffix}</outputDirectory>
+                            <outputDirectory>${project.build.directory}/classes/org/bigbase/lz4/native/${lib.path.plaftorm.suffix}</outputDirectory>
                             <overWriteReleases>false</overWriteReleases>
                             <overWriteSnapshots>true</overWriteSnapshots>
                         </configuration>

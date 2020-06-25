@@ -112,7 +112,7 @@ public class LibLoader
 
     private static boolean hasInjectedNativeLoader() {
         try {
-            final String nativeLoaderClassName = "com.koda.common.nativelib.NativeLoader";
+            final String nativeLoaderClassName = "org.bigbase.common.nativelib.NativeLoader";
             @SuppressWarnings("unused")
             Class< ? > c = Class.forName(nativeLoaderClassName);
             // If this native loader class is already defined, it means that another class loader already loaded the native library 
@@ -186,10 +186,10 @@ public class LibLoader
         try {
             // Use parent class loader to load Native lib, since Tomcat, which uses different class loaders for each webapps, cannot load JNI interface twice
 
-            final String nativeLoaderClassName = "com.koda.common.nativelib.NativeLoader";
+            final String nativeLoaderClassName = "org.bigbase.common.nativelib.NativeLoader";
             ClassLoader rootClassLoader = getRootClassLoader();
             // Load a byte code 
-            byte[] byteCode = getByteCode("/com/koda/common/nativelib/NativeLoader.bytecode");
+            byte[] byteCode = getByteCode("/org/bigbase/common/nativelib/NativeLoader.bytecode");
             // In addition, we need to load the other dependent classes (e.g., SnappyNative and SnappyException) using the system class loader
  
             List<byte[]> preloadClassByteCode = new ArrayList<byte[]>(classesToPreload.length);
@@ -398,7 +398,7 @@ public class LibLoader
         // We have standard dircetory structure for JNI lib
         // 1. /com/koda/<libname>/native - where alll JNI libs are stored
         // 2. /com/koda/<libname>/VERSION - file which contains version name
-        nativeLibraryPath = "/com/koda/" + libName + "/native/" + OSInfo.getNativeLibFolderPathForCurrentOS();
+        nativeLibraryPath = "/org/bigbase/" + libName + "/native/" + OSInfo.getNativeLibFolderPathForCurrentOS();
 
         if (LibLoader.class.getResource(nativeLibraryPath + "/" + nativeLibraryName) != null) {
             // Temporary library folder. Use the value of com.koda.tempdir or java.io.tmpdir
@@ -423,7 +423,7 @@ public class LibLoader
 
     public static String getVersion(String libName) {
 
-        URL versionFile = LibLoader.class.getResource("/com/koda/"+libName+"/VERSION");
+        URL versionFile = LibLoader.class.getResource("/org/bigbase/"+libName+"/VERSION");
 
         String version = "unknown";
         try {
