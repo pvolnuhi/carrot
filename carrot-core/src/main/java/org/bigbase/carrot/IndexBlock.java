@@ -1009,6 +1009,31 @@ public final class IndexBlock implements Comparable<IndexBlock> {
   }
 
 	/**
+	 * Type is PUT for this call
+	 * @param keyPtr
+	 * @param keyLength
+	 * @param version
+	 * @return tru/false
+	 */
+	boolean isLessThanMin(long keyPtr, int keyLength, long version) 
+	  throws RetryOperationException
+	  
+	{
+	  byte[] firstKey = getFirstKey();
+	  int result = Utils.compareTo(firstKey, 0, firstKey.length, keyPtr, keyLength);
+	  if (result != 0) {
+	    return result > 0;
+	  }
+	  // result == 0;
+	  long ver = version(dataPtr);
+	  if (ver != version) {
+	    return version > ver;
+	  }
+	  // we do not compare types as since answer will always be false
+	  return false;
+	}
+	
+	/**
 	 * Put k-v operation
 	 * 
 	 * @param keyPtr

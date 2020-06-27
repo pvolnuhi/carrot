@@ -297,7 +297,6 @@ public class BigSortedMap {
 
     while (true) {
       IndexBlock b = null;
-      boolean isSplit = false;
       try {
         b = map.floorKey(kvBlock);
         // TODO: we do a lot of locking
@@ -318,9 +317,7 @@ public class BigSortedMap {
           bb = b.split();
           // block into
           putBlock(bb);
-          if (isSplit) {
-            continue;
-          }
+          continue;
         } else if (!result) {
           // MAP is FULL
           return false;
@@ -347,6 +344,126 @@ public class BigSortedMap {
     }
   }
   
+  /**
+   * Execute generic read - modify - write operation in a single update
+   * @param op - update operation
+   * @return true or false
+   */
+  public boolean update(Update op) {
+    long version = getSequenceId();
+    IndexBlock kvBlock = getThreadLocalBlock();
+    op.setVersion(version);
+    kvBlock.putForSearch(op.getKeyAddress(), op.getKeySize(), version);
+    while (true) {
+      IndexBlock b = null;
+      try {
+        b = map.floorKey(kvBlock);
+        lock(b); // to prevent locking from another thread
+        // TODO: optimize - last time split? what is the safest threshold? 100ms
+        if(b.hasRecentUnsafeModification()) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
+            continue;
+          }
+        }        
+        long recordAddress = b.get(op.getKeyAddress(), op.getKeySize(), version);
+        if (recordAddress <=0) {
+          return false;
+        }
+        op.setFoundRecordAddress(recordAddress);
+        // Execute operation
+        boolean result = op.execute();
+        if (result == false ) {
+          return result;
+        } 
+        int updatesCount = op.getUpdatesCount();
+        if (updatesCount == 0) {
+          // Update in place was done, so we can return now
+          return result;
+        }
+        // updates count > 0
+        // execute first update (update to existing key)
+        long keyPtr = op.keys()[0];
+        int keyLength     = op.keySizes()[0];
+        long valuePtr = op.values()[0];
+        int valueLength = op.valueSizes()[0];
+        
+        result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+        IndexBlock bb = null;
+        boolean isBB = false;
+        if (!result && getTotalAllocatedMemory() < maxMemory) {
+          bb = b.split();          
+          if (!bb.isLessThanMin(keyPtr, keyLength, version)) {
+            // Insert into new block
+            result = bb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+            // This should succeed?
+            if (!result) {
+              // TODO: We failed to insert into non-full index block
+              return false;
+            }
+            isBB = true;
+          } else {
+            // try again into b
+            result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+            if (!result) {
+              // TODO: We failed to insert into non-full index block
+              return false;
+            }
+          }
+        } else if (!result) {
+          // MAP is FULL
+          return false;
+        }
+        // block into
+        if (updatesCount < 2 && bb != null) {
+          putBlock(bb);
+          return true;
+        }
+        // updateCounts == 2 - second is insert new K-V
+        // second key is larger than first one and if first was inserted into new split block
+        // so the second one goes into it as well.
+        IndexBlock block = isBB? bb: b;
+        keyPtr = op.keys()[1];
+        keyLength     = op.keySizes()[1];
+        valuePtr = op.values()[1];
+        valueLength = op.valueSizes()[1];
+        
+        result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+        if (!result) {
+          // We do not check allocated memory limit b/c it can break
+          // the transaction
+          IndexBlock ibb = block.split();          
+          if (!ibb.isLessThanMin(keyPtr, keyLength, version)) {
+            // Insert into new block
+            result = ibb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+            // This should succeed?
+            if (!result) {
+              // TODO: We failed to insert into non-full index block
+              return false;
+            }
+          } else {
+            // try again into block
+            result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+            if (!result) {
+              // TODO: We failed to insert into non-full index block
+              return false;
+            }
+          }
+          putBlock(ibb);
+        }
+        // we put either ibb or bb - not both of them - mens
+        // we do not do two index block splits in a single update operation
+        if (block == bb) {
+          putBlock(bb);
+        }
+        return true;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        unlock(b);
+      }
+    }
+  }
 
   /**
    * Put k-v operation
@@ -364,7 +481,6 @@ public class BigSortedMap {
 
     while (true) {
       IndexBlock b = null;
-      boolean isSplit = false;
       try {
         b = map.floorKey(kvBlock);
         // TODO: we do a lot of locking
@@ -379,15 +495,11 @@ public class BigSortedMap {
         boolean result =
             b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
         if (!result && getTotalAllocatedMemory() < maxMemory) {
-          // In sequential pattern of puts, we do not need to split
-          // but need to add new block with a given K-V
           IndexBlock bb = null;
           bb = b.split();
           // block into
           putBlock(bb);
-          if (isSplit) {
-            continue;
-          }
+          continue;
         } else if (!result) {
           // MAP is FULL
           return false;

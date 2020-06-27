@@ -953,6 +953,38 @@ public final class DataBlock  {
     return recAddress;
   }
   
+  /**
+   * Returns address of externally allocated record
+   * @param ptr current allocation
+   * @param key - key pointer
+   * @param keyLength key length
+   * @param value value pointer
+   * @param valueLength value length
+   * @return address of a record
+   */
+  private long reallocateAndCopyExternalKeyValue(long ptr, long keyPtr, int keyLength, long valuePtr, 
+      int valueLength) {
+    
+    int kLen = keyLength(ptr);
+    int vLen = valueLength(ptr);
+    if (kLen + vLen > keyLength + valueLength) {
+      deallocateIfExternalRecord(ptr);
+      return allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, valueLength);
+    }
+    long recAddress = UnsafeAccess.realloc(ptr,keyLength + valueLength + 2 * INT_SIZE);
+    if (recAddress <=0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
+    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    UnsafeAccess.putInt(recAddress, keyLength);
+    UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
+    UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
+    UnsafeAccess.copy(valuePtr, recAddress + 2*INT_SIZE + keyLength, valueLength);
+    return recAddress;
+  }
+  
   private long allocateAndCopyExternalValue(long valuePtr, int valueLength) {
     long recAddress = UnsafeAccess.malloc(valueLength + INT_SIZE);
     if (recAddress <=0) {
@@ -967,6 +999,24 @@ public final class DataBlock  {
     return recAddress;
   }
   
+  private long reallocateAndCopyExternalValue(long ptr, long valuePtr, int valueLength) {
+    int vLen = valueLength(ptr);
+    if (vLen > valueLength) {
+      deallocateIfExternalRecord(ptr);
+      return allocateAndCopyExternalValue(valuePtr, valueLength);
+    }
+    long recAddress = UnsafeAccess.realloc(ptr, valueLength + INT_SIZE);
+    if (recAddress <=0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
+    //TODO dataSize ?
+    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
+    UnsafeAccess.putInt(recAddress , valueLength);
+    UnsafeAccess.copy(valuePtr, recAddress + INT_SIZE, valueLength);
+    return recAddress;
+  }
   /**
    * Returns address of externally allocated record
    * @param key - key array
@@ -994,6 +1044,42 @@ public final class DataBlock  {
     return recAddress;
   }
   
+  /**
+   * Returns address of externally allocated record
+   * @param ptr current allocation
+   * @param key - key array
+   * @param keyOffset key offset
+   * @param keyLength key length
+   * @param value value array
+   * @param valueOffset value offset
+   * @param valueLength value length
+   * @return address of a record
+   */
+  private long reallocateAndCopyExternalKeyValue(long ptr, byte[] key, int keyOffset, 
+      int keyLength, byte[] value, int valueOffset,
+      int valueLength) {
+    int kLen = keyLength(ptr);
+    int vLen = valueLength(ptr);
+    if (kLen + vLen > keyLength + valueLength) {
+      deallocateIfExternalRecord(ptr);
+      return allocateAndCopyExternalKeyValue(key, keyOffset, keyLength, value, valueOffset, valueLength);
+    }
+    long recAddress = UnsafeAccess.realloc(ptr, keyLength + valueLength + 2 * INT_SIZE);
+    if (recAddress < 0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
+    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    
+    UnsafeAccess.putInt(recAddress, keyLength);
+    UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
+    UnsafeAccess.copy(key, keyOffset, recAddress + 2 * INT_SIZE, keyLength);
+    UnsafeAccess.copy(value, valueOffset, recAddress + 2 * INT_SIZE + keyLength, valueLength);
+    return recAddress;
+  }
+  
+  
   private long getExternalAllocationSize(long address, AllocType type) {
     switch(type) {
       case EXT_VALUE:
@@ -1007,6 +1093,25 @@ public final class DataBlock  {
   private long allocateAndCopyExternalValue( byte[] value, int valueOffset,
       int valueLength) {
     long recAddress = UnsafeAccess.malloc( valueLength +  INT_SIZE);
+    if (recAddress < 0) {
+      return UnsafeAccess.MALLOC_FAILED;
+    }
+    largeKVs.incrementAndGet();
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
+    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
+    UnsafeAccess.putInt(recAddress, valueLength);
+    UnsafeAccess.copy(value, valueOffset, recAddress + INT_SIZE, valueLength);
+    return recAddress;
+  }
+  
+  private long reallocateAndCopyExternalValue(long ptr, byte[] value, int valueOffset,
+      int valueLength) {
+    int vLen = valueLength(ptr);
+    if (vLen > valueLength) {
+      deallocateIfExternalRecord(ptr);
+      return allocateAndCopyExternalValue(value, valueOffset, valueLength);
+    }
+    long recAddress = UnsafeAccess.realloc( ptr, valueLength +  INT_SIZE);
     if (recAddress < 0) {
       return UnsafeAccess.MALLOC_FAILED;
     }
@@ -1237,10 +1342,10 @@ public final class DataBlock  {
         // As since keys are the same, both new and old records have the same type of 
         // external allocation, either EXT_VALUE or EXT_KEY_VALUE
         // Deallocate existing allocation
-
-        deallocateIfExternalRecord(addr);
+        //TODO: realloc reconsider
+        //deallocateIfExternalRecord(addr);
         if (type == AllocType.EXT_KEY_VALUE) {
-          recAddress = allocateAndCopyExternalKeyValue(key, keyOffset, keyLength, value, 
+          recAddress = reallocateAndCopyExternalKeyValue(addr, key, keyOffset, keyLength, value, 
             valueOffset, valueLength);
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, 
             keyLength + valueLength + 2 * INT_SIZE);
@@ -1250,7 +1355,7 @@ public final class DataBlock  {
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
         } else { // AllocType.EXT_VALUE
           // As since keys are the same - no need to overwrite existing key
-          recAddress = allocateAndCopyExternalValue(value, 
+          recAddress = reallocateAndCopyExternalValue(addr, value, 
             valueOffset, valueLength);         
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
             valueLength + INT_SIZE);
@@ -1678,9 +1783,11 @@ public final class DataBlock  {
         // external allocation, either EXT_VALUE or EXT_KEY_VALUE
         // Deallocate existing allocation
 
-        deallocateIfExternalRecord(addr);
+        //deallocateIfExternalRecord(addr);
         if (type == AllocType.EXT_KEY_VALUE) {
-          recAddress = allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, valueLength);
+          //TODO: realloc reconsider
+
+          recAddress = reallocateAndCopyExternalKeyValue(addr,keyPtr, keyLength, valuePtr, valueLength);
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, 
             keyLength + valueLength + 2 * INT_SIZE);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + INT_SIZE, recAddress);
@@ -1689,7 +1796,8 @@ public final class DataBlock  {
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
         } else { // AllocType.EXT_VALUE
           // As since keys are the same - no need to overwrite existing key
-          recAddress = allocateAndCopyExternalValue(valuePtr, valueLength);         
+          //TODO: realloc reconsider
+          recAddress = reallocateAndCopyExternalValue(addr, valuePtr, valueLength);         
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
             valueLength + INT_SIZE);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength +INT_SIZE, recAddress);
