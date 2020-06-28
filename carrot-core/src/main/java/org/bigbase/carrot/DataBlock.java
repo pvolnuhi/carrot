@@ -97,7 +97,7 @@ public final class DataBlock  {
     }
   }
 
-  static int getMaximumBlockSize() {
+  public static int getMaximumBlockSize() {
     return BASE_SIZE * BASE_MULTIPLIERS[BASE_MULTIPLIERS.length -1];
   }
   
@@ -337,7 +337,7 @@ public final class DataBlock  {
   }
 
   
-  static AllocType getRecordAllocationType(long ptr) {
+  public static AllocType getRecordAllocationType(long ptr) {
     if( blockKeyLength(ptr) == EXTERNAL_KEY_VALUE) {
       return AllocType.EXT_KEY_VALUE;
     } else if (UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH) == EXTERNAL_VALUE) {
@@ -348,12 +348,12 @@ public final class DataBlock  {
       
   }
   
-  static boolean isExternalAllocatedRecord(long ptr) {
+  public static boolean isExternalAllocatedRecord(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     return type != AllocType.EMBEDDED;
   }
   
-  static short blockKeyLength(long ptr) {
+  public static short blockKeyLength(long ptr) {
     return UnsafeAccess.toShort(ptr);
   }
   
@@ -363,7 +363,7 @@ public final class DataBlock  {
     return UnsafeAccess.toInt(address);
   }
   
-  static int keyLength(long ptr) {
+  public static int keyLength(long ptr) {
     if (getRecordAllocationType(ptr) == AllocType.EXT_KEY_VALUE) {
       return externalKeyLength(ptr);
     } else {
@@ -371,14 +371,14 @@ public final class DataBlock  {
     }
   }
   
-  static short blockValueLength(long ptr) {
+  public static short blockValueLength(long ptr) {
     short len = UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH);
     if (len == EXTERNAL_VALUE) return INT_SIZE + ADDRESS_SIZE;
     return len;
   }
   
   
-  static final int valueLength(long ptr) {
+  public static final int valueLength(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     if (type == AllocType.EXT_KEY_VALUE) {
       long address = getExternalRecordAddress(ptr);
@@ -391,12 +391,12 @@ public final class DataBlock  {
     }
   }
   
-  static long getExternalRecordAddress(long ptr) {
+  public static long getExternalRecordAddress(long ptr) {
     int klen = blockKeyLength(ptr);
     return UnsafeAccess.toLong(ptr + RECORD_TOTAL_OVERHEAD + klen + INT_SIZE);
   }
   
-  static long keyAddress(long ptr) {
+  public static long keyAddress(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     if (type != AllocType.EXT_KEY_VALUE) {
       return ptr + RECORD_PREFIX_LENGTH;
@@ -406,12 +406,12 @@ public final class DataBlock  {
     }
   }
   
-  static long version(long ptr) {
+  public static long version(long ptr) {
     short keylen = blockKeyLength(ptr);
     return UnsafeAccess.toLong(ptr + RECORD_PREFIX_LENGTH + keylen);
   }
   
-  static long valueAddress(long ptr) {
+  public static long valueAddress(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     if (type == AllocType.EMBEDDED) {
       return blockKeyLength(ptr) + keyAddress(ptr) + SEQUENCEID_SIZE + TYPE_SIZE;
@@ -424,11 +424,11 @@ public final class DataBlock  {
     }
   }
   
-  static boolean mustStoreExternally (int keyLength, int valueLength) {
+  public static boolean mustStoreExternally (int keyLength, int valueLength) {
     return getAllocType(keyLength, valueLength) != AllocType.EMBEDDED;
   }
   
-  static Op type(long ptr) {
+  public static Op type(long ptr) {
     short keylen = blockKeyLength(ptr);
     byte v =UnsafeAccess.toByte(ptr + RECORD_PREFIX_LENGTH + keylen + SEQUENCEID_SIZE);
     return Op.values()[v];
@@ -1379,41 +1379,41 @@ public final class DataBlock  {
     }
   }
   
-  private static long getRecordSeqId(long recordAddress) {
+  public static long getRecordSeqId(long recordAddress) {
     short keyLen = blockKeyLength(recordAddress);
     return UnsafeAccess.toLong(recordAddress + RECORD_PREFIX_LENGTH + keyLen);
   }
 
 
-  private static void setRecordSeqId(long recordAddress, long seqId) {
+  public static void setRecordSeqId(long recordAddress, long seqId) {
     short keyLen = blockKeyLength(recordAddress);
     UnsafeAccess.putLong(recordAddress + RECORD_PREFIX_LENGTH + keyLen, seqId);
   }
 
 
-  private static long getRecordExpire(long recordAddress) {
+  public static long getRecordExpire(long recordAddress) {
     return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH);
   }
 
-  private static void setRecordExpire(long recordAddress, long time) {
+  public static void setRecordExpire(long recordAddress, long time) {
     UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH, time);
   }
 
-  private static long getRecordEviction(long recordAddress) {
+  public static long getRecordEviction(long recordAddress) {
     return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH + EXPIRE_SIZE_LENGTH);
   }
 
-  private static void setRecordEviction(long recordAddress, long value) {
+  public static void setRecordEviction(long recordAddress, long value) {
     UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH + EXPIRE_SIZE_LENGTH, value);
   }
 
-  static Op getRecordType(long recordAddress) {
+  public static Op getRecordType(long recordAddress) {
     short keyLen = blockKeyLength(recordAddress);
     int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE);
     return Op.values()[val];
   }
 
-  private static void setRecordType(long recordAddress, Op type) {
+  public static void setRecordType(long recordAddress, Op type) {
     short keyLen = blockKeyLength(recordAddress);
     UnsafeAccess.putByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE,
       (byte) type.ordinal());

@@ -7,6 +7,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.bigbase.carrot.updates.Update;
 
 public class BigSortedMap {
 	
@@ -415,8 +416,10 @@ public class BigSortedMap {
           return false;
         }
         // block into
-        if (updatesCount < 2 && bb != null) {
-          putBlock(bb);
+        if (updatesCount < 2) {
+          if(bb != null) {
+            putBlock(bb);
+          }
           return true;
         }
         // updateCounts == 2 - second is insert new K-V

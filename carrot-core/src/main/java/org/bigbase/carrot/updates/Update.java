@@ -1,4 +1,4 @@
-package org.bigbase.carrot;
+package org.bigbase.carrot.updates;
 
 /**
  * This class encapsulate read-modify-write 
@@ -58,42 +58,42 @@ public abstract class Update {
    */
   int updatesCount; // 1 or 2
   
-  Update() {
+  public Update() {
   }
   
-  final void setExpire(long expire) {
+  public final void setExpire(long expire) {
     this.expire = expire;
   }
   
-  final long getExpire() {
+  public final long getExpire() {
     return expire;
   }
   
-  final void setKeyAddress(long address) {
+  public final void setKeyAddress(long address) {
     this.keyAddress = address;
   }
   
-  final long getKeyAddress() {
+  public final long getKeyAddress() {
     return keyAddress;
   }
   
-  final void setKeySize (int size) {
+  public final void setKeySize (int size) {
     this.keySize = size;
   }
   
-  final int getKeySize() {
+  public final int getKeySize() {
     return keySize;
   }
   
-  final void setVersion(long version) {
+  public final void setVersion(long version) {
     this.version = version;
   }
   
-  final long getVersion() {
+  public final long getVersion() {
     return version;
   }
   
-  final void reset() {
+  public void reset() {
     this.keyAddress = 0;
     this.keySize = 0;
     this.version = 0;
@@ -104,7 +104,7 @@ public abstract class Update {
     this.values[0] = 0;
     this.values[1] = 0;
     this.valueSizes[0] = 0;
-    this.valueSizes[1] = 1;
+    this.valueSizes[1] = 0;
     this.foundRecordAddress = 0;
   }
   
@@ -113,7 +113,7 @@ public abstract class Update {
    * Must handle NOT_FOUND
    * @param address
    */
-  final void setFoundRecordAddress(long address) {
+  public final void setFoundRecordAddress(long address) {
     this.foundRecordAddress = address;
   }
 
@@ -121,7 +121,7 @@ public abstract class Update {
    * Execute update operation on a found K-V record
    * @return true, if success, false - to abort
    */
-  abstract boolean execute();
+  public abstract boolean execute();
   
  
   /**
@@ -131,7 +131,7 @@ public abstract class Update {
    * 2 - split of a current Key Value into two consecutive key values
    * @return number of updates required
    */
-  final int getUpdatesCount() {
+  public final int getUpdatesCount() {
     return updatesCount;
   }
   
@@ -139,7 +139,7 @@ public abstract class Update {
    * Gets result key addresses
    * @return key addresses
    */
-  final long[] keys() {
+  public final long[] keys() {
     return this.keys;
   }
   
@@ -147,7 +147,7 @@ public abstract class Update {
    * Gets result key sizes
    * @return key sizes
    */
-  final int[] keySizes() {
+  public final int[] keySizes() {
     return keySizes;
   }
   
@@ -155,7 +155,7 @@ public abstract class Update {
    * Get result value addresses
    * @return value addresses
    */
-  final long[] values() {
+  public final long[] values() {
     return values;
   }
   
@@ -163,7 +163,7 @@ public abstract class Update {
    * Get result value sizes
    * @return value sizes
    */
-  final int[] valueSizes() {
+  public final int[] valueSizes() {
     return valueSizes;
   }
   
