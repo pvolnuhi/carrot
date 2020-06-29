@@ -25,7 +25,9 @@ import org.bigbase.carrot.util.Utils;
  * <EVICTION> (8 bytes - used by eviction algorithm : LRU, LFU etc) 
  * <KEY> 
  * <SEQUENCEID> - 8 bytes
- * <TYPE> - 1 byte: 0 - DELETE, 1 - PUT (DELETE comes first) 
+ * <TYPE/DATA_TYPE> - 1 byte: 
+ * 7 bit  - data type (up to 128)
+ * last bit - 0 - DELETE, 1 - PUT (DELETE comes first) 
  * <VALUE> 
  * For ordering we use combination of <KEY><SEQUENCEID><TYPE> 
  * TODO: 
@@ -426,12 +428,6 @@ public final class DataBlock  {
   
   public static boolean mustStoreExternally (int keyLength, int valueLength) {
     return getAllocType(keyLength, valueLength) != AllocType.EMBEDDED;
-  }
-  
-  public static Op type(long ptr) {
-    short keylen = blockKeyLength(ptr);
-    byte v =UnsafeAccess.toByte(ptr + RECORD_PREFIX_LENGTH + keylen + SEQUENCEID_SIZE);
-    return Op.values()[v];
   }
   
   /**
@@ -1410,16 +1406,31 @@ public final class DataBlock  {
   public static Op getRecordType(long recordAddress) {
     short keyLen = blockKeyLength(recordAddress);
     int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE);
-    return Op.values()[val];
+    return Op.values()[val & 0x1];
   }
 
   public static void setRecordType(long recordAddress, Op type) {
     short keyLen = blockKeyLength(recordAddress);
+    int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE);
     UnsafeAccess.putByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE,
-      (byte) type.ordinal());
+      (byte) (val & 0xfe| type.ordinal()));
   }
 
+  public static int getRecordDataType(long recordAddress) {
+    short keyLen = blockKeyLength(recordAddress);
+    int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE);
+    // top 7 bits
+    return (val >>> 1);
+  }
 
+  public static void setRecordDataType(long recordAddress, int type) {
+    short keyLen = blockKeyLength(recordAddress);
+    int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE);
+    val &= 0x1;
+    val |= (type <<1);
+    UnsafeAccess.putByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE,
+      (byte) val);
+  }
   /**
    * Put k-v operation
    * @param keyPtr
@@ -2844,9 +2855,7 @@ public final class DataBlock  {
    * @return type 
    */
   final Op getFirstKeyType() {
-    int keylen = blockKeyLength(dataPtr);
-    int v = UnsafeAccess.toByte(dataPtr +RECORD_PREFIX_LENGTH + keylen + SEQUENCEID_SIZE);
-    return Op.values()[v];
+    return getRecordType(dataPtr);
   }
   
   /**

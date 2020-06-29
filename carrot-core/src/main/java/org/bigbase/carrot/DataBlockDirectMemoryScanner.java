@@ -146,7 +146,7 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
           this.curPtr = ptr;
           return;
         } else if (version == this.snapshotId) {
-          Op type_ = DataBlock.type(ptr);
+          Op type_ = DataBlock.getRecordType(ptr);
           if (type.ordinal() <= type_.ordinal()) {
             this.curPtr = ptr;
             return;
@@ -280,7 +280,7 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
   final void skipDeletedAndIrrelevantRecords() {
     while (this.curPtr - this.ptr < this.dataSize) {
       long version = DataBlock.version(this.curPtr);
-      Op type = DataBlock.type(this.curPtr);
+      Op type = DataBlock.getRecordType(this.curPtr);
       short keylen = DataBlock.blockKeyLength(this.curPtr);
       short vallen = DataBlock.blockValueLength(this.curPtr);
 
