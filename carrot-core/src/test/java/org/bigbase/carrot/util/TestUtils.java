@@ -1,6 +1,9 @@
 package org.bigbase.carrot.util;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import java.util.Random;
 
 import org.junit.Test;
 
@@ -87,4 +90,36 @@ public class TestUtils {
 
   }  
   
+  @Test
+  public void testUnsignedVaribaleInt() {
+    int [] values = new int[1000];
+    fillRandom(values, 1 << 7);
+    verify(values);
+    fillRandom(values, 1 << 14);
+    verify(values);
+    fillRandom(values, 1 << 21);
+    verify(values);
+    fillRandom(values, 1 << 28);
+    verify(values);
+  }
+  
+  private void verify(int[] values) {
+    long ptr = UnsafeAccess.malloc(4);
+    for(int i=0; i < values.length; i++) {
+      // clear
+      UnsafeAccess.putInt(ptr,  0);
+      int size = Utils.writeUVInt(ptr, values[i]);
+      int v = Utils.readUVInt(ptr);
+      assertEquals(values[i], v);
+      assertEquals(size, Utils.sizeUVInt(v));
+    }
+    UnsafeAccess.free(ptr);
+  }
+
+  private void fillRandom(int[] arr, int maxValue) {
+    Random r = new Random();
+    for(int i=0; i < arr.length; i++) {
+      arr[i] = r.nextInt(maxValue);
+    }
+  }
 }

@@ -8,6 +8,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.updates.Update;
+import org.bigbase.carrot.util.Utils;
 
 public class BigSortedMap {
 	
@@ -367,7 +368,7 @@ public class BigSortedMap {
             continue;
           }
         }        
-        long recordAddress = b.get(op.getKeyAddress(), op.getKeySize(), version);
+        long recordAddress = b.get(op.getKeyAddress(), op.getKeySize(), version, op.isFloorKey());
         if (recordAddress <=0) {
           return false;
         }
@@ -388,39 +389,54 @@ public class BigSortedMap {
         int keyLength     = op.keySizes()[0];
         long valuePtr = op.values()[0];
         int valueLength = op.valueSizes()[0];
-        
-        result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+        boolean updateType = op.updateTypes()[0];
         IndexBlock bb = null;
         boolean isBB = false;
-        if (!result && getTotalAllocatedMemory() < maxMemory) {
-          bb = b.split();          
-          if (!bb.isLessThanMin(keyPtr, keyLength, version)) {
-            // Insert into new block
-            result = bb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
-            // This should succeed?
-            if (!result) {
-              // TODO: We failed to insert into non-full index block
-              return false;
-            }
-            isBB = true;
+
+        if (updateType == true) { // DELETE
+          // Single update can be delete - NOW WE DO NOT INSERT DELETE MARKERS
+          // So DELETE will always succeed (true or false)
+          OpResult res = b.delete(keyPtr, keyLength, version);
+          // We do not check result? Should always be OK?
+          if (updatesCount < 2) {
+            return true;
           } else {
-            // try again into b
-            result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
-            if (!result) {
-              // TODO: We failed to insert into non-full index block
-              return false;
+            // Currently we support only single DELETE or 1/2 PUTs
+            throw new RuntimeException("Unexpected number of updates with DELETE operation: " + updatesCount);
+          }
+          
+        } else { // PUT
+          result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+          if (!result && getTotalAllocatedMemory() < maxMemory) {
+            bb = b.split();
+            if (!bb.isLessThanMin(keyPtr, keyLength, version)) {
+              // Insert into new block
+              result = bb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+              // This should succeed?
+              if (!result) {
+                // TODO: We failed to insert into non-full index block
+                return false;
+              }
+              isBB = true;
+            } else {
+              // try again into b
+              result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+              if (!result) {
+                // TODO: We failed to insert into non-full index block
+                return false;
+              }
             }
+          } else if (!result) {
+            // MAP is FULL
+            return false;
           }
-        } else if (!result) {
-          // MAP is FULL
-          return false;
-        }
-        // block into
-        if (updatesCount < 2) {
-          if(bb != null) {
-            putBlock(bb);
+          // block into
+          if (updatesCount < 2) {
+            if (bb != null) {
+              putBlock(bb);
+            }
+            return true;
           }
-          return true;
         }
         // updateCounts == 2 - second is insert new K-V
         // second key is larger than first one and if first was inserted into new split block
@@ -430,7 +446,7 @@ public class BigSortedMap {
         keyLength     = op.keySizes()[1];
         valuePtr = op.values()[1];
         valueLength = op.valueSizes()[1];
-        
+        updateType = op.updateTypes()[1];
         result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
         if (!result) {
           // We do not check allocated memory limit b/c it can break
@@ -735,6 +751,7 @@ public class BigSortedMap {
     }
   }
   
+  
   /**
    * Exists
    * @param key
@@ -825,6 +842,20 @@ public class BigSortedMap {
         continue;
       }
     }
+  }
+  
+  /**
+   * Get prefix scanner (direct memory)
+   * 
+   */
+  
+  public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength) {
+    long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
+    if (endRowPtr == -1) {
+      return null;
+    }
+    
+    return getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
   }
   
   public void dispose() {

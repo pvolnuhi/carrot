@@ -5,7 +5,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
 
 /**
  * This example of specific Update - atomic counter 
- * @author vrodionov
+ * @author Vladimir Rodionov
  *
  */
 public class Increment extends Update {

@@ -52,7 +52,9 @@ public final class DataBlockScanner implements Closeable{
   long snapshotId;
     
   /*
-   * Thread local for scanner instance
+   * Thread local for scanner instance.
+   * Multiple instances UNSAFE (can not be used in multiple 
+   * instances in context of a one thread)
    */
   static ThreadLocal<DataBlockScanner> scanner = new ThreadLocal<DataBlockScanner>() {
     @Override
@@ -61,7 +63,16 @@ public final class DataBlockScanner implements Closeable{
     }    
   };
       
-  
+  /**
+   * This method is to call when single instance of DataBlockScanner is 
+   * expected inside one thread operation
+   * @param b data block
+   * @param startRow start row
+   * @param stopRow stop row
+   * @param snapshotId snapshotID
+   * @return scanner instance
+   * @throws RetryOperationException
+   */
   public static DataBlockScanner getScanner(DataBlock b, byte[] startRow, byte[] stopRow,
       long snapshotId) throws RetryOperationException {
 
@@ -71,6 +82,35 @@ public final class DataBlockScanner implements Closeable{
       // Return null for now
       return null;
     }
+    bs.setBlock(b);
+    bs.setSnapshotId(snapshotId);
+    bs.setStartRow(startRow);
+    bs.setStopRow(stopRow);
+    return bs;
+  }
+  
+  /**
+   * This method is to call when multiple instances of DataBlockScanners are 
+   * expected inside one thread operation
+   * @param b data block
+   * @param startRow start row
+   * @param stopRow stop row
+   * @param snapshotId snapshotID
+   * @param bs scanner to reuse
+   * @return scanner instance
+   * @throws RetryOperationException
+   */
+  public static DataBlockScanner getScanner(DataBlock b, byte[] startRow, byte[] stopRow,
+      long snapshotId, DataBlockScanner bs) throws RetryOperationException {
+
+    if (bs == null) {
+      bs = new DataBlockScanner();
+    }
+    if (!b.isValid()) {
+      // Return null for now
+      return null;
+    }
+    bs.reset();
     bs.setBlock(b);
     bs.setSnapshotId(snapshotId);
     bs.setStartRow(startRow);

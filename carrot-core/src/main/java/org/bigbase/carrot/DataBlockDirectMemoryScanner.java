@@ -62,7 +62,9 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
    */
   long snapshotId;
   /*
-   * Thread local for scanner instance
+   * Thread local for scanner instance.
+   * Multiple instances UNSAFE (can not be used in multiple 
+   * instances in context of a one thread)
    */
   static ThreadLocal<DataBlockDirectMemoryScanner> scanner = 
       new ThreadLocal<DataBlockDirectMemoryScanner>() {
@@ -72,13 +74,55 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     }    
   };
       
-  
+  /**
+   * Call this method when single instance is expected inside one thread operation
+   * @param b data block
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address 
+   * @param stopRowLength stop row length
+   * @param snapshotId snapshot id
+   * @return new instance of a scanner
+   * @throws RetryOperationException
+   */
   public static DataBlockDirectMemoryScanner getScanner(DataBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId)
       throws RetryOperationException {
 
     DataBlockDirectMemoryScanner bs = scanner.get();
     bs.reset();
+    if (!b.isValid()) {
+      // Return null for now
+      return null;
+    }
+    bs.setBlock(b);
+    bs.setSnapshotId(snapshotId);
+    bs.setStartRow(startRowPtr, startRowLength);
+    bs.setStopRow(stopRowPtr, stopRowLength);
+    return bs;
+  }
+  
+  /**
+   * Call this method when multiple instances are expected inside 
+   * one thread operation
+   * @param b data block
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address 
+   * @param stopRowLength stop row length
+   * @param snapshotId snapshot id
+   * @param scanner scanner to reuse
+   * @return new instance of a scanner
+   * @throws RetryOperationException
+   */
+  public static DataBlockDirectMemoryScanner getScanner(DataBlock b, long startRowPtr,
+      int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId, 
+      DataBlockDirectMemoryScanner bs)
+      throws RetryOperationException {
+
+    if (bs == null) { 
+      bs = new DataBlockDirectMemoryScanner();
+    }
     if (!b.isValid()) {
       // Return null for now
       return null;

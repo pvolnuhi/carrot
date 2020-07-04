@@ -46,9 +46,15 @@ public final class IndexBlockScanner implements Closeable{
   private DataBlock currentDataBlock;
   
   private boolean closed = false;
-  
   /*
-   * Thread local for scanner instance
+   * Is safe to use in multiple instances inside one thread?
+   */
+  private boolean isMultiSafe = false;
+ 
+  /*
+   * Thread local for scanner instance.
+   * Multiple instances UNSAFE (can not be used in multiple 
+   * instances in context of a one thread)
    */
   static ThreadLocal<IndexBlockScanner> scanner = new ThreadLocal<IndexBlockScanner>() {
     @Override
@@ -57,7 +63,14 @@ public final class IndexBlockScanner implements Closeable{
     }    
   };
   
-  
+  /**
+   * Get or create new instance of a scanner
+   * @param b data block
+   * @param snapshotId snapshot id
+   * @param create create new if true, otherwise use thread local
+   * @return new scanner instance
+   * @throws RetryOperationException
+   */
   private static IndexBlockScanner getScanner(IndexBlock b, long snapshotId) 
       throws RetryOperationException {
     IndexBlockScanner bs = scanner.get();
@@ -66,7 +79,14 @@ public final class IndexBlockScanner implements Closeable{
     bs.snapshotId = snapshotId;
     return bs;
   }
-  
+  /**
+   * Get  instance of a scanner
+   * @param b data block
+   * @param snapshotId snapshot id
+   * @param create create new if true, otherwise use thread local
+   * @return new scanner instance
+   * @throws RetryOperationException
+   */
   public static IndexBlockScanner getScanner(IndexBlock b, byte[] startRow, byte[] stopRow, long snapshotId) 
       throws RetryOperationException {
     if (stopRow != null) {
@@ -80,6 +100,42 @@ public final class IndexBlockScanner implements Closeable{
       // Lock index block   
       b.readLock();
       IndexBlockScanner bs = getScanner(b, snapshotId);
+      bs.setStartStopRows(startRow, stopRow);
+      return bs;
+    } catch(RetryOperationException e) {
+      b.readUnlock();
+      throw e;
+    }
+  }
+  
+  /**
+   * Get new instance of a scanner (multiple instance safe)
+   * @param b index block
+   * @param snapshotId snapshot id
+   * @param bs scanner to reuse
+   * @return new scanner instance
+   * @throws RetryOperationException
+   */
+  public static IndexBlockScanner getScanner(IndexBlock b, byte[] startRow, byte[] stopRow, long snapshotId,
+      IndexBlockScanner bs) 
+      throws RetryOperationException {
+    if (stopRow != null) {
+      byte[] firstKey = b.getFirstKey();
+      int res = Utils.compareTo(firstKey, 0, firstKey.length, stopRow, 0, stopRow.length);
+      if (res > 0) {
+        return null; // out of range
+      }
+    }    
+    try {     
+      // Lock index block   
+      b.readLock();
+      if(bs == null) {
+        bs = new IndexBlockScanner();
+      };
+      bs.reset();
+      bs.setMultiInstanceSafe(true);
+      bs.setBlock(b);
+      bs.snapshotId = snapshotId;
       bs.setStartStopRows(startRow, stopRow);
       return bs;
     } catch(RetryOperationException e) {
@@ -102,17 +158,27 @@ public final class IndexBlockScanner implements Closeable{
     this.currentDataBlock = null;
     this.snapshotId = 0;
     this.closed = false;
+    this.isMultiSafe = false;
   }
   
   private void setStartStopRows(byte[] start, byte[] stop) {
     this.startRow = start;
     this.stopRow = stop;
-    // Returns IndexBlock thread local
-    DataBlock b = this.startRow != null
+    // Returns IndexBlock thread local if isMutiSafe = false
+    DataBlock b = null;
+    if (!isMultiSafe) {
+      b = this.startRow != null
         ? indexBlock.searchBlock( this.startRow, 0, this.startRow.length,
           snapshotId, Op.DELETE)
         : indexBlock.firstBlock();
         
+    } else {
+      b = new DataBlock();
+      b = this.startRow != null
+          ? indexBlock.searchBlock( this.startRow, 0, this.startRow.length,
+            snapshotId, Op.DELETE, b)
+          : indexBlock.firstBlock(b);
+    }
     // It can not be null
     this.currentDataBlock = b;
     if (b == null) {
@@ -122,7 +188,22 @@ public final class IndexBlockScanner implements Closeable{
 
   }
  
-
+  /**
+   * Is this scanner safe to use in multiple instances in the context
+   * of a single thread?
+   * @return
+   */
+  boolean isMultiInstanceSafe() {
+    return this.isMultiSafe;
+  }
+  
+  /**
+   * Set multiple instances safe
+   * @param b
+   */
+  void setMultiInstanceSafe(boolean b) {
+    this.isMultiSafe = b;
+  }
   /**
    * Set scanner with new block
    * @param b block
@@ -149,7 +230,7 @@ public final class IndexBlockScanner implements Closeable{
         this.curDataBlockScanner = null;
       } catch (IOException e) {
       }
-      this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock);
+      this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock, !isMultiSafe);
 
       if (this.currentDataBlock == null) {
         this.closed = true;
@@ -164,12 +245,26 @@ public final class IndexBlockScanner implements Closeable{
           return null;
         }
       }
-      this.curDataBlockScanner =
+      if (!isMultiSafe) {
+        this.curDataBlockScanner =
           DataBlockScanner.getScanner(this.currentDataBlock, this.startRow, this.stopRow, snapshotId);
+      } else {
+        this.curDataBlockScanner =
+            DataBlockScanner.getScanner(this.currentDataBlock, this.startRow, this.stopRow, snapshotId,
+              this.curDataBlockScanner );
+      }
       return this.curDataBlockScanner;
     } else if(!closed){
-      this.curDataBlockScanner =
+      
+      if (!isMultiSafe) {
+        this.curDataBlockScanner =
           DataBlockScanner.getScanner(this.currentDataBlock, this.startRow, this.stopRow, snapshotId);
+      } else {
+        this.curDataBlockScanner =
+            DataBlockScanner.getScanner(this.currentDataBlock, this.startRow, this.stopRow, snapshotId,
+              this.curDataBlockScanner );
+      }
+      
       if (this.indexBlock.isFirstIndexBlock() && this.startRow == null &&
           this.curDataBlockScanner != null) {
         // skip system first entry : {0}{0}

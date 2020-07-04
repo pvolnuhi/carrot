@@ -9,6 +9,8 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * Scanner implementation
+ * TODO Scanner w/o thread locals
+ * WARNING: we can not create multiple scanners in a single thread
  * @author jenium65
  *
  */
@@ -26,7 +28,11 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
   private IndexBlockDirectMemoryScanner indexScanner;
   private IndexBlock currentIndexBlock;
   private long snapshotId;
+  private boolean isMultiSafe = false;
   
+  /**
+   * Multi - instance SAFE (can be used in multiple instances in context of a one thread)
+   */
   static ThreadLocal<IndexBlock> tlKey = new ThreadLocal<IndexBlock>() {
     @Override
     protected IndexBlock initialValue() {
@@ -34,8 +40,33 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
     }
   };
   
+  
+  /**
+   * Constructor in non safe mode
+   * @param map ordered map
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @param snapshotId snapshot id
+   */
   BigSortedMapDirectMemoryScanner(BigSortedMap map, long startRowPtr, 
     int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId) {
+    this(map, startRowPtr, startRowLength, stopRowPtr, stopRowLength, snapshotId, false);
+  }
+  /**
+   * Constructor in safe mode
+   * @param map ordered map
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @param snapshotId snapshot id
+   * @param isMultiSafe true - safe for maultiple instances
+   */
+  BigSortedMapDirectMemoryScanner(BigSortedMap map, long startRowPtr, 
+    int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId,
+    boolean isMultiSafe) {
     checkArgs(startRowPtr, startRowLength, stopRowPtr, stopRowLength);
     this.map = map;
     this.startRowPtr = startRowPtr;
@@ -43,6 +74,7 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
     this.stopRowPtr = stopRowPtr;
     this.stopRowLength = stopRowLength;
     this.snapshotId = snapshotId;
+    this.isMultiSafe = isMultiSafe;
     init();
   }
   
@@ -66,8 +98,15 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
     while(true) {
       try {
         currentIndexBlock = key != null? cmap.floorKey(key): cmap.firstKey();
-        indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
-          this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
+        
+        if (!isMultiSafe) {
+          indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
+            this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
+        } else {
+          indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
+            this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId, indexScanner);
+        }
+        
         blockScanner = indexScanner.nextBlockScanner(); 
         updateNextFirstKey();
         break;
@@ -155,9 +194,16 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
             nextBlockFirstKeySize = firstKey.length;
           }
           // set startRow to null, because it is out of range of a IndexBlockScanner
-          this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, nextBlockFirstKey, 
-            nextBlockFirstKeySize, stopRowPtr, 
-            stopRowLength, snapshotId);
+          if (!isMultiSafe) {
+            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, nextBlockFirstKey, 
+              nextBlockFirstKeySize, stopRowPtr, 
+              stopRowLength, snapshotId);
+          } else {
+            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, nextBlockFirstKey, 
+              nextBlockFirstKeySize, stopRowPtr, 
+              stopRowLength, snapshotId, indexScanner);
+          }
+          
           if (this.indexScanner == null) {
             return false;
           }

@@ -53,10 +53,19 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    */
   private DataBlock currentDataBlock;
   
+  /*
+   * Is closed
+   */
   private boolean closed = false;
   
   /*
-   * Thread local for scanner instance
+   * Is safe to use in multiple instances inside one thread?
+   */
+  private boolean isMultiSafe = false;
+  /*
+   * Thread local for scanner instance.
+   * Multiple instances UNSAFE (can not be used in multiple 
+   * instances in context of a one thread)
    */
   static ThreadLocal<IndexBlockDirectMemoryScanner> scanner = 
       new ThreadLocal<IndexBlockDirectMemoryScanner>() {
@@ -66,7 +75,13 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     }    
   };
   
-  
+  /**
+   * Get or create new scanner
+   * @param b data block
+   * @param snapshotId snapshot Id
+   * @return scanner 
+   * @throws RetryOperationException
+   */
   private static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long snapshotId) 
       throws RetryOperationException {
     IndexBlockDirectMemoryScanner bs = scanner.get();
@@ -75,9 +90,20 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     bs.snapshotId = snapshotId;
     return bs;
   }
-  
-  public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, 
-      long startRowPtr, int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId) 
+
+  /**
+   * Get scanner instance
+   * @param b data block
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @param snapshotId snapshot id
+   * @return scanner
+   * @throws RetryOperationException
+   */
+  public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long startRowPtr,
+      int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId)
       throws RetryOperationException {
     if (stopRowPtr != 0) {
       byte[] firstKey = b.getFirstKey();
@@ -85,14 +111,53 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
       if (res > 0) {
         return null; // out of range
       }
-    }    
-    try {     
-      // Lock index block   
+    }
+    try {
+      // Lock index block
       b.readLock();
       IndexBlockDirectMemoryScanner bs = getScanner(b, snapshotId);
       bs.setStartStopRows(startRowPtr, startRowLength, stopRowPtr, stopRowLength);
       return bs;
-    } catch(RetryOperationException e) {
+    } catch (RetryOperationException e) {
+      b.readUnlock();
+      throw e;
+    }
+  }
+
+  /**
+   * Get new scanner instance
+   * @param b data block
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @param snapshotId snapshot id
+   * @return scanner
+   * @throws RetryOperationException
+   */
+  public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long startRowPtr,
+      int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId,
+      IndexBlockDirectMemoryScanner bs)
+      throws RetryOperationException {
+    if (stopRowPtr != 0) {
+      byte[] firstKey = b.getFirstKey();
+      int res = Utils.compareTo(firstKey, 0, firstKey.length, stopRowPtr, stopRowLength);
+      if (res > 0) {
+        return null; // out of range
+      }
+    }
+    try {
+      // Lock index block
+      b.readLock();
+      if(bs == null) {
+        bs = new IndexBlockDirectMemoryScanner();
+      }
+      bs.setMultiInstanceSafe(true);
+      bs.setBlock(b);
+      bs.snapshotId = snapshotId;
+      bs.setStartStopRows(startRowPtr, startRowLength, stopRowPtr, stopRowLength);
+      return bs;
+    } catch (RetryOperationException e) {
       b.readUnlock();
       throw e;
     }
@@ -114,6 +179,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     this.currentDataBlock = null;
     this.snapshotId = 0;
     this.closed = false;
+    this.isMultiSafe = false;
   }
   
   private void setStartStopRows(long start, int startLength, long stop, int stopLength) {
@@ -121,21 +187,45 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     this.startRowLength = startLength;
     this.stopRowPtr = stop;
     this.stopRowLength = stopLength;
-    // Returns IndexBlock thread local
-    DataBlock b = this.startRowPtr != 0
+    // Returns IndexBlock thread local if isMutiSafe = false
+    DataBlock b = null;
+    if (!isMultiSafe) {
+      b = this.startRowPtr != 0
         ? indexBlock.searchBlock( this.startRowPtr,  this.startRowLength,
           snapshotId, Op.DELETE)
         : indexBlock.firstBlock();
         
+    } else {
+      b = new DataBlock();
+      b = this.startRowPtr != 0
+          ? indexBlock.searchBlock( this.startRowPtr,  this.startRowLength,
+            snapshotId, Op.DELETE, b)
+          : indexBlock.firstBlock(b);
+    }
     this.currentDataBlock = b;
+
     if (b == null) {
       // FATAL
       throw new RuntimeException("Index block scanner");
     }
-
   }
  
-
+  /**
+   * Is this scanner safe to use in multiple instances in the context
+   * of a single thread?
+   * @return
+   */
+  boolean isMultiInstanceSafe() {
+    return this.isMultiSafe;
+  }
+  
+  /**
+   * Set multiple instances safe
+   * @param b
+   */
+  void setMultiInstanceSafe(boolean b) {
+    this.isMultiSafe = b;
+  }
   /**
    * Set scanner with new block
    * @param b block
@@ -162,7 +252,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
         this.curDataBlockScanner = null;
       } catch (IOException e) {
       }
-      this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock);
+      this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock, !isMultiSafe);
 
       if (this.currentDataBlock == null) {
         this.closed = true;
@@ -177,14 +267,28 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
           return null;
         }
       }
-      this.curDataBlockScanner =
+      if (!isMultiSafe) {
+        this.curDataBlockScanner =
           DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
             this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
+      } else {
+        this.curDataBlockScanner =
+            DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
+              this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId,
+              this.curDataBlockScanner);
+      }
       return this.curDataBlockScanner;
     } else if(!closed){
-      this.curDataBlockScanner =
+      if (!isMultiSafe) {
+        this.curDataBlockScanner =
           DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
-              this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
+            this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
+      } else {
+        this.curDataBlockScanner =
+            DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
+              this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId,
+              this.curDataBlockScanner);
+      }
       if (this.indexBlock.isFirstIndexBlock() && this.startRowPtr == 0 &&
           this.curDataBlockScanner != null) {
         // skip system first entry : {0}{0}

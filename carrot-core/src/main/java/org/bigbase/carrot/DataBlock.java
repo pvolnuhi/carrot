@@ -238,7 +238,7 @@ public final class DataBlock  {
     LOG.info("First key      =" + Bytes.toHex(getFirstKey()));
   }
   /**
-   * Create new block with a given size
+   * Create new block with a given size (memory allocation)
    * @param size of a block
    */
   DataBlock(int size) {
@@ -251,6 +251,9 @@ public final class DataBlock  {
     this.blockSize = (short)size;
   }
 
+  /**
+   * Constructor w/o memory allocation and maximum size
+   */
   DataBlock() {
     String val = System.getProperty(MAX_BLOCK_SIZE_KEY);
     short size = 0;
@@ -259,12 +262,6 @@ public final class DataBlock  {
     } else {
       size = MAX_BLOCK_SIZE;
     }
-    dataPtr = UnsafeAccess.malloc(size);
-    if (dataPtr == 0) {
-      throw new RuntimeException("Failed to allocate " + size + " bytes");
-    }
-    BigSortedMap.totalAllocatedMemory.addAndGet(size);
-    BigSortedMap.totalBlockDataSize.addAndGet(size);
     this.blockSize = size;
   }
   
@@ -272,33 +269,7 @@ public final class DataBlock  {
     // First key = {0}
     return keyLength(dataPtr) == 1 && UnsafeAccess.toByte(keyAddress(dataPtr)) == 0;
   }
-  /**
-   * Copy constructor
-   * @param db
-   */
-  DataBlock(DataBlock db) {
-    this();
-    copyOf(db);
-  }
-  
-  /**
-   * For detached data block (used in IndexBlockScanner/DataBlockScanner)
-   * No locking is applied, because this method is called
-   * inside writeLock of an IndexBlock
-   * @param b block
-   */
-  private void copyOf(DataBlock b) {
-    this.dataInBlockSize = b.getDataInBlockSize();
-    this.numRecords = b.getNumberOfRecords();
-    this.numDeletedAndUpdatedRecords = b.getNumberOfDeletedAndUpdatedRecords();
-    //TODO: always valid here?
-    this.valid = b.isValid();
-    this.compressed = b.isCompressed();
-    this.seqNumberSplitOrMerge = b.getSeqNumberSplitOrMerge();
-    // This block is going to be used by single thread
-    this.threadSafe = true;
-    UnsafeAccess.copy(b.dataPtr, this.dataPtr, this.dataInBlockSize);
-  }
+ 
   
   final boolean isValid() {
     return valid;
@@ -1912,6 +1883,42 @@ public final class DataBlock  {
     return stopAddress;
   }
 
+  /**
+   * Search position of a first key which is less or equals to a given key
+   * @param keyPtr
+   * @param keyLength
+   * @return address to insert (or update)
+   */
+  final long searchFloor(long keyPtr, int keyLength, long version) {
+    long ptr = dataPtr;
+    long stopAddress =0;
+    int numRecords = getNumberOfRecords();
+    int dataSize = getDataInBlockSize();
+    long txId = BigSortedMap.getMostRecentActiveTxSeqId();
+    long prevPtr = NOT_FOUND;
+    stopAddress = dataPtr + dataSize;
+    while (ptr < stopAddress) {
+      int keylen = keyLength(ptr);     
+      int vallen = blockValueLength(ptr);
+      int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
+      if (res < 0) {
+        return prevPtr; // can be NOT_FOUND
+      } else if (res == 0) {
+        // check versions
+        long ver = getRecordSeqId(ptr);
+        if (ver <= version) {
+          return ptr;
+        } else if (version > txId) {
+          return NOT_FOUND;
+        }
+      }
+      prevPtr = ptr;
+      keylen = blockKeyLength(ptr);
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    }
+    // after the last record
+    return NOT_FOUND;
+  }
 
   
   /**
@@ -2520,6 +2527,23 @@ public final class DataBlock  {
     }
   }
 
+  public long get(long keyPtr, int keyLength, long version, boolean floor) {
+    if (!floor) {
+      return get(keyPtr, keyLength, version);
+    }
+    try {
+      if (isForbiddenKey(keyPtr, keyLength)) {
+        // Return NOT FOUND TODO
+        return NOT_FOUND;
+      }
+      readLock();
+      long addr = searchFloor(keyPtr, keyLength, version);
+      return addr;
+    } finally {
+      readUnlock();
+    }
+  }
+  
   /**
    * Get key-value offset in a block
    * @param key
@@ -3091,4 +3115,5 @@ public final class DataBlock  {
     UnsafeAccess.copy(addr, buf, 0, len);
     return buf;
   }
+
 }

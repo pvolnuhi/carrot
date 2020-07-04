@@ -1,12 +1,14 @@
 package org.bigbase.carrot.updates;
 
+import java.io.IOException;
+
 /**
  * This class encapsulate read-modify-write 
  * transactional access pattern. Subclasses must provide
  * key (address, size), version and implement execute()
  * operation. The result can be one or two PUTs, which will be 
  * executed in the context of this atomic operation
- * @author vrodionov
+ * @author Vladimir Rodionov
  *
  */
 public abstract class Update {
@@ -14,49 +16,54 @@ public abstract class Update {
   /*
    * operation sequence number
    */
-  long version;
+  protected long version;
   /*
    * Key address associated with update
    */
-  long keyAddress;
+  protected long keyAddress;
   
   /*
    * Expiration
    */
-  long expire;
+  protected long expire;
   
   /*
    * Key size
    */
-  int keySize;
+  protected int keySize;
   /*
    * Found K-V record address
    */
-  long foundRecordAddress;
+  protected long foundRecordAddress;
 
   /* 
    * These are result of update operation
    * There can be 1 or 2 K_V pairs to insert
    * Result key addresses
    */
-  long[] keys = new long[2];
+  protected long[] keys = new long[2];
   /*
    * Result key sizes 
    */
-  int[]  keySizes = new int[2];
+  protected int[]  keySizes = new int[2];
   /*
    * Result value addresses
    */
-  long[] values = new long[2];
+  protected long[] values = new long[2];
   /*
    * Result value sizes
    */
-  int[] valueSizes = new int[2];
-  
+  protected int[] valueSizes = new int[2];
   /*
-   * Number of results (1 or 2 updates/puts) 
+   * Update types for updates: false - PUT, true - Delete
    */
-  int updatesCount; // 1 or 2
+  protected boolean[] updateTypes = new boolean[] {false, false};
+  /*
+   * Number of results (0, 1,  2 updates/puts/ deletes) 
+   */
+  protected int updatesCount; // 1 or 2
+  
+  protected boolean floorKey = false; // if true, look for largest key which less or equals
   
   public Update() {
   }
@@ -106,6 +113,17 @@ public abstract class Update {
     this.valueSizes[0] = 0;
     this.valueSizes[1] = 0;
     this.foundRecordAddress = 0;
+    this.updateTypes[0] = false;
+    this.updateTypes[1] = false;
+    this.floorKey = false;
+  }
+  
+  public final void setFloorKey(boolean b) {
+    this.floorKey = b;
+  }
+  
+  public final boolean isFloorKey() {
+    return floorKey;
   }
   
   /**
@@ -121,7 +139,7 @@ public abstract class Update {
    * Execute update operation on a found K-V record
    * @return true, if success, false - to abort
    */
-  public abstract boolean execute();
+  public abstract boolean execute() ;
   
  
   /**
@@ -166,5 +184,11 @@ public abstract class Update {
   public final int[] valueSizes() {
     return valueSizes;
   }
-  
+  /**
+   * Get update types for update operations
+   * @return
+   */
+  public final boolean[] updateTypes() {
+    return updateTypes;
+  }
 }

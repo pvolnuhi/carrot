@@ -3,6 +3,7 @@ package org.bigbase.carrot.util;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 
 import org.bigbase.carrot.Key;
 
@@ -10,10 +11,10 @@ import sun.misc.Unsafe;
 
 public class Utils {
 
-  final static int SIZEOF_LONG = 8;
-  final static int SIZEOF_INT = 4;
-  final static int SIZEOF_SHORT = 2;
-  final static int SIZEOF_BYTE = 1;
+  public final static int SIZEOF_LONG = 8;
+  public final static int SIZEOF_INT = 4;
+  public final static int SIZEOF_SHORT = 2;
+  public final static int SIZEOF_BYTE = 1;
   
 
   /**
@@ -440,4 +441,136 @@ public class Utils {
       }
     });
   }
+  
+  /**
+   * Calculates end key for prefix scanner
+   * @param start start key address
+   * @param startSize start key size
+   * @return end key address if success, or -1
+   */
+  public static long prefixKeyEnd(long start, int startSize) {
+    long end = UnsafeAccess.malloc(startSize);
+    UnsafeAccess.copy(start, end, startSize);
+    for( int i = startSize - 1; i >=0; i--) {
+      int v = UnsafeAccess.toByte(end + i) & 0xff; 
+      if (v == 0xff) {
+        continue;
+      } else {
+        UnsafeAccess.putByte(end + i, (byte)(v+1));
+        return end;
+      }
+    }
+    return -1;
+  }
+  
+  /**
+   * Read unsigned VarInt
+   * @param ptr address to read from
+   * @return int value
+   */
+  public static int readUVInt(long ptr) {
+    int v1 = UnsafeAccess.toByte(ptr) & 0xff;
+    
+    int cont = v1 >>> 7; // either 0 or 1
+    ptr += cont;
+    v1 &= 0x7f; // set 8th bit 0
+    int v2 = (byte) (UnsafeAccess.toByte(ptr) * cont) & 0xff;
+    cont = v2 >>> 7;
+    ptr += cont;
+    v2 &= 0x7f;
+    int v3 = (byte)(UnsafeAccess.toByte(ptr) * cont) & 0xff;
+    cont = v3 >>> 7;
+    ptr += cont;
+    v3 &= 0x7f;
+    int v4 = (byte)(UnsafeAccess.toByte(ptr) * cont) & 0xff;
+    v4 &= 0x7f;
+    return v1 + (v2 << 7) + (v3 << 14) + (v4 << 21);
+  }
+  
+  /**
+   * Returns size of unsigned variable integer in bytes
+   * @param value
+   * @return size in bytes
+   */
+  public static int sizeUVInt(int value) {
+    if (value < v1) {
+      return 1;
+    } else if (value < v2) {
+      return 2;
+    } else if (value < v3) {
+      return 3;
+    } else if (value < v4){
+      return 4;
+    }   
+    return 0;
+  }
+  
+  final static int v1 = 1 << 7;
+  final static int v2 = 1 << 14;
+  final static int v3 = 1 << 21;
+  final static int v4 = 1 << 28;
+  /**
+   * Writes unsigned variable integer
+   * @param ptr address to write to
+   * @param value 
+   * @return number of bytes written
+   */
+  public static int writeUVInt(long ptr, int value) {
+    
+    
+    if (value < v1) {
+      UnsafeAccess.putByte(ptr, (byte) value);
+      return 1;
+    } else if (value < v2) {
+      UnsafeAccess.putByte(ptr, (byte) ((value & 0xff) | 0x80));
+      UnsafeAccess.putByte(ptr + 1, (byte)(value >>> 7));
+      return 2;
+    } else if (value < v3) {
+      UnsafeAccess.putByte(ptr, (byte) ((value & 0xff) | 0x80));
+      UnsafeAccess.putByte(ptr + 1, (byte)((value >>> 7) | 0x80));
+      UnsafeAccess.putByte(ptr + 2, (byte)(value >>> 14));
+      return 3;
+    } else if (value < v4){
+      UnsafeAccess.putByte(ptr, (byte) ((value & 0xff) | 0x80));
+      UnsafeAccess.putByte(ptr + 1, (byte)((value >>> 7) | 0x80));
+      UnsafeAccess.putByte(ptr + 2, (byte)((value >>> 14) | 0x80));
+      UnsafeAccess.putByte(ptr + 3, (byte)(value >>> 21));
+      return 4;
+    }   
+    return 0;
+  }
+  
+  public static void main(String[] args) {
+    int count =0;
+    int num = 100000000;
+    long ptr = UnsafeAccess.malloc(num);
+    while( count++ < 1000) {
+      encode(ptr, num);
+      
+      long t1 = System.currentTimeMillis();
+      long total = decode(ptr, num);
+      long t2 = System.currentTimeMillis();
+      
+      System.out.println("total="+ total +" time="+(t2-t1)+"ms");
+    }
+  }
+  
+  private static long encode (long ptr, int num) {
+    Random r = new Random();
+    for (int i=0; i < num; i++) {
+      writeUVInt(ptr + i, r.nextInt(128));
+    }
+    return ptr;
+  }
+  
+  private static long decode(long ptr, int size) {
+    int  off = 0;
+    long totalSize = 0;
+    while (off < size) {
+      totalSize+=readUVInt(ptr + off);
+      off++;
+    }
+    return totalSize;
+  }
+  
 }

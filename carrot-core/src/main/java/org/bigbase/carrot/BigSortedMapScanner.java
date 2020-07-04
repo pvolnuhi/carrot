@@ -22,7 +22,10 @@ public class BigSortedMapScanner implements Closeable{
   private IndexBlockScanner indexScanner;
   private IndexBlock currentIndexBlock;
   private long snapshotId;
-  
+  private boolean isMultiSafe = false;
+  /**
+   * Multi - instance SAFE (can be used in multiple instances in context of a one thread)
+   */
   static ThreadLocal<IndexBlock> tlKey = new ThreadLocal<IndexBlock>() {
     @Override
     protected IndexBlock initialValue() {
@@ -31,11 +34,17 @@ public class BigSortedMapScanner implements Closeable{
   };
   
   BigSortedMapScanner(BigSortedMap map, byte[] start, byte[] stop, long snapshotId) {
+    this(map, start, stop, snapshotId, false);
+  }
+  
+  BigSortedMapScanner(BigSortedMap map, byte[] start, byte[] stop, long snapshotId,
+    boolean isMultiSafe) {
     checkArgs(startRow, stopRow);
     this.map = map;
     this.startRow = start;
     this.stopRow = stop;
     this.snapshotId = snapshotId;
+    this.isMultiSafe = isMultiSafe;
     init();
   }
   
@@ -59,8 +68,13 @@ public class BigSortedMapScanner implements Closeable{
     while(true) {
       try {
         currentIndexBlock = key != null? cmap.floorKey(key): cmap.firstKey();
-        indexScanner = IndexBlockScanner.getScanner(currentIndexBlock, this.startRow, 
-          this.stopRow, snapshotId);
+        if (isMultiSafe) {
+          indexScanner = IndexBlockScanner.getScanner(currentIndexBlock, this.startRow, 
+            this.stopRow, snapshotId, indexScanner);
+        } else {
+          indexScanner = IndexBlockScanner.getScanner(currentIndexBlock, this.startRow, 
+            this.stopRow, snapshotId);
+        }
         blockScanner = indexScanner.nextBlockScanner(); 
         updateNextFirstKey();
         break;
@@ -136,7 +150,15 @@ public class BigSortedMapScanner implements Closeable{
             nextBlockFirstKey, 0, nextBlockFirstKey.length) > 0) {
             nextBlockFirstKey = firstKey;
           }
-          this.indexScanner = IndexBlockScanner.getScanner(tmp, nextBlockFirstKey, stopRow, snapshotId);
+          
+          //this.indexScanner = IndexBlockScanner.getScanner(tmp, nextBlockFirstKey, stopRow, snapshotId);
+          if (isMultiSafe) {
+            indexScanner = IndexBlockScanner.getScanner(tmp, nextBlockFirstKey, 
+              this.stopRow, snapshotId, indexScanner);
+          } else {
+            indexScanner = IndexBlockScanner.getScanner(tmp, nextBlockFirstKey, 
+              this.stopRow, snapshotId);
+          }
           if (this.indexScanner == null) {
             return false;
           }
