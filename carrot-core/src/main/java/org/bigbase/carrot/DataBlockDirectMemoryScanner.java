@@ -8,7 +8,6 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * Thread unsafe implementation
- * TODO: stopRow logic
  */
 public final class DataBlockDirectMemoryScanner implements Closeable{
 
@@ -206,6 +205,50 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     this.curPtr = this.ptr + dataSize;
   }
 
+  /**
+   * Search last record, which is less or equals to a given key
+   * @param key key array
+   * @param keyOffset offset in a key array
+   * @param keyLength  length of a key in bytes
+   * @param snapshotId snapshot Id of a scanner
+   * @param type op type 
+   */
+  void searchBefore(long key, int keyLength, long snapshotId, Op type) {
+    long ptr = this.ptr;
+    long prevPtr = ptr;
+    int count = 0;
+    while (count++ < numRecords) {
+      int keylen = DataBlock.keyLength(ptr);
+      int vallen = DataBlock.valueLength(ptr);
+      int res =
+          Utils.compareTo(key, keyLength, DataBlock.keyAddress(ptr), keylen);
+      if (res < 0) {
+        this.curPtr = prevPtr;
+        return;
+      } else if (res == 0) {
+        // check version
+        long version = DataBlock.version(ptr);
+        if (version < this.snapshotId) {
+          this.curPtr = ptr;
+          return;
+        } else if (version == this.snapshotId) {
+          Op type_ = DataBlock.getRecordType(ptr);
+          if (type.ordinal() <= type_.ordinal()) {
+            this.curPtr = ptr;
+            return;
+          }
+        }
+      }
+      keylen = DataBlock.blockKeyLength(ptr);
+      vallen = DataBlock.blockValueLength(ptr);
+      prevPtr = ptr;
+      ptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+
+    }
+    // after the last record
+    this.curPtr = this.ptr + dataSize;
+  }
+  
   private void setStopRow(long ptr, int len) {
     this.stopRowPtr = ptr;
     this.stopRowLength = len;
@@ -287,6 +330,20 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     }
   }
 
+  /**
+   * Advance backwards by one from a a given key if 
+   * not equals to this key
+   * @param keyPtr key address
+   * @param keySize key size
+   */
+  public final void previous(long keyPtr, int keySize) {
+    long kPtr = keyAddress();
+    int  kSize = keySize();
+    if (Utils.compareTo(kPtr, kSize, keyPtr, keySize) <= 0) {
+      return ;
+    }
+    searchBefore(keyPtr, keySize, snapshotId, Op.DELETE);
+  }
   /**
    * Get current address of a k-v in a scanner
    * @return address of a record

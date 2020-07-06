@@ -1,4 +1,4 @@
-package org.bigbase.carrot.extensions.sets;
+package org.bigbase.carrot.extensions.hashes;
 
 import static org.bigbase.carrot.extensions.Commons.KEY_SIZE;
 import static org.bigbase.carrot.extensions.Commons.elementAddressFromKey;
@@ -9,29 +9,24 @@ import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.Utils;
 
+public class HashValueLength extends Operation{
 
-
-/**
- * Although not a mutation this operation is executed as a mutation
- * to avoid copy - on -read. It checks if element exists in a set defined by a
- * Key in place w/o copying Value data.
- * @author Vladimir Rodionov
- *
- */
-public class SetExists extends Operation{
-  // TODO: use own keyArena
-
-    
-  public SetExists() {
+  private int foundValueSize = -1;
+  
+  public HashValueLength() {
     setFloorKey(true);
   }
-  
+
   @Override
   public void reset() {
     super.reset();
     setFloorKey(true);
+    foundValueSize = -1;
   }
     
+  public int getFoundValueSize() {
+    return foundValueSize;
+  }
   
   @Override
   public boolean execute() {
@@ -51,13 +46,17 @@ public class SetExists extends Operation{
       return false;
     }
     
-    long elementPtr = elementAddressFromKey(keyAddress);
-    int elementSize = elementSizeFromKey(keyAddress, keySize);
+    long fieldPtr = elementAddressFromKey(keyAddress);
+    int fieldSize = elementSizeFromKey(keyAddress, keySize);
     // Set no updates
     updatesCount = 0;
-    // First two bytes are number of elements in a value
-    return Sets.exactSearch(foundRecordAddress, elementPtr, elementSize) > 0;
+    long address = Hashes.exactSearch(foundRecordAddress, fieldPtr, fieldSize);
+    if (address < 0) {
+      this.foundValueSize = -1;
+      return false;
+    }
+    // size of a field-value pair
+    foundValueSize = Hashes.getValueSize(address);    
+    return true;
   }
-  
-
 }

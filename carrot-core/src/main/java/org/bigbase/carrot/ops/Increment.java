@@ -1,4 +1,4 @@
-package org.bigbase.carrot.updates;
+package org.bigbase.carrot.ops;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -8,7 +8,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * @author Vladimir Rodionov
  *
  */
-public class Increment extends Update {
+public class Increment extends Operation {
   
   long value;
   

@@ -7,13 +7,18 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.bigbase.carrot.updates.Update;
+import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.Utils;
 
 public class BigSortedMap {
 	
   Log LOG = LogFactory.getLog(BigSortedMap.class);
-  private static ThreadLocal<IndexBlock> keyBlock = new ThreadLocal<IndexBlock>();  
+  /*
+   * Thread local storage for index blocks used as a key in a 
+   * Map<IndexBlock,IndexBlock> operations
+   */
+  private static ThreadLocal<IndexBlock> keyBlock = new ThreadLocal<IndexBlock>(); 
+  
   public final static String MAX_MEMORY_KEY = "map.max.memory";
   private ConcurrentSkipListMap<IndexBlock, IndexBlock> map = 
 		  new ConcurrentSkipListMap<IndexBlock, IndexBlock>();
@@ -100,31 +105,47 @@ public class BigSortedMap {
     activeSnapshots.put(id,  id);
     return id;
   }
-  
+  /**
+   * Release snapshot by Id
+   * @param id
+   */
   public static void releaseSnapshot(long id) {
     activeSnapshots.remove(id);
   }
   
+  /**
+   * Gets max block size (data)
+   * @return size
+   */
   public static int getMaxBlockSize() {
 	  return maxBlockSize;
   }
   
+  /**
+   * Sets maximum data block size
+   * @param size
+   */
   public static void setMaxBlockSize(int size) {
 	  maxBlockSize = size;
   }
   
+  /**
+   * Gets maximum index block size
+   * @return size
+   */
   public static int getMaxIndexBlockSize() {
 	  return maxIndexBlockSize;
   }
     
+  /**
+   * Constructor of a big sorted map
+   * @param maxMemory - memory limit in bytes
+   */
   public BigSortedMap(long maxMemory) {
     this.maxMemory = maxMemory;
     initNodes();
   }
   
-  public int getBlockSize() {
-    return maxBlockSize;
-  }
   
   /**
    * Get total allocated memory
@@ -179,9 +200,13 @@ public class BigSortedMap {
     return totalDataInIndexBlocksSize.get();
   }
   
+  /** 
+   * Gets maximum memory limit
+   */
   public long getMaxMemory() {
     return maxMemory;
   }
+  
   
   public void dumpStats() {
     long totalRows = 0;
@@ -201,15 +226,18 @@ public class BigSortedMap {
   }
   
   /**
-   * TODO: do we need this locking?
-   * @param b
+   * Lock on index block
+   * @param b index block to lock on
    */
   private void lock(IndexBlock b) {
     int i = (int) (b.hashCode() % locks.length);
     ReentrantLock lock = locks[i];
     lock.lock();
   }
-  
+  /**
+   * Unlock lock
+   * @param b index block
+   */
   private void unlock(IndexBlock b) {
     if (b == null) return;
     int i = (int) (b.hashCode() % locks.length);
@@ -250,10 +278,22 @@ public class BigSortedMap {
     return kvBlock;
   }
   
+  /**
+   * Returns native map
+   * @return map
+   */
   ConcurrentSkipListMap<IndexBlock, IndexBlock> getMap() {
     return map;
   }
   
+  /**
+   * Verifies arguments are valid
+   * @param buf buffer
+   * @param off offset
+   * @param len length
+   * @throws NullPointerException
+   * @throws IllegalArgumentException
+   */
   private void verifyArgs(byte[] buf, int off, int len) 
   	throws NullPointerException, IllegalArgumentException
   {
@@ -273,18 +313,15 @@ public class BigSortedMap {
     return sequenceID.get();
   }
   
-  private long incrementSequenceId() {
-    return sequenceID.incrementAndGet();
-  }
   
   /**
-   * Put operation
-   * @param key
-   * @param keyOffset
-   * @param keyLength
-   * @param value
-   * @param valueOffset
-   * @param valueLength
+   * Put key -value operation
+   * @param key key buffer
+   * @param keyOffset key offset in a buffer
+   * @param keyLength key length
+   * @param value value buffer
+   * @param valueOffset value offset in a buffer
+   * @param valueLength value length
    * @return true, if success, false otherwise (no room, split block)
    * @throws RetryOperationException 
    */
@@ -335,6 +372,10 @@ public class BigSortedMap {
 
   }
   
+  /**
+   * Put index block into map
+   * @param b index block
+   */
   private void putBlock(IndexBlock b) {
     while(true) {
        try {
@@ -349,9 +390,9 @@ public class BigSortedMap {
   /**
    * Execute generic read - modify - write operation in a single update
    * @param op - update operation
-   * @return true or false
+   * @return true if operation succeeds, false otherwise
    */
-  public boolean update(Update op) {
+  public boolean update(Operation op) {
     long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
     op.setVersion(version);
@@ -485,11 +526,12 @@ public class BigSortedMap {
   }
 
   /**
-   * Put k-v operation
-   * @param keyPtr
-   * @param keyLength
-   * @param valuePtr
-   * @param valueLength
+   * Put key-value operation
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param valuePtr value address
+   * @param valueLength value length
+   * @param expire expiration time
    * @return true, if success, false otherwise
    */
   public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long expire) {
@@ -534,14 +576,11 @@ public class BigSortedMap {
   }
   
   /**
-   * Delete operation
-   * TODO: compact on deletion
-   * TODO: REmove IndxeNode if empty
-   * TODO: check if IndexNode is valid after obtaining lock
+   * Delete key operation
    * 
-   * @param key
-   * @param keyOffset
-   * @param keyLength
+   * @param key key buffer
+   * @param keyOffset key offset
+   * @param keyLength key length
    * @return true, if success, false otherwise
    */
   
@@ -595,10 +634,9 @@ public class BigSortedMap {
   }
   
   /**
-   * Delete operation
-   * TODO: compact on deletion 
-   * @param keyPtr
-   * @param keyLength
+   * Delete key operation
+   * @param keyPtr key address
+   * @param keyLength key length
    * @return true if success, false otherwise
    */
   public boolean delete(long keyPtr, int keyLength) {
@@ -649,10 +687,13 @@ public class BigSortedMap {
   }
   
   /**
-   * Get value by key in a block
-   * @param key
-   * @param keyOffset
-   * @param keyLength
+   * Get value by key
+   * @param key key buffer
+   * @param keyOffset key offset
+   * @param keyLength key length
+   * @param valueBuf value buffer
+   * @param valueOffset value offset
+   * @param version version
    * @return value length or NOT_FOUND if not found
    *         caller MUST verify that valueBuf.length > value length + valOffset   
    */
@@ -701,11 +742,12 @@ public class BigSortedMap {
   }
   
   /**
-   * Get key-value offset in a block
-   * @param key
-   * @param keyOffset
-   * @param keyLength
+   * Get value by key 
+   * @param keyPtr address to look for
+   * @param keyLength key length
+   * @param valueBuf value buffer address
    * @param valueBufLength value buffer length
+   * @param version version
    * @return value length if found, or NOT_FOUND. if value length >  valueBufLength
    *          no copy will be made - one must repeat call with new value buffer
    */
@@ -753,28 +795,28 @@ public class BigSortedMap {
   
   
   /**
-   * Exists
-   * @param key
-   * @param offset
-   * @param len
-   * @return true, false
+   * Checks if key exists in a map
+   * @param key buffer
+   * @param offset offset in a buffer
+   * @param len key length
+   * @return true if exists, false otherwise
    */
   public boolean exists(byte[] key, int offset, int len) {
     return get(key, offset, len, key, key.length -1, Long.MAX_VALUE) > 0;
   }
   
   /**
-   * Exists API
-   * @param key
-   * @param len
-   * @return true, false
+   * Checks if key exists in a map
+   * @param key key address
+   * @param len key length
+   * @return true if exists, false - false otherwise
    */
   public  boolean exists(long key, int len) {
     return get(key, len,  key, 0, Long.MAX_VALUE) > 0;
 
   }
   /**
-   * Get first key
+   * Get first key in a map
    * @return first key
    * @throws IOException 
    */
@@ -813,9 +855,10 @@ public class BigSortedMap {
   }
 
   /**
-   *  Get scanner
+   *  Get scanner (single instance per thread)
    *  @param start start row (inclusive)
    *  @param stop stop row (exclusive)
+   *  @return scanner
    */
   public BigSortedMapScanner getScanner(byte[] start, byte[] stop) {
     long snapshotId = getSequenceId();
@@ -828,8 +871,30 @@ public class BigSortedMap {
     }
   }
   
+  
   /**
-   * Get scanner (direct memory)
+   *  Get safe scanner, which is safe to run in multiple instances
+   *  @param start start row (inclusive)
+   *  @param stop stop row (exclusive)
+   */
+  public BigSortedMapScanner getSafeScanner(byte[] start, byte[] stop) {
+    long snapshotId = getSequenceId();
+    while(true) {
+      try {
+        return new BigSortedMapScanner(this, start, stop, snapshotId, true);
+      }catch (RetryOperationException e) {
+        continue;
+      }
+    }
+  }
+  
+  /**
+   * Get scanner (single instance per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @return scanner
    */
   public BigSortedMapDirectMemoryScanner getScanner(long startRowPtr, int startRowLength, 
       long stopRowPtr, int stopRowLength) {
@@ -845,8 +910,31 @@ public class BigSortedMap {
   }
   
   /**
-   * Get prefix scanner (direct memory)
-   * 
+   * Get safe scanner (multiple instances per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @return scanner
+   */
+  public BigSortedMapDirectMemoryScanner getSafeScanner(long startRowPtr, int startRowLength, 
+      long stopRowPtr, int stopRowLength) {
+    long snapshotId = getSequenceId();
+    while(true) {
+      try {
+        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+          stopRowPtr, stopRowLength, snapshotId, true); 
+      } catch (RetryOperationException e) {
+        continue;
+      }
+    }
+  }
+  
+  /**
+   * Get prefix scanner (single instance per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength stop row address
+   * @return scanner
    */
   
   public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength) {
@@ -858,6 +946,25 @@ public class BigSortedMap {
     return getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
   }
   
+  /**
+   * Get safe prefix scanner (multiple instances per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength stop row address
+   * @return scanner
+   */
+  
+  public BigSortedMapDirectMemoryScanner getSafePrefixScanner(long startRowPtr, int startRowLength) {
+    long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
+    if (endRowPtr == -1) {
+      return null;
+    }
+    
+    return getSafeScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
+  }
+  
+  /**
+   * Disposes map, deallocate all the memory
+   */
   public void dispose() {
     for(IndexBlock b: map.keySet()) {
     	b.free();

@@ -1,5 +1,7 @@
 package org.bigbase.carrot.extensions.sets;
 
+import static org.bigbase.carrot.extensions.Commons.NUM_ELEM_SIZE;
+
 import java.io.Closeable;
 import java.io.IOException;
 
@@ -27,8 +29,8 @@ public class SetScanner implements Closeable{
     // TODO Auto-generated method stub
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
-    this.offset = Sets.NUM_ELEM_SIZE;
-    if (this.valueSize > Sets.NUM_ELEM_SIZE) {
+    this.offset = NUM_ELEM_SIZE;
+    if (this.valueSize > NUM_ELEM_SIZE) {
       this.elementSize = Utils.readUVInt(valueAddress + offset);
       this.elementAddress = valueAddress + offset + Utils.sizeUVInt(this.elementSize);
     } else {
@@ -40,7 +42,8 @@ public class SetScanner implements Closeable{
 
   public boolean hasNext() throws IOException {
     if (offset < valueSize) {
-      return elementAddress + elementSize < valueAddress + valueSize;
+      return elementAddress + elementSize + Utils.sizeUVInt(elementSize) 
+        < valueAddress + valueSize;
     }
     // TODO next K-V can not have 0 elements - it must be deleted
     // but first element can, so we has to check what next() call return
@@ -50,8 +53,8 @@ public class SetScanner implements Closeable{
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
       // check if it it is not empty
-      this.offset = Sets.NUM_ELEM_SIZE;
-      if (valueSize <= Sets.NUM_ELEM_SIZE) {
+      this.offset = NUM_ELEM_SIZE;
+      if (valueSize <= NUM_ELEM_SIZE) {
         // empty set in K-V? Must be deleted
         continue;
       } else {
@@ -64,8 +67,8 @@ public class SetScanner implements Closeable{
   public boolean next() throws IOException {
     if (offset < valueSize) {
       int elSize = Utils.readUVInt(valueAddress + offset);
-      int lenSize =Utils.sizeUVInt(elSize);
-      offset += elSize + lenSize;
+      int elSizeSize =Utils.sizeUVInt(elSize);
+      offset += elSize + elSizeSize;
       if (offset < valueSize) {
         this.elementSize = Utils.readUVInt(valueAddress + offset);
         this.elementAddress = valueAddress + offset + Utils.sizeUVInt(this.elementSize);
@@ -80,11 +83,13 @@ public class SetScanner implements Closeable{
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
       // check if it it is not empty
-      this.offset = Sets.NUM_ELEM_SIZE;
-      if (valueSize <= Sets.NUM_ELEM_SIZE) {
+      this.offset = NUM_ELEM_SIZE;
+      if (valueSize <= NUM_ELEM_SIZE) {
         // empty set in K-V? Must be deleted
         continue;
       } else {
+        this.elementSize = Utils.readUVInt(valueAddress + offset);
+        this.elementAddress = valueAddress + offset + Utils.sizeUVInt(this.elementSize);
         return true;
       }
     }

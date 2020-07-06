@@ -1,17 +1,17 @@
-package org.bigbase.carrot.updates;
+package org.bigbase.carrot.ops;
 
-import java.io.IOException;
 
 /**
  * This class encapsulate read-modify-write 
  * transactional access pattern. Subclasses must provide
  * key (address, size), version and implement execute()
  * operation. The result can be one or two PUTs, which will be 
- * executed in the context of this atomic operation
+ * executed in the context of this atomic operation or one Delete and PUT
+ * or no updates at all
  * @author Vladimir Rodionov
  *
  */
-public abstract class Update {
+public abstract class Operation {
 
   /*
    * operation sequence number
@@ -65,7 +65,7 @@ public abstract class Update {
   
   protected boolean floorKey = false; // if true, look for largest key which less or equals
   
-  public Update() {
+  public Operation() {
   }
   
   public final void setExpire(long expire) {

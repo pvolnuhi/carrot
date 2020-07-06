@@ -1,9 +1,9 @@
-package org.bigbase.carrot.updates;
+package org.bigbase.carrot.ops;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.util.UnsafeAccess;
 
-public class Append extends Update {
+public class Append extends Operation {
   
   long appendValuePtr;
   int appendValueSize;

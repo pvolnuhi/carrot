@@ -46,6 +46,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	public final static double MAX_MERGE_RATIO = 0.25d;
 
 	public final static String MAX_BLOCK_SIZE_KEY = "max.index.block.size";
+	/*
+	 * TODO: check usage for DataBlocks
+	 */
 	public static int MAX_BLOCK_SIZE = 4096;
 
 	public final static int DATA_BLOCK_STATIC_PREFIX = 19;

@@ -1,4 +1,4 @@
-package org.bigbase.carrot.extensions.sets;
+package org.bigbase.carrot.extensions.hashes;
 
 import static org.bigbase.carrot.extensions.Commons.KEY_SIZE;
 import static org.bigbase.carrot.extensions.Commons.NUM_ELEM_SIZE;
@@ -15,16 +15,13 @@ import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
-
-
-
 /**
  * This read-modify-write mutation is executed atomically and isolated
  * It adds new element to a given set, defined by a Key
  * @author Vladimir Rodionov
  *
  */
-public class SetAdd extends Operation{
+public class HashSet extends Operation{
   
   static long ZERO = UnsafeAccess.malloc(0);  
   static {
@@ -45,15 +42,6 @@ public class SetAdd extends Operation{
     }
   };
   
-  public SetAdd() {
-    setFloorKey(true);
-  }
-  
-  @Override
-  public void reset() {
-    super.reset();
-    setFloorKey(true);
-  }
     
   /**
    * Checks key arena size
@@ -93,6 +81,37 @@ public class SetAdd extends Operation{
     }
     return kSize;
   }
+
+  private long fieldValueAddress;
+  private int fieldValueSize;
+  private boolean ifNotExists = false;
+  
+  public HashSet() {
+    setFloorKey(true);
+  }
+  
+  @Override
+  public void reset() {
+    super.reset();
+    setFloorKey(true);
+    this.fieldValueAddress = 0;
+    this.fieldValueSize = 0;
+    this.ifNotExists = false;
+  }
+  
+  /**
+   * Sets field's value address
+   * @param address value address
+   * @param size value size
+   */
+  public void setFieldValue(long address, int size) {
+    this.fieldValueAddress = address;
+    this.fieldValueSize = size;
+  }
+  
+  public void setIfNotExists(boolean b) {
+    this.ifNotExists = b;
+  }
   
   @Override
   public boolean execute() {
@@ -109,22 +128,23 @@ public class SetAdd extends Operation{
       setKeySize +  KEY_SIZE) != 0) {
       // Set does not exist yet
       // Insert new set KV
-      insertNewKVandElement(ZERO, 1);
+      insertNewKVandFieldValue(ZERO, 1);
       return true;
     }
     // Set exists
-    long elementPtr = elementAddressFromKey(keyAddress);
-    int elementSize = elementSizeFromKey(keyAddress, keySize);
+    long fieldPtr = elementAddressFromKey(keyAddress);
+    int fieldSize = elementSizeFromKey(keyAddress, keySize);
     // First two bytes are number of elements in a value
-    long addr = Sets.insertSearch(foundRecordAddress, elementPtr, elementSize);
+    long addr = Hashes.insertSearch(foundRecordAddress, fieldPtr, fieldSize);
     // check if the same element
-    if (Sets.compareElements(addr, elementPtr, elementSize) == 0) {
-      // Can not insert, because it is already there
+    if (Hashes.compareFields(addr, fieldPtr, fieldSize) == 0 && ifNotExists) {
+      // Can not insert, because it is already there (ifNotExists = true)
       return false;
     }
     // found
-    int elemSizeSize = Utils.sizeUVInt(elementSize);
-    int toAdd = elemSizeSize + elementSize;
+    int fieldSizeSize = Utils.sizeUVInt(fieldSize);
+    int fieldValueSizeSize = Utils.sizeUVInt(fieldValueSize);
+    int toAdd = fieldSizeSize + fieldSize + fieldValueSize + fieldValueSizeSize;
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
 
     int valueSize = DataBlock.valueLength(foundRecordAddress);
@@ -134,38 +154,38 @@ public class SetAdd extends Operation{
 
     if (!needSplit) {
 
-      Sets.checkValueArena(newValueSize);
-      insertElement(valueAddress, valueSize, addr, elementPtr, elementSize); 
+      Hashes.checkValueArena(newValueSize);
+      insertFieldValue(valueAddress, valueSize, addr, fieldPtr, fieldSize); 
     
       // set # of updates to 1
       this.updatesCount = 1;
       this.keys[0] = foundKeyAddress; // use the key we found
       this.keySizes[0] = foundKeySize; // use the key we found
-      this.values[0] = Sets.valueArena.get();
+      this.values[0] = Hashes.valueArena.get();
       this.valueSizes[0] = newValueSize;
       return true;
     } else if (!canSplit(valueAddress)){
       // We can't split existing KV , so insert new one
-      insertNewKVandElement(elementPtr, elementSize);
+      insertNewKVandFieldValue(fieldPtr, fieldSize);
       return true;
     } else {
       // Do split
-      Sets.checkValueArena(newValueSize + NUM_ELEM_SIZE);
-      insertElement(valueAddress, valueSize, addr, elementPtr, elementSize);
+      Hashes.checkValueArena(newValueSize + NUM_ELEM_SIZE);
+      insertFieldValue(valueAddress, valueSize, addr, fieldPtr, fieldSize);
       // calculate new key size
       // This is value address for update #1
-      long vPtr = Sets.valueArena.get();
+      long vPtr = Hashes.valueArena.get();
       int kSize = keySize(keyAddress);
       // This is value address for update #2
-      long splitPos = Sets.splitAddress(vPtr, newValueSize);
-      int eSize = Sets.getElementSize(splitPos);
-      long ePtr = Sets.getElementAddress(splitPos);
+      long splitPos = Hashes.splitAddress(vPtr, newValueSize);
+      int fSize = Hashes.getFieldSize(splitPos);
+      long fPtr = Hashes.getFieldAddress(splitPos);
       // This is key size for update #2
-      int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, ePtr, eSize);
+      int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, fPtr, fSize);
       // This is key address for update #2
       long kPtr = keyArena.get();
       int totalElNum = numElementsInValue(vPtr);
-      int leftSplitElNum = Sets.splitNumber(vPtr, newValueSize);
+      int leftSplitElNum = Hashes.splitNumber(vPtr, newValueSize);
       int rightSplitElNum = totalElNum - leftSplitElNum;
       // Prepare value for split
       UnsafeAccess.copy(splitPos, splitPos + NUM_ELEM_SIZE, (vPtr + newValueSize - splitPos));
@@ -193,57 +213,69 @@ public class SetAdd extends Operation{
   }
   
   /**
-   * Insert new K-V with a given element
-   * @param elKeyPtr element address
-   * @param elKeySize element size
+   * Insert new K-V with a given field-value pair
+   * @param fieldPtr field address
+   * @param fieldSize field size
    */
-  private void insertNewKVandElement(long ePtr, int eSize) {
+  private void insertNewKVandFieldValue(long fieldPtr, int fieldSize) {
     // Get real keySize
     int kSize = keySize(keyAddress);
-    checkKeyArena(kSize + KEY_SIZE + eSize); 
+    checkKeyArena(kSize + KEY_SIZE + fieldSize); 
     // Build first key for the new set
-    int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, ePtr, eSize);
+    int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, fieldPtr, fieldSize);
     long kPtr = keyArena.get();
-    int eSizeSize = Utils.sizeUVInt(eSize);
-    Sets.checkValueArena(eSize + eSizeSize + NUM_ELEM_SIZE);
-    long vPtr = Sets.valueArena.get();
+    int fSizeSize = Utils.sizeUVInt(fieldSize);
+    int vSizeSize = Utils.sizeUVInt(fieldValueSize);
+    Hashes.checkValueArena(fieldSize + fSizeSize + fieldValueSize + vSizeSize + NUM_ELEM_SIZE);
+    long vPtr = Hashes.valueArena.get();
     setNumElements(vPtr, 1);
-    // Write element length
-    Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, eSize);
-    // Copy element
-    UnsafeAccess.copy(ePtr, vPtr + NUM_ELEM_SIZE + eSizeSize, eSize);
+    // Write field length
+    Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, fieldSize);
+    // Write value length
+    Utils.writeUVInt(vPtr + NUM_ELEM_SIZE + fSizeSize, fieldValueSize);
+    // Copy field
+    UnsafeAccess.copy(fieldPtr, vPtr + NUM_ELEM_SIZE + fSizeSize + vSizeSize, fieldSize);
+    //Copy value
+    UnsafeAccess.copy(fieldValueAddress, vPtr + NUM_ELEM_SIZE + fSizeSize + 
+      vSizeSize + fieldSize, fieldValueSize);
+    
     
     // set number of updates to 1
     this.updatesCount = 1;
     keys[0] = kPtr;
     keySizes[0] = totalKeySize;
     values[0] = vPtr;
-    valueSizes[0] = eSize + eSizeSize + NUM_ELEM_SIZE;
+    valueSizes[0] = fieldSize + fSizeSize + fieldValueSize + vSizeSize + NUM_ELEM_SIZE;
   }
   /**
-   * Insert element(elementPtr, elementSize) into value (valueAddress, valueSize)
-   * insertion point is addr. Sets.valueArena is used
+   * Insert field-value into value (valueAddress, valueSize)
+   * insertion point is addr. Hashes.valueArena is used
    * @param valueAddress value address
    * @param valueSize current value size
    * @param addr insertion point
-   * @param elementPtr element pointer
-   * @param elementSize element size
+   * @param fieldPtr field pointer
+   * @param fieldSize field size
    */
-  private void insertElement(long valueAddress, int valueSize, long addr, long elementPtr, int elementSize) {
+  private void insertFieldValue(long valueAddress, int valueSize, long addr, long fieldPtr, int fieldSize) {
     // increment number of elements in this value
     addNumElements(valueAddress, 1);
-    long ptr = Sets.valueArena.get();
+    long ptr = Hashes.valueArena.get();
     // Copy everything before addr
     UnsafeAccess.copy(valueAddress, ptr, addr - valueAddress);
     // Encode element size
     ptr += addr - valueAddress;
-    int elemSizeSize = Utils.writeUVInt(ptr, elementSize);
-    ptr += elemSizeSize;
-    // copy element
-    UnsafeAccess.copy(elementPtr, ptr, elementSize);
-    ptr += elementSize;
+    int fSizeSize = Utils.writeUVInt(ptr, fieldSize);
+    ptr += fSizeSize;
+    int vSizeSize = Utils.writeUVInt(ptr, fieldValueSize);
+    ptr += vSizeSize;
+    // copy field
+    UnsafeAccess.copy(fieldPtr, ptr, fieldSize);
+    ptr += fieldSize;
+    // copy value
+    UnsafeAccess.copy(fieldValueAddress, ptr, fieldValueSize);
+    ptr += fieldValueSize;
     // copy rest elements
-    int toAdd = elemSizeSize + elementSize;
+    int toAdd = fSizeSize + fieldSize + vSizeSize + fieldValueSize;
 
     UnsafeAccess.copy(addr + toAdd, ptr, valueSize - (addr - valueAddress));
   }

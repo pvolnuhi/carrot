@@ -55,14 +55,14 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
     this(map, startRowPtr, startRowLength, stopRowPtr, stopRowLength, snapshotId, false);
   }
   /**
-   * Constructor in safe mode
+   * Constructor in a safe mode
    * @param map ordered map
    * @param startRowPtr start row address
    * @param startRowLength start row length
    * @param stopRowPtr stop row address
    * @param stopRowLength stop row length
    * @param snapshotId snapshot id
-   * @param isMultiSafe true - safe for maultiple instances
+   * @param isMultiSafe true - safe for multiple instances
    */
   BigSortedMapDirectMemoryScanner(BigSortedMap map, long startRowPtr, 
     int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId,
@@ -152,6 +152,14 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
     return blockScanner.next();
   }
   
+  /**
+   * Get backwards from a given key
+   * @param key key address
+   * @param size key size
+   */
+  public void previous(long key, int size) {
+    blockScanner.previous(key, size);
+  }
   
   /**
    * Scanner can duplicate rows

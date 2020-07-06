@@ -8,6 +8,8 @@ import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.ops.Append;
+import org.bigbase.carrot.ops.Increment;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.junit.Test;
 

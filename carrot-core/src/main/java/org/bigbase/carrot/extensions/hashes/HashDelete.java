@@ -1,4 +1,4 @@
-package org.bigbase.carrot.extensions.sets;
+package org.bigbase.carrot.extensions.hashes;
 
 import static org.bigbase.carrot.extensions.Commons.KEY_SIZE;
 import static org.bigbase.carrot.extensions.Commons.addNumElements;
@@ -19,16 +19,21 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * This read-modify-write mutation is executed atomically and isolated
- * It deletes element from a given set, defined by a Key
+ * It deletes field from a given Hash, defined by a Key
  * @author Vladimir Rodionov
  *
  */
-public class SetDelete extends Operation{
-  // TODO: use own keyArena
+public class HashDelete extends Operation{
 
+  /**
+   * Parent big sorted map
+   */
   BigSortedMap map;
     
-  public SetDelete() {
+  /**
+   * Constructor
+   */
+  public HashDelete() {
     setFloorKey(true);
   }
   
@@ -39,6 +44,10 @@ public class SetDelete extends Operation{
     map = null;
   }
   
+  /**
+   * Sets parent sorted map
+   * @param map sorted map
+   */
   public void setMap(BigSortedMap map) {
     this.map = map;
   }
@@ -52,32 +61,37 @@ public class SetDelete extends Operation{
     int setKeySize = keySize(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
     if (foundKeySize <= setKeySize + KEY_SIZE) {
+      // Hash does not exists
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
     // Prefix keys must be equals
     if (Utils.compareTo(keyAddress, setKeySize +  KEY_SIZE, foundKeyAddress, 
       setKeySize +  KEY_SIZE) != 0) {
+      // Hash does not exists
       return false;
     }
     
-    long elementPtr = elementAddressFromKey(keyAddress);
-    int elementSize = elementSizeFromKey(keyAddress, keySize);
+    long fieldPtr = elementAddressFromKey(keyAddress);
+    int fieldSize = elementSizeFromKey(keyAddress, keySize);
     // First two bytes are number of elements in a value
-    long addr = Sets.exactSearch(foundRecordAddress, elementPtr, elementSize);
+    long addr = Hashes.exactSearch(foundRecordAddress, fieldPtr, fieldSize);
     if (addr < 0) {
+      // Field not found
       return false;
     }
     // found
-    int elemSizeSize = Utils.sizeUVInt(elementSize);
-    int toCut = elemSizeSize + elementSize;
+    int fieldSizeSize = Utils.sizeUVInt(fieldSize);
+    int fieldValueSize = Utils.readUVInt(addr + fieldSizeSize);
+    int fieldValueSizeSize = Utils.sizeUVInt(fieldValueSize);
+    int toCut = fieldSizeSize + fieldSize + fieldValueSizeSize + fieldValueSize;
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
     // decrement number of elements in this value
     int numElements = addNumElements(valueAddress, -1);
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     int newValueSize = valueSize - toCut;
-    Sets.checkValueArena(newValueSize);
-    long ptr = Sets.valueArena.get();
+    Hashes.checkValueArena(newValueSize);
+    long ptr = Hashes.valueArena.get();
     // TODO: check this
     UnsafeAccess.copy(valueAddress, ptr, addr - valueAddress);
     UnsafeAccess.copy(addr + toCut, ptr + addr - valueAddress, valueSize - toCut - (addr - valueAddress));

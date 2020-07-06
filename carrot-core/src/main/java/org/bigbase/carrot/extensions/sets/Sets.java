@@ -1,5 +1,10 @@
 package org.bigbase.carrot.extensions.sets;
 
+import static org.bigbase.carrot.extensions.Commons.KEY_SIZE;
+import static org.bigbase.carrot.extensions.Commons.NUM_ELEM_SIZE;
+import static org.bigbase.carrot.extensions.Commons.keySize;
+import static org.bigbase.carrot.extensions.Commons.numElementsInValue;
+
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
@@ -7,6 +12,10 @@ import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+
+
+
+
 
 /**
  * Support for packing multiple values into one K-V value
@@ -22,14 +31,6 @@ import org.bigbase.carrot.util.Utils;
  */
 public class Sets {
   
-  /*
-   * Number of bytes to keep sizes of element in Value object 
-   */
-  public final static int NUM_ELEM_SIZE = Utils.SIZEOF_SHORT;
-  /*
-   * Key size, currently 4 bytes
-   */
-  public final static int KEY_SIZE = Utils.SIZEOF_INT;
   
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
@@ -144,7 +145,7 @@ public class Sets {
    * @return number of elements
    * @throws IOException 
    */
-  public static long getNumberElementsInSet(BigSortedMap map, long keyPtr, int keySize){
+  public static long getNumberOfElementsInSet(BigSortedMap map, long keyPtr, int keySize){
     int kSize = buildKey(keyPtr, keySize, 0, 0);
     long ptr = keyArena.get();
     BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
@@ -193,46 +194,6 @@ public class Sets {
     return total;
   }
   
-  /**
-   * Number of elements in a Value object
-   * @param valuePtr address
-   * @return number of elements
-   */
-  static int numElementsInValue(long valuePtr) {
-    return UnsafeAccess.toShort(valuePtr);
-  }
-  
-  /**
-   * Increase number of elements in a Value object
-   * @param valuePtr value address
-   * @param v value to increse
-   * @return total new number of elements
-   */
-  static int addNumElements(long valuePtr, int v) {
-    int value = UnsafeAccess.toShort(valuePtr);
-    if (value + v < 0) return value;
-    UnsafeAccess.putShort(valuePtr, (short)(value + v));
-    return value + v;
-  }
-  /**
-   * Set number of elements in a Value object
-   * @param valuePtr value address
-   * @param v value to set to
-   * @return v new number of elements
-   */
-  static int setNumElements(long valuePtr, int v) {
-    UnsafeAccess.putShort(valuePtr, (short)(v));
-    return v;
-  }
-  
-  /** 
-   * Length  (size) of a Key
-   * @param key address
-   * @return length of key
-   */
-  static int keySize(long keyAddress) {
-    return UnsafeAccess.toInt(keyAddress);
-  }
   
   /**
    * Checks if a given Key is the first one in a set 
@@ -320,14 +281,16 @@ public class Sets {
    * @param map sorted map to run on
    * @param keyPtr key address
    * @param keySize key size
+   * @param safe get safe instance
    * @return set scanner
    */
-  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize) {
+  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
     long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE);
     UnsafeAccess.putInt(kPtr, keySize);
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE, keySize);
     //TODO do not use thread local in scanners - check it
-    BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(kPtr, keySize + KEY_SIZE);
+    BigSortedMapDirectMemoryScanner scanner = safe? 
+        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE): map.getPrefixScanner(kPtr, keySize + KEY_SIZE);
     if (scanner == null) {
       return null;
     }
@@ -395,14 +358,6 @@ public class Sets {
     return Utils.compareTo(ptr + eSizeSize, eSize, elemPtr, elemSize); 
   }
   
-  /**
-   * Checks if Value object can be split. (number of element is greater than 1)
-   * @param valuePtr address
-   * @return true, if - yes, false otherwise
-   */
-  public static boolean canSplit(long valuePtr) {
-    return numElementsInValue(valuePtr) > 1;
-  }
   
   /**
    * Returns suggested split address
@@ -479,25 +434,4 @@ public class Sets {
     return size + Utils.sizeUVInt(size);
   }
   
-  /**
-   * Gets element address from mutation key
-   * @param keyAddress key address
-   * @return address of element
-   */
-  static long elementAddressFromKey(long keyAddress) {
-    // Read set key size 4 bytes
-    int setKeySize = keySize(keyAddress);
-    return keyAddress +  KEY_SIZE + setKeySize;
-  }
-  /**
-   * Gets element size from a mutation key
-   * @param keyAddress key address
-   * @param keySize size of a key
-   * @return size of an element
-   */
-  static int elementSizeFromKey(long keyAddress, int keySize) {
-    // Read set key size 4 bytes
-    int setKeySize = keySize(keyAddress);
-    return keySize  -  KEY_SIZE - setKeySize;
-  }
 }
