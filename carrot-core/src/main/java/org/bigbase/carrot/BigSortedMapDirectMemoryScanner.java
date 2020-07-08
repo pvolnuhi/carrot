@@ -152,15 +152,7 @@ public class BigSortedMapDirectMemoryScanner implements Closeable{
     return blockScanner.next();
   }
   
-  /**
-   * Get backwards from a given key
-   * @param key key address
-   * @param size key size
-   */
-  public void previous(long key, int size) {
-    blockScanner.previous(key, size);
-  }
-  
+ 
   /**
    * Scanner can duplicate rows
    * if split happens 

@@ -6,6 +6,7 @@ import static org.bigbase.carrot.extensions.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.extensions.Commons.elementSizeFromKey;
 import static org.bigbase.carrot.extensions.Commons.firstKVinType;
 import static org.bigbase.carrot.extensions.Commons.keySize;
+import static org.bigbase.carrot.extensions.Commons.keySizeWithPrefix;
 import static org.bigbase.carrot.extensions.Commons.nextKVisInType;
 
 import java.io.IOException;
@@ -58,16 +59,16 @@ public class HashDelete extends Operation{
       return false;
     }
     // check prefix
-    int setKeySize = keySize(keyAddress);
+    int setKeySize = keySizeWithPrefix(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (foundKeySize <= setKeySize + KEY_SIZE) {
+    if (foundKeySize <= setKeySize) {
       // Hash does not exists
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
     // Prefix keys must be equals
-    if (Utils.compareTo(keyAddress, setKeySize +  KEY_SIZE, foundKeyAddress, 
-      setKeySize +  KEY_SIZE) != 0) {
+    if (Utils.compareTo(keyAddress, setKeySize , foundKeyAddress, 
+      setKeySize) != 0) {
       // Hash does not exists
       return false;
     }

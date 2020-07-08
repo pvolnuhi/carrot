@@ -392,7 +392,7 @@ public class BigSortedMap {
    * @param op - update operation
    * @return true if operation succeeds, false otherwise
    */
-  public boolean update(Operation op) {
+  public boolean execute(Operation op) {
     long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
     op.setVersion(version);
@@ -410,9 +410,9 @@ public class BigSortedMap {
           }
         }        
         long recordAddress = b.get(op.getKeyAddress(), op.getKeySize(), version, op.isFloorKey());
-        if (recordAddress <=0) {
-          return false;
-        }
+        //if (recordAddress <=0) {
+        //  return false;
+        //}
         op.setFoundRecordAddress(recordAddress);
         // Execute operation
         boolean result = op.execute();

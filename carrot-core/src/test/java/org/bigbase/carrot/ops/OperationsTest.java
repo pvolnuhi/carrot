@@ -1,4 +1,4 @@
-package org.bigbase.carrot.updates;
+package org.bigbase.carrot.ops;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -13,7 +13,7 @@ import org.bigbase.carrot.ops.Increment;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.junit.Test;
 
-public class UpdatesTest {
+public class OperationsTest {
 
   static BigSortedMap map;
   static long totalLoaded;
@@ -63,7 +63,7 @@ public class UpdatesTest {
         incr.setIncrement(1);
         incr.setKeyAddress(ptr);
         incr.setKeySize(keySize);
-        boolean res = map.update(incr);
+        boolean res = map.execute(incr);
         assertTrue(res);
       }
       long end = System.currentTimeMillis();
@@ -110,7 +110,7 @@ public class UpdatesTest {
         append.setKeyAddress(key);
         append.setKeySize(keySize);
         append.setAppendValue(value, 8);
-        boolean res = map.update(append);
+        boolean res = map.execute(append);
         assertTrue(res);
       }
       long end = System.currentTimeMillis();

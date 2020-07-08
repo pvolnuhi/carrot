@@ -1402,13 +1402,16 @@ public final class DataBlock  {
     UnsafeAccess.putByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen + SEQUENCEID_SIZE,
       (byte) val);
   }
+  
+
   /**
-   * Put k-v operation
-   * @param keyPtr
-   * @param keyLength
-   * @param valuePtr
-   * @param valueLength
-   * @param version
+   * Put key-value operation
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param valuePtr value address
+   * @param valueLength value length
+   * @param version version
+   * @param expire expiration time
    * @return true, if success, false otherwise
    * @throws RetryOperationException
    */
@@ -1572,6 +1575,7 @@ public final class DataBlock  {
    * @param valuePtr
    * @param valueLength
    * @param version
+   * @param reuseValue - do not copy or free inside the method if can't be reused
    * @return true, if success, false otherwise
    * @throws RetryOperationException
    */

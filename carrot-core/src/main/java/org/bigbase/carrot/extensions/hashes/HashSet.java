@@ -7,10 +7,12 @@ import static org.bigbase.carrot.extensions.Commons.canSplit;
 import static org.bigbase.carrot.extensions.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.extensions.Commons.elementSizeFromKey;
 import static org.bigbase.carrot.extensions.Commons.keySize;
+import static org.bigbase.carrot.extensions.Commons.keySizeWithPrefix;
 import static org.bigbase.carrot.extensions.Commons.numElementsInValue;
 import static org.bigbase.carrot.extensions.Commons.setNumElements;
 
 import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.extensions.DataType;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -69,19 +71,19 @@ public class HashSet extends Operation{
    */
     
    
-  static int buildKey( long keyPtr, int keySize, long elPtr, int elSize) {
-    checkKeyArena(keySize + KEY_SIZE + elSize);
+  private static int buildKey( long keyPtr, int keySize, long fieldPtr, int fieldSize) {
+    checkKeyArena(keySize + KEY_SIZE + fieldSize + Utils.SIZEOF_BYTE);
     long arena = keyArena.get();
-    int kSize = KEY_SIZE + keySize;
-    UnsafeAccess.putInt(arena, keySize);
-    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE, keySize);
-    if (elPtr > 0) {
-      UnsafeAccess.copy(elPtr, arena + kSize, elSize);
-      kSize += elSize;
+    int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
+    UnsafeAccess.putByte(arena, (byte) DataType.HASH.ordinal());
+    UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+    if (fieldPtr > 0) {
+      UnsafeAccess.copy(fieldPtr, arena + kSize, fieldSize);
+      kSize += fieldSize;
     }
     return kSize;
   }
-
   private long fieldValueAddress;
   private int fieldValueSize;
   private boolean ifNotExists = false;
@@ -119,13 +121,13 @@ public class HashSet extends Operation{
       return false;
     }
     // check prefix
-    int setKeySize = keySize(keyAddress);
+    int setKeySize = keySizeWithPrefix(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
     // Prefix keys must be equals if set exists, otherwise insert new set KV
-    if ((foundKeySize <= setKeySize + KEY_SIZE) || 
-        Utils.compareTo(keyAddress, setKeySize +  KEY_SIZE, foundKeyAddress, 
-      setKeySize +  KEY_SIZE) != 0) {
+    if ((foundKeySize <= setKeySize) || 
+        Utils.compareTo(keyAddress, setKeySize, foundKeyAddress, 
+      setKeySize) != 0) {
       // Set does not exist yet
       // Insert new set KV
       insertNewKVandFieldValue(ZERO, 1);
@@ -181,7 +183,7 @@ public class HashSet extends Operation{
       int fSize = Hashes.getFieldSize(splitPos);
       long fPtr = Hashes.getFieldAddress(splitPos);
       // This is key size for update #2
-      int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, fPtr, fSize);
+      int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, fPtr, fSize);
       // This is key address for update #2
       long kPtr = keyArena.get();
       int totalElNum = numElementsInValue(vPtr);
@@ -220,9 +222,9 @@ public class HashSet extends Operation{
   private void insertNewKVandFieldValue(long fieldPtr, int fieldSize) {
     // Get real keySize
     int kSize = keySize(keyAddress);
-    checkKeyArena(kSize + KEY_SIZE + fieldSize); 
+    checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldSize); 
     // Build first key for the new set
-    int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, fieldPtr, fieldSize);
+    int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, fieldPtr, fieldSize);
     long kPtr = keyArena.get();
     int fSizeSize = Utils.sizeUVInt(fieldSize);
     int vSizeSize = Utils.sizeUVInt(fieldValueSize);

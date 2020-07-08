@@ -3,12 +3,16 @@ package org.bigbase.carrot.extensions.hashes;
 import static org.bigbase.carrot.extensions.Commons.KEY_SIZE;
 import static org.bigbase.carrot.extensions.Commons.NUM_ELEM_SIZE;
 import static org.bigbase.carrot.extensions.Commons.numElementsInValue;
+import static org.bigbase.carrot.extensions.Commons.keySize;
+import static org.bigbase.carrot.extensions.Commons.keySizeWithPrefix;
+
 
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.extensions.DataType;
 import org.bigbase.carrot.extensions.IncrementType;
 import org.bigbase.carrot.extensions.OperationFailedException;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -152,11 +156,12 @@ public class Hashes {
     
    
   private static int buildKey( long keyPtr, int keySize, long fieldPtr, int fieldSize) {
-    checkKeyArena(keySize + KEY_SIZE + fieldSize);
+    checkKeyArena(keySize + KEY_SIZE + fieldSize + Utils.SIZEOF_BYTE);
     long arena = keyArena.get();
-    int kSize = KEY_SIZE + keySize;
-    UnsafeAccess.putInt(arena, keySize);
-    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE, keySize);
+    int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
+    UnsafeAccess.putByte(arena, (byte) DataType.HASH.ordinal());
+    UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     if (fieldPtr > 0) {
       UnsafeAccess.copy(fieldPtr, arena + kSize, fieldSize);
       kSize += fieldSize;
@@ -183,7 +188,7 @@ public class Hashes {
     set.setFieldValue(valuePtr, valueSize);
     set.setIfNotExists(false);
     // version?    
-    return map.update(set);
+    return map.execute(set);
   }
   
   /**
@@ -206,7 +211,7 @@ public class Hashes {
     set.setFieldValue(valuePtr, valueSize);
     set.setIfNotExists(true);
     // version?    
-    return map.update(set);
+    return map.execute(set);
   }
   
   /**
@@ -281,7 +286,7 @@ public class Hashes {
     update.setKeyAddress(keyArena.get());
     update.setKeySize(kSize);
     // version?    
-    return map.update(update);
+    return map.execute(update);
   }
   /**
    * Determine if hash filed exists
@@ -299,7 +304,7 @@ public class Hashes {
     update.setKeyAddress(keyArena.get());
     update.setKeySize(kSize);
     // version?    
-    return map.update(update);  
+    return map.execute(update);  
   }
   
   /**
@@ -324,7 +329,7 @@ public class Hashes {
     get.setBufferPtr(valueBuf);
     get.setBufferSize(valueBufSize);
     // version?    
-    map.update(get);
+    map.execute(get);
     return get.getFoundValueSize();
   }
   
@@ -349,7 +354,7 @@ public class Hashes {
     incr.setIncrementType(IncrementType.INTEGER);
     incr.setIntValue(value);
     // version?    
-    boolean result = map.update(incr);
+    boolean result = map.execute(incr);
     if (result == false) {
       throw new OperationFailedException();
     }
@@ -378,7 +383,7 @@ public class Hashes {
     incr.setIncrementType(IncrementType.LONG);
     incr.setLongValue(value);
     // version?    
-    boolean result = map.update(incr);
+    boolean result = map.execute(incr);
     if (result == false) {
       throw new OperationFailedException();
     }
@@ -406,7 +411,7 @@ public class Hashes {
     incr.setIncrementType(IncrementType.FLOAT);
     incr.setFloatValue(value);
     // version?    
-    boolean result = map.update(incr);
+    boolean result = map.execute(incr);
     if (result == false) {
       throw new OperationFailedException();
     }
@@ -434,7 +439,7 @@ public class Hashes {
     incr.setIncrementType(IncrementType.DOUBLE);
     incr.setDoubleValue(value);
     // version?    
-    boolean result = map.update(incr);
+    boolean result = map.execute(incr);
     if (result == false) {
       throw new OperationFailedException();
     }
@@ -456,46 +461,34 @@ public class Hashes {
     get.setKeyAddress(keyArena.get());
     get.setKeySize(kSize);
     // version?    
-    map.update(get);
+    map.execute(get);
     return get.getFoundValueSize();
   }
   /**
    * TODO: pattern matching
-   * Read next 'count' field-value pairs
+   * Create scanner from  a cursor, which defined by pairs of last 
+   * seen key and field
    * @param map ordered map
-   * @param keyAddress hash key address
-   * @param keySize hash key size
+   * @param lastSeenKeyPtr last seen key address
+   * @param lastSeenKeySize  last seen key size
    * @param lastFieldSeenPtr last seen field address, if 0 - start from beginning
    * @param lastFieldSeenSize last seen field size
-   * @param count total pair to read
-   * @return total size of read data, if it is larger than bufferSize, the call
-   *          must be repeated with appropriately sized buffer
+   * @return hash scanner
    */
-  public static long hashScan(BigSortedMap map, long keyAddress, int keySize, long lastFieldSeenPtr, 
-      int lastFieldSeenSize, int count, long buffer, long bufferSize) {
-    int startKeySize = buildKey(keyAddress, keySize, lastFieldSeenPtr, lastFieldSeenSize);
-    long startKeyPtr = keyArena.get();
-    long stopKeyPtr = Utils.prefixKeyEnd(startKeyPtr, keySize + KEY_SIZE);
+  public static HashScanner getScanner(BigSortedMap map, long lastSeenKeyPtr, 
+      int lastSeenKeySize, long lastFieldSeenPtr, int lastFieldSeenSize) {
+    int startKeySize = keySizeWithPrefix(lastSeenKeyPtr);
+    long stopKeyPtr = Utils.prefixKeyEnd(lastSeenKeyPtr, startKeySize);
     if (stopKeyPtr == -1) {
-      return -1;
+      return null;
     }
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(startKeyPtr, startKeySize, stopKeyPtr, keySize + KEY_SIZE);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(lastSeenKeyPtr, lastSeenKeySize, 
+      stopKeyPtr, startKeySize);
     // TODO - test this call
-    scanner.previous(startKeyPtr,  startKeySize);
     HashScanner hs = new HashScanner(scanner, 0);
-    //TODO - test this call
     hs.seek(lastFieldSeenPtr, lastFieldSeenSize, true);
-    int cc = 0;
     
-    try {
-      while(cc++ < count && hs.hasNext()) {
-        //TODO
-      }
-    } catch (IOException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
-    return 0;
+    return hs;
   }
   
   /**
@@ -509,11 +502,13 @@ public class Hashes {
    * @return hash scanner
    */
   public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
-    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE);
-    UnsafeAccess.putInt(kPtr, keySize);
-    UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE, keySize);
+    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+    UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
+    UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE): map.getPrefixScanner(kPtr, keySize + KEY_SIZE);
+        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE): 
+          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
     if (scanner == null) {
       return null;
     }

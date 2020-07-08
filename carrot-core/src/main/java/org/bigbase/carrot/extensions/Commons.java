@@ -28,9 +28,17 @@ public class Commons {
    * @return length of key
    */
   public static int keySize(long keyAddress) {
-    return UnsafeAccess.toInt(keyAddress);
+    return UnsafeAccess.toInt(keyAddress + Utils.SIZEOF_BYTE);
   }
   
+  /**
+   * Length of a Key with prefix
+   * @param keyAddress key address
+   * @return length with prefix 
+   */
+  public static int keySizeWithPrefix(long keyAddress) {
+    return UnsafeAccess.toInt(keyAddress + Utils.SIZEOF_BYTE) + KEY_SIZE + Utils.SIZEOF_BYTE;
+  }
   /**
    * Checks if a given Key is the first one in a type (set, hash, etc) 
    * First key has the following format:
@@ -40,7 +48,7 @@ public class Commons {
    * @return true or false
    */
   public static boolean firstKVinType(long ptr, int size) {
-    if(keySize(ptr) + KEY_SIZE + 1 != size) {
+    if(keySize(ptr) + KEY_SIZE + Utils.SIZEOF_BYTE + 1 != size) {
       return false;
     }
     return UnsafeAccess.toByte(ptr + size -1) == 0;
@@ -53,7 +61,7 @@ public class Commons {
   public static long elementAddressFromKey(long keyAddress) {
     // Read set key size 4 bytes
     int setKeySize = keySize(keyAddress);
-    return keyAddress +  KEY_SIZE + setKeySize;
+    return keyAddress +  KEY_SIZE + setKeySize + Utils.SIZEOF_BYTE;
   }
   /**
    * Gets element (field) size from a mutation key
@@ -64,7 +72,7 @@ public class Commons {
   public static int elementSizeFromKey(long keyAddress, int keySize) {
     // Read set key size 4 bytes
     int setKeySize = keySize(keyAddress);
-    return keySize  -  KEY_SIZE - setKeySize;
+    return keySize  -  KEY_SIZE - setKeySize - Utils.SIZEOF_BYTE;
   }
   
   /**

@@ -641,10 +641,22 @@ public final class UnsafeAccess {
     return address;
   }
   
+  /**
+   * Malloc zeroed
+   * @param size
+   * @return memory pointer
+   */
+  public static long mallocZeroed (long size) {
+    long address = theUnsafe.allocateMemory(size);
+    theUnsafe.setMemory(address, size, (byte)0);
+    mallocStats.allocEvent(address, size);
+    return address;
+  }
   
   public static void mallocStats() {
     mallocStats.printStats();
   }
+  
   /**
    * Reallocate memory
    */
@@ -652,7 +664,20 @@ public final class UnsafeAccess {
   public static long realloc(long ptr, long newSize) {
     return theUnsafe.reallocateMemory(ptr, newSize);
   }
+
+  /**
+   * Reallocate memory zeroed
+   */
   
+  public static long reallocZeroed(long ptr, long oldSize, long newSize) {
+    long addr = theUnsafe.reallocateMemory(ptr, newSize);
+    theUnsafe.setMemory(addr + oldSize, newSize - oldSize, (byte) 0);
+    return addr;
+  }
+
+  public static void setMemory(long ptr, long size, byte v) {
+    theUnsafe.setMemory(ptr, size, v);
+  }
   /**
    * Free memory
    * @param ptr memory pointer

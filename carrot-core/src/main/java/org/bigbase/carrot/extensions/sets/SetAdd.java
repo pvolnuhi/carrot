@@ -7,10 +7,13 @@ import static org.bigbase.carrot.extensions.Commons.canSplit;
 import static org.bigbase.carrot.extensions.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.extensions.Commons.elementSizeFromKey;
 import static org.bigbase.carrot.extensions.Commons.keySize;
+import static org.bigbase.carrot.extensions.Commons.keySizeWithPrefix;
+
 import static org.bigbase.carrot.extensions.Commons.numElementsInValue;
 import static org.bigbase.carrot.extensions.Commons.setNumElements;
 
 import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.extensions.DataType;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -81,12 +84,13 @@ public class SetAdd extends Operation{
    */
     
    
-  static int buildKey( long keyPtr, int keySize, long elPtr, int elSize) {
-    checkKeyArena(keySize + KEY_SIZE + elSize);
+  private static int buildKey( long keyPtr, int keySize, long elPtr, int elSize) {
+    checkKeyArena(keySize + KEY_SIZE + elSize + Utils.SIZEOF_BYTE);
     long arena = keyArena.get();
-    int kSize = KEY_SIZE + keySize;
-    UnsafeAccess.putInt(arena, keySize);
-    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE, keySize);
+    int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
+    UnsafeAccess.putByte(arena, (byte)DataType.SET.ordinal());
+    UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     if (elPtr > 0) {
       UnsafeAccess.copy(elPtr, arena + kSize, elSize);
       kSize += elSize;
@@ -100,13 +104,13 @@ public class SetAdd extends Operation{
       return false;
     }
     // check prefix
-    int setKeySize = keySize(keyAddress);
+    int setKeySize = keySizeWithPrefix(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
     // Prefix keys must be equals if set exists, otherwise insert new set KV
-    if ((foundKeySize <= setKeySize + KEY_SIZE) || 
-        Utils.compareTo(keyAddress, setKeySize +  KEY_SIZE, foundKeyAddress, 
-      setKeySize +  KEY_SIZE) != 0) {
+    if ((foundKeySize <= setKeySize) || 
+        Utils.compareTo(keyAddress, setKeySize , foundKeyAddress, 
+      setKeySize) != 0) {
       // Set does not exist yet
       // Insert new set KV
       insertNewKVandElement(ZERO, 1);
@@ -161,7 +165,7 @@ public class SetAdd extends Operation{
       int eSize = Sets.getElementSize(splitPos);
       long ePtr = Sets.getElementAddress(splitPos);
       // This is key size for update #2
-      int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, ePtr, eSize);
+      int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, ePtr, eSize);
       // This is key address for update #2
       long kPtr = keyArena.get();
       int totalElNum = numElementsInValue(vPtr);
@@ -200,9 +204,9 @@ public class SetAdd extends Operation{
   private void insertNewKVandElement(long ePtr, int eSize) {
     // Get real keySize
     int kSize = keySize(keyAddress);
-    checkKeyArena(kSize + KEY_SIZE + eSize); 
+    checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE+ eSize); 
     // Build first key for the new set
-    int totalKeySize = buildKey(keyAddress + KEY_SIZE, kSize, ePtr, eSize);
+    int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, ePtr, eSize);
     long kPtr = keyArena.get();
     int eSizeSize = Utils.sizeUVInt(eSize);
     Sets.checkValueArena(eSize + eSizeSize + NUM_ELEM_SIZE);

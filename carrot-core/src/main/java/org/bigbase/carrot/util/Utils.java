@@ -540,6 +540,24 @@ public class Utils {
     return 0;
   }
   
+  /**
+   * Counts set bits in a byte value
+   * @param b value
+   * @return number of set bits
+   */
+  public static int bitCount(byte b) {
+    final byte[] table = new byte[] {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
+    return table[b & 0xf] + table[b >>> 4];
+  }
+  /**
+   * Count bits in a short value
+   * @param s short value
+   * @return number of bits set
+   */
+  public static int bitCount(short s) {
+    return bitCount( (byte)(s & 0xff)) + bitCount((byte)(s>>>8));
+  }
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

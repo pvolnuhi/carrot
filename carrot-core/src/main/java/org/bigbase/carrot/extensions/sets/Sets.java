@@ -10,6 +10,7 @@ import java.io.IOException;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.extensions.DataType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -134,7 +135,7 @@ public class Sets {
     add.setKeyAddress(keyArena.get());
     add.setKeySize(kSize);
     // version?    
-    return map.update(add);
+    return map.execute(add);
   }
   
   /**
@@ -193,23 +194,7 @@ public class Sets {
     }
     return total;
   }
-  
-  
-  /**
-   * Checks if a given Key is the first one in a set 
-   * First key in a set has the following format:
-   * [KEY_SIZE]Key'0' - zero at  the end
-   * @param ptr key address
-   * @param size key size
-   * @return true or false
-   */
-  static boolean firstKVinSet(long ptr, int size) {
-    if(keySize(ptr) + KEY_SIZE + 1 != size) {
-      return false;
-    }
-    return UnsafeAccess.toByte(ptr + size -1) == 0;
-  }
-  
+    
   /**
    * Build key for Set. It uses thread local key arena 
    * TODO: data type prefix
@@ -222,11 +207,12 @@ public class Sets {
     
    
   private static int buildKey( long keyPtr, int keySize, long elPtr, int elSize) {
-    checkKeyArena(keySize + KEY_SIZE + elSize);
+    checkKeyArena(keySize + KEY_SIZE + elSize + Utils.SIZEOF_BYTE);
     long arena = keyArena.get();
-    int kSize = KEY_SIZE + keySize;
-    UnsafeAccess.putInt(arena, keySize);
-    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE, keySize);
+    int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
+    UnsafeAccess.putByte(arena, (byte)DataType.SET.ordinal());
+    UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     if (elPtr > 0) {
       UnsafeAccess.copy(elPtr, arena + kSize, elSize);
       kSize += elSize;
@@ -252,7 +238,7 @@ public class Sets {
     update.setKeyAddress(keyArena.get());
     update.setKeySize(kSize);
     // version?    
-    return map.update(update);
+    return map.execute(update);
   }
   
   /**
@@ -271,7 +257,7 @@ public class Sets {
     update.setKeyAddress(keyArena.get());
     update.setKeySize(kSize);
     // version?    
-    return map.update(update);
+    return map.execute(update);
   }
   
   /**
@@ -285,12 +271,14 @@ public class Sets {
    * @return set scanner
    */
   public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
-    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE);
-    UnsafeAccess.putInt(kPtr, keySize);
-    UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE, keySize);
+    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+    UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
+    UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE): map.getPrefixScanner(kPtr, keySize + KEY_SIZE);
+        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE):
+          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
     if (scanner == null) {
       return null;
     }
@@ -426,7 +414,7 @@ public class Sets {
   }
   /**
    * Gets total element size including variable part
-   * @param addr address
+   * @param addr address of size:element tuple
    * @return size total
    */
   public static int getTotalElementSize(long addr) {

@@ -330,20 +330,7 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     }
   }
 
-  /**
-   * Advance backwards by one from a a given key if 
-   * not equals to this key
-   * @param keyPtr key address
-   * @param keySize key size
-   */
-  public final void previous(long keyPtr, int keySize) {
-    long kPtr = keyAddress();
-    int  kSize = keySize();
-    if (Utils.compareTo(kPtr, kSize, keyPtr, keySize) <= 0) {
-      return ;
-    }
-    searchBefore(keyPtr, keySize, snapshotId, Op.DELETE);
-  }
+
   /**
    * Get current address of a k-v in a scanner
    * @return address of a record
