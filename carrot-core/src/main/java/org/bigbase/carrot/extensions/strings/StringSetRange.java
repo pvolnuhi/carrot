@@ -34,6 +34,7 @@ public class StringSetRange extends Operation {
     // compare keys
     boolean keyExists = Utils.compareTo(keyAddress, keySize, kPtr, kSize) ==0;
     long newPtr = 0;
+    boolean reuseValue = false;
     if (keyExists) {
       int vSize = DataBlock.valueLength(foundRecordAddress);
       long vPtr = DataBlock.valueAddress(foundRecordAddress);
@@ -48,6 +49,7 @@ public class StringSetRange extends Operation {
         // Allocate new value
         newPtr = UnsafeAccess.reallocZeroed(vPtr, vSize, this.length);
         UnsafeAccess.copy(valuePtr, newPtr + offset, valueSize);
+        reuseValue = true;
       }
     } else {
       // key does not exists;
@@ -55,14 +57,15 @@ public class StringSetRange extends Operation {
       // Allocate new value
       newPtr = UnsafeAccess.mallocZeroed(this.length);
       UnsafeAccess.copy(valuePtr, newPtr + offset, valueSize);
+      reuseValue = true;
     }
-    // TODO: memory free or avoid double allocation / copy for large values
     // now update
     this.updatesCount = 1;
     this.keys[0] = keyAddress;
     this.keySizes[0] = keySize;
     this.values[0] = newPtr;
     this.valueSizes[0] = length;
+    this.reuseValues[0] = reuseValue;
     return true;
   }
   
@@ -81,7 +84,7 @@ public class StringSetRange extends Operation {
     this.offset = offset;
   }
   
-  public int getLength() {
+  public int getValueLength() {
     return this.length;
   }
   

@@ -357,7 +357,8 @@ public final class DataBlock  {
       long address = getExternalRecordAddress(ptr);
       return UnsafeAccess.toInt(address + INT_SIZE);
     } else if (type == AllocType.EXT_VALUE){
-      long address = getExternalRecordAddress(ptr);
+      //CHANGE
+      long address = blockKeyLength(ptr) + keyAddress(ptr) + SEQUENCEID_SIZE + TYPE_SIZE;//getExternalRecordAddress(ptr);
       return UnsafeAccess.toInt(address);
     } else {
       return blockValueLength(ptr);
@@ -393,7 +394,8 @@ public final class DataBlock  {
       return address + 2 * INT_SIZE + UnsafeAccess.toInt(address)/*key length*/;
     } else {
       long address = getExternalRecordAddress(ptr);
-      return address + INT_SIZE;
+      //CHANGE
+      return address /*+ INT_SIZE*/;
     }
   }
   
@@ -953,35 +955,37 @@ public final class DataBlock  {
   }
   
   private long allocateAndCopyExternalValue(long valuePtr, int valueLength) {
-    long recAddress = UnsafeAccess.malloc(valueLength + INT_SIZE);
+    //CHANGE
+    long recAddress = UnsafeAccess.malloc(valueLength /*+ INT_SIZE*/);
     if (recAddress <=0) {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
     //TODO dataSize ?
-    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
-    UnsafeAccess.putInt(recAddress , valueLength);
-    UnsafeAccess.copy(valuePtr, recAddress + INT_SIZE, valueLength);
+    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+   // UnsafeAccess.putInt(recAddress , valueLength);
+    UnsafeAccess.copy(valuePtr, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
   }
   
   private long reallocateAndCopyExternalValue(long ptr, long valuePtr, int valueLength) {
+    //CHANGE
     int vLen = valueLength(ptr);
     if (vLen > valueLength) {
       deallocateIfExternalRecord(ptr);
       return allocateAndCopyExternalValue(valuePtr, valueLength);
     }
-    long recAddress = UnsafeAccess.realloc(ptr, valueLength + INT_SIZE);
+    long recAddress = UnsafeAccess.realloc(ptr, valueLength /*+ INT_SIZE*/);
     if (recAddress <=0) {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
     //TODO dataSize ?
-    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
-    UnsafeAccess.putInt(recAddress , valueLength);
-    UnsafeAccess.copy(valuePtr, recAddress + INT_SIZE, valueLength);
+    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    //UnsafeAccess.putInt(recAddress , valueLength);
+    UnsafeAccess.copy(valuePtr, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
   }
   /**
@@ -1048,45 +1052,49 @@ public final class DataBlock  {
   
   
   private long getExternalAllocationSize(long address, AllocType type) {
+    //CHANGE
     switch(type) {
       case EXT_VALUE:
-        return UnsafeAccess.toInt(address) + INT_SIZE;
+        return valueLength(address);
       case EXT_KEY_VALUE:
-        return UnsafeAccess.toInt(address) + UnsafeAccess.toInt(address + INT_SIZE) + 2 * INT_SIZE;
+        long ptr = getExternalRecordAddress(address);
+        return UnsafeAccess.toInt(ptr) + UnsafeAccess.toInt(ptr + INT_SIZE) + 2 * INT_SIZE;
       default: return 0;  
     }
   }
   
   private long allocateAndCopyExternalValue( byte[] value, int valueOffset,
       int valueLength) {
-    long recAddress = UnsafeAccess.malloc( valueLength +  INT_SIZE);
+    //CHANGE
+    long recAddress = UnsafeAccess.malloc( valueLength /*+  INT_SIZE*/);
     if (recAddress < 0) {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
-    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
-    UnsafeAccess.putInt(recAddress, valueLength);
-    UnsafeAccess.copy(value, valueOffset, recAddress + INT_SIZE, valueLength);
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    //UnsafeAccess.putInt(recAddress, valueLength);
+    UnsafeAccess.copy(value, valueOffset, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
   }
   
   private long reallocateAndCopyExternalValue(long ptr, byte[] value, int valueOffset,
       int valueLength) {
+    //CHANGE
     int vLen = valueLength(ptr);
     if (vLen > valueLength) {
       deallocateIfExternalRecord(ptr);
       return allocateAndCopyExternalValue(value, valueOffset, valueLength);
     }
-    long recAddress = UnsafeAccess.realloc( ptr, valueLength +  INT_SIZE);
+    long recAddress = UnsafeAccess.realloc( ptr, valueLength /*+  INT_SIZE*/);
     if (recAddress < 0) {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength + INT_SIZE);
-    BigSortedMap.totalDataSize.addAndGet(valueLength + INT_SIZE);
-    UnsafeAccess.putInt(recAddress, valueLength);
-    UnsafeAccess.copy(value, valueOffset, recAddress + INT_SIZE, valueLength);
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    //UnsafeAccess.putInt(recAddress, valueLength);
+    UnsafeAccess.copy(value, valueOffset, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
   }
   
@@ -1197,13 +1205,14 @@ public final class DataBlock  {
           UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE /* ==0*/);
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
         } else { // AllocType.EXT_VALUE
+          //CHANGE
           recAddress = allocateAndCopyExternalValue(value, valueOffset, valueLength);
           
           UnsafeAccess.copy(addr, addr + newRecLength, dataPtr + dataSize - addr);
           // copy key
           UnsafeAccess.copy(key,  keyOffset, addr + RECORD_PREFIX_LENGTH, keyLength);
           // store value (size + address)
-          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, valueLength + INT_SIZE);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, valueLength/* + INT_SIZE*/);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) keyLength);
@@ -1234,7 +1243,8 @@ public final class DataBlock  {
           UnsafeAccess.copy(value, valueOffset, recAddress + 2 * INT_SIZE + keyLength,
             valueLength);
         } else { // AllocType.EXT_VALUE
-          UnsafeAccess.copy(value, valueOffset, recAddress + INT_SIZE,
+          //CHANGE
+          UnsafeAccess.copy(value, valueOffset, recAddress /*+ INT_SIZE*/,
             valueLength);
         }
         // Set version, expire, op type and eviction (0)
@@ -1276,7 +1286,7 @@ public final class DataBlock  {
           UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE);
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
         } else { // AlocType.EXT_VALUE
-          
+          //CHANGE
           recAddress = allocateAndCopyExternalValue(value, 
             valueOffset, valueLength);
          
@@ -1287,7 +1297,7 @@ public final class DataBlock  {
           // copy key
           UnsafeAccess.copy(key,  keyOffset, addr + RECORD_PREFIX_LENGTH, keyLength);
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
-            valueLength + INT_SIZE);
+            valueLength /*+ INT_SIZE*/);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) keyLength);
@@ -1322,10 +1332,11 @@ public final class DataBlock  {
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
         } else { // AllocType.EXT_VALUE
           // As since keys are the same - no need to overwrite existing key
+          //CHANGE
           recAddress = reallocateAndCopyExternalValue(addr, value, 
             valueOffset, valueLength);         
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
-            valueLength + INT_SIZE);
+            valueLength /* + INT_SIZE*/);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength +INT_SIZE, recAddress);
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) keyLength);
@@ -1403,7 +1414,6 @@ public final class DataBlock  {
       (byte) val);
   }
   
-
   /**
    * Put key-value operation
    * @param keyPtr key address
@@ -1417,6 +1427,22 @@ public final class DataBlock  {
    */
   final boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version,
       long expire) throws RetryOperationException {
+    return put(keyPtr, keyLength, valuePtr, valueLength, version, expire, false);
+  }
+  /**
+   * Put key-value operation
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param valuePtr value address
+   * @param valueLength value length
+   * @param version version
+   * @param expire expiration time
+   * @param reuseValue, reuse value allocation, if possible
+   * @return true, if success, false otherwise
+   * @throws RetryOperationException
+   */
+  final boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version,
+      long expire, boolean reuseValue) throws RetryOperationException {
 
     if (getNumberOfRecords() > 0 && isForbiddenKey(keyPtr, keyLength)) {
       // Return success silently TODO
@@ -1425,7 +1451,7 @@ public final class DataBlock  {
     
     if (mustStoreExternally(keyLength, valueLength)) {
       return putExternally(keyPtr,  keyLength, valuePtr,  
-        valueLength, version, expire);
+        valueLength, version, expire, reuseValue);
     }
     boolean onlyExactOverwrite = false;
     boolean recordOverwrite = false;
@@ -1575,12 +1601,12 @@ public final class DataBlock  {
    * @param valuePtr
    * @param valueLength
    * @param version
-   * @param reuseValue - do not copy or free inside the method if can't be reused
+   * @param reuseValue - reuse value allocation if possible
    * @return true, if success, false otherwise
    * @throws RetryOperationException
    */
   final boolean putExternally(long keyPtr, int keyLength, long valuePtr, int valueLength, long version,
-      long expire) throws RetryOperationException {
+      long expire, boolean reuseValue) throws RetryOperationException {
 
     boolean onlyExactOverwrite = false;
     boolean recordOverwrite = false;
@@ -1588,6 +1614,7 @@ public final class DataBlock  {
     // Get the most recent active Tx Id or snapshot Id (scanner)
     long mostRecentActiveTxId = BigSortedMap.getMostRecentActiveTxSeqId();
     AllocType type = getAllocType(keyLength, valueLength);
+    boolean freeValue = false;
     // TODO: result check
     int newKVLength = INT_SIZE + ADDRESS_SIZE +
         (type == AllocType.EXT_VALUE? keyLength:0);// 4 - contains overall length, 8 - address 
@@ -1603,6 +1630,7 @@ public final class DataBlock  {
         // we silently return true to avoid further splitting
         // This is how we handle multiple updates to the same key at the same time
         // All succeed but the winner has the highest sequenceId
+        freeValue = true;
         return true;
       }
       boolean append = addr == (dataPtr + dataSize);
@@ -1640,6 +1668,7 @@ public final class DataBlock  {
 
       if (onlyExactOverwrite && !overwrite && insert) {
         // Failed to put - split the block
+        // Do not free value
         return false;
       }
       long recAddress = 0;
@@ -1647,6 +1676,7 @@ public final class DataBlock  {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
         if (type == AllocType.EXT_KEY_VALUE) {
+          freeValue = true;
           int kvSize = keyLength + valueLength + 2 *INT_SIZE;
           recAddress = allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, valueLength);
         
@@ -1657,13 +1687,14 @@ public final class DataBlock  {
           UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE /* ==0*/);
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
         } else { // AllocType.EXT_VALUE
-          recAddress = allocateAndCopyExternalValue(valuePtr, valueLength);
-          
+          //CHANGE
+          freeValue = false;
+          recAddress = reuseValue? valuePtr: allocateAndCopyExternalValue(valuePtr, valueLength);
           UnsafeAccess.copy(addr, addr + newRecLength, dataPtr + dataSize - addr);
           // copy key
           UnsafeAccess.copy(keyPtr, addr + RECORD_PREFIX_LENGTH, keyLength);
           // store value (size + address)
-          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, valueLength + INT_SIZE);
+          UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, valueLength /*+ INT_SIZE*/);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) keyLength);
@@ -1689,12 +1720,13 @@ public final class DataBlock  {
         // UPDATE existing - both are external records
         // We do overwrite of existing record and use existing external allocation
         recAddress = getExternalRecordAddress(addr);
-        
+        freeValue = true;
         if (type == AllocType.EXT_KEY_VALUE) {
           UnsafeAccess.copy(valuePtr, recAddress + 2 * INT_SIZE + keyLength,
             valueLength);
         } else { // AllocType.EXT_VALUE
-          UnsafeAccess.copy(valuePtr, recAddress + INT_SIZE,
+          //CHANGE
+          UnsafeAccess.copy(valuePtr, recAddress /*+ INT_SIZE*/,
             valueLength);
         }
         // Set version, expire, op type and eviction (0)
@@ -1724,7 +1756,7 @@ public final class DataBlock  {
         if (type == AllocType.EXT_KEY_VALUE) {
           recAddress = allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, 
             valueLength);
-
+          freeValue = true;
           // move from offset to offset + moveDist
           UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
             dataPtr + dataSize - addr - existRecLength);
@@ -1736,9 +1768,9 @@ public final class DataBlock  {
           UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE);
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
         } else { // AlocType.EXT_VALUE
-          
-          recAddress = allocateAndCopyExternalValue(valuePtr, valueLength);
-         
+          //CHANGE
+          recAddress = reuseValue? valuePtr: allocateAndCopyExternalValue(valuePtr, valueLength);
+          freeValue = false;
 
           // move from offset to offset + moveDist
           UnsafeAccess.copy(addr + existRecLength, addr + existRecLength + toMove,
@@ -1746,7 +1778,7 @@ public final class DataBlock  {
           // copy key
           UnsafeAccess.copy(keyPtr,  addr + RECORD_PREFIX_LENGTH, keyLength);
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
-            valueLength + INT_SIZE);
+            valueLength /*+ INT_SIZE*/);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength + INT_SIZE, recAddress);
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) keyLength);
@@ -1772,7 +1804,7 @@ public final class DataBlock  {
         //deallocateIfExternalRecord(addr);
         if (type == AllocType.EXT_KEY_VALUE) {
           //TODO: realloc reconsider
-
+          freeValue = true;
           recAddress = reallocateAndCopyExternalKeyValue(addr,keyPtr, keyLength, valuePtr, valueLength);
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + 0 /*key length*/, 
             keyLength + valueLength + 2 * INT_SIZE);
@@ -1783,9 +1815,11 @@ public final class DataBlock  {
         } else { // AllocType.EXT_VALUE
           // As since keys are the same - no need to overwrite existing key
           //TODO: realloc reconsider
-          recAddress = reallocateAndCopyExternalValue(addr, valuePtr, valueLength);         
+          //CHANGE
+          freeValue = false;
+          recAddress = reuseValue? valuePtr: reallocateAndCopyExternalValue(addr, valuePtr, valueLength);         
           UnsafeAccess.putInt( addr + RECORD_TOTAL_OVERHEAD + keyLength, 
-            valueLength + INT_SIZE);
+            valueLength /*+ INT_SIZE*/);
           UnsafeAccess.putLong(addr + RECORD_TOTAL_OVERHEAD + keyLength +INT_SIZE, recAddress);
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) keyLength);
@@ -1802,6 +1836,9 @@ public final class DataBlock  {
       }
       return true;
     } finally {
+      if (freeValue && reuseValue) {
+        UnsafeAccess.free(valuePtr);
+      }
       writeUnlock();
     }
   }
@@ -2725,8 +2762,9 @@ public final class DataBlock  {
     if (type == AllocType.EMBEDDED) {
       return;
     }
+    //CHANGE
     int size = keyLength(ptr) + valueLength(ptr) + 
-        (type == AllocType.EXT_KEY_VALUE?(2 * INT_SIZE): INT_SIZE);
+        (type == AllocType.EXT_KEY_VALUE?(2 * INT_SIZE): 0/*INT_SIZE*/);
     UnsafeAccess.free(getExternalRecordAddress(ptr));
     largeKVs.decrementAndGet();
     BigSortedMap.totalDataSize.addAndGet(-size);
@@ -3087,7 +3125,7 @@ public final class DataBlock  {
       AllocType type = getRecordAllocationType(ptr);
       if (freeExternalAllocs && getRecordAllocationType(ptr) != AllocType.EMBEDDED) {
         long addr = getExternalRecordAddress(ptr);
-        long size = getExternalAllocationSize(addr, type);
+        long size = getExternalAllocationSize(ptr, type);
         UnsafeAccess.free(addr);
         BigSortedMap.totalAllocatedMemory.addAndGet(-size);
         BigSortedMap.totalDataSize.addAndGet(-size);

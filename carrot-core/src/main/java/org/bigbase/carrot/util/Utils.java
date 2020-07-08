@@ -558,6 +558,69 @@ public class Utils {
     return bitCount( (byte)(s & 0xff)) + bitCount((byte)(s>>>8));
   }
   
+  
+  
+  /**
+   * Murmur3hash implementation with native pointer.
+   * @param ptr the address of memory
+   * @param len the length of memory
+   * @param seed the seed 
+   * @return hash value
+   */
+  public static int murmurHash(long ptr,  int len, int seed) {
+    Unsafe unsafe = UnsafeAccess.theUnsafe;
+
+    final int m = 0x5bd1e995;
+    final int r = 24;
+    final int length = len;
+    int h = seed ^ length;
+
+    final int len_4 = length >> 2;
+    for (int i = 0; i < len_4; i++) {
+      int i_4 = i << 2;
+      int k = unsafe.getByte(ptr + i_4 + 3) & 0xff;
+      k = k << 8;
+      k = k | (unsafe.getByte(ptr + i_4 + 2) & 0xff);
+      k = k << 8;
+      k = k | (unsafe.getByte(ptr + i_4 + 1) & 0xff);
+      k = k << 8;
+      k = k | (unsafe.getByte(ptr + i_4) & 0xff);
+      k *= m;
+      k ^= k >>> r;
+      k *= m;
+      h *= m;
+      h ^= k;
+    }
+    // avoid calculating modulo
+    int len_m = len_4 << 2;
+    int left = length - len_m;
+
+    if (left != 0) {
+      if (left >= 3) {
+        h ^= (unsafe.getByte(ptr + length - 3) & 0xff) << 16;
+      }
+      if (left >= 2) {
+        h ^= (unsafe.getByte(ptr + length - 2) & 0xff) << 8;
+      }
+      if (left >= 1) {
+        h ^= (unsafe.getByte(ptr + length - 1) & 0xff);
+      }
+
+      h *= m;
+    }
+
+    h ^= h >>> 13;
+    h *= m;
+    h ^= h >>> 15;
+
+    // This is a stupid thinh I have ever stuck upon
+    if (h == Integer.MIN_VALUE) h = -(Integer.MIN_VALUE + 1);
+    return h;
+
+  }
+            
+            
+            
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

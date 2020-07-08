@@ -1,8 +1,5 @@
 package org.bigbase.carrot.extensions;
 
-
-import static org.bigbase.carrot.extensions.Commons.numElementsInValue;
-
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
@@ -12,6 +9,8 @@ import org.bigbase.carrot.util.Utils;
 
 public class Commons {
 
+  public final static int NULL_INT = Integer.MIN_VALUE;
+  public final static long NULL_LONG = Long.MIN_VALUE;
   /*
    * Number of bytes to keep sizes of element in Value object 
    */

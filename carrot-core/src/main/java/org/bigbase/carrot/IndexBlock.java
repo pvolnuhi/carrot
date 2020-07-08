@@ -1020,18 +1020,25 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  return false;
 	}
 	
+	public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, 
+      long expire) throws RetryOperationException {
+	  return put(keyPtr, keyLength, valuePtr, valueLength, version, expire, false);
+	}
+	
 	/**
-	 * Put k-v operation
+	 * Put key-value operation
 	 * 
-	 * @param keyPtr
-	 * @param keyLength
-	 * @param valuePtr
-	 * @param valueLength
-	 * @param version
+	 * @param keyPtr key address
+	 * @param keyLength key length
+	 * @param valuePtr value address
+	 * @param valueLength value length
+	 * @param version version of operation
+	 * @param expire expiration time
 	 * @return true, if success, false otherwise
 	 * @throws RetryOperationException
 	 */
-	public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, long expire)
+	public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, 
+	    long expire, boolean reuseValue)
 			throws RetryOperationException {
     try {
       // TODO: key-value size check
@@ -1049,7 +1056,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       b.set(this, ptr - dataPtr);
       boolean res = false;
       while (true) {
-        res = b.put(keyPtr,  keyLength, valuePtr, valueLength, version, expire);
+        res = b.put(keyPtr,  keyLength, valuePtr, valueLength, version, expire, reuseValue);
         if (res == false) {
           if (b.canSplit() && !b.isLargerThanMax(keyPtr,  keyLength, version)) {
             // get split position
@@ -1087,7 +1094,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
             DataBlock bb = new DataBlock(MAX_BLOCK_SIZE);
             insertNewBlock(bb, keyPtr, keyLength, version, Op.PUT);
             // we do not check result - it should be OK (empty block)
-            bb.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
+            bb.put(keyPtr, keyLength, valuePtr, valueLength, version, expire, reuseValue);
             return true; // if false, then index block split is required
           }
         } else {

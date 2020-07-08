@@ -1,6 +1,7 @@
 package org.bigbase.carrot.extensions.strings;
 
 import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.extensions.MutationOptions;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.Utils;
 
@@ -17,8 +18,8 @@ public class StringSet extends Operation {
 
   private long valuePtr;
   private int valueSize;
-  private boolean notExists = false;
   private boolean keepTTL = false;
+  private MutationOptions opts;
   
   @Override
   public boolean execute() {
@@ -29,7 +30,8 @@ public class StringSet extends Operation {
     int kSize = DataBlock.keyLength(foundRecordAddress);
     // compare keys
     boolean keyExists = Utils.compareTo(keyAddress, keySize, kPtr, kSize) ==0;
-    if ((keyExists && notExists) || (!keyExists && !notExists)) {
+    if ((keyExists && opts == MutationOptions.NX) || 
+        (!keyExists &&  opts == MutationOptions.XX)) {
       return false;
     }
     if (keepTTL) {
@@ -44,13 +46,22 @@ public class StringSet extends Operation {
     return true;
   }
   
+  /**
+   * Set keep TimeToLive
+   * @param b value
+   */
   public void setKeepTTL(boolean b) {
     this.keepTTL = b;
   }
   
-  public void setIfDoesNotExist(boolean b) {
-    this.notExists = b;
+  /**
+   * set mutation options
+   * @param opts options
+   */
+  public void setMutationOptions(MutationOptions opts) {
+    this.opts = opts;
   }
+  
   /**
    * Set value
    * @param ptr value address
@@ -68,6 +79,6 @@ public class StringSet extends Operation {
     this.valuePtr = 0;
     this.valueSize = 0;
     this.keepTTL = false;
-    this.notExists = false;
+    this.opts = null;
   }
 }

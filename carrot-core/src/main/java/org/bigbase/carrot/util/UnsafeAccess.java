@@ -2,12 +2,10 @@ package org.bigbase.carrot.util;
 
 
 import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.logging.Log;
@@ -139,6 +137,127 @@ public final class UnsafeAccess {
   }
   
   /**
+   * Bit manipulation routines
+   */
+  
+  /**
+   * Get offset of a first bit set in a long value (8 bytes)
+   * @param addr address to read value from
+   * @return offset, or -1 if no bits set 
+   */
+  public static int firstBitSetLong(long addr) {
+    
+    long value = theUnsafe.getLong(addr);
+    if (value == 0) return -1;
+    if (littleEndian) {
+      value = Long.reverseBytes(value);
+    }
+    return Long.numberOfTrailingZeros(value) +1;
+  }
+  
+  /**
+   * Get offset of a first bit unset in a long value (8 bytes)
+   * @param addr address to read value from
+   * @return offset, or -1 if no bits unset 
+   */
+  public static int firstBitUnSetLong(long addr) {
+    
+    long value = theUnsafe.getLong(addr);
+    if (value == 0xffffffffffffffffL) return -1;
+    if (littleEndian) {
+      value = Long.reverseBytes(value);
+    }
+    value = ~value;
+    return Long.numberOfTrailingZeros(value) +1;
+  }
+  
+  /**
+   * Get offset of a first bit set in a integer value (4 bytes)
+   * @param addr address to read value from
+   * @return offset, or -1 if 
+   */
+  public static int firstBitSetInt(long addr) {
+    
+    int value = theUnsafe.getInt(addr);
+    if (value == 0) return -1;
+    if (littleEndian) {
+      value = Integer.reverseBytes(value);
+    }
+    return Integer.numberOfTrailingZeros(value) +1;
+  }
+  
+  /**
+   * Get offset of a first bit unset in a integer value (4 bytes)
+   * @param addr address to read value from
+   * @return offset of first '0', or -1 if not found 
+   */
+  public static int firstBitUnSetInt(long addr) {
+    
+    int value = theUnsafe.getInt(addr);
+    if (value == 0xffffffff) return -1;
+    if (littleEndian) {
+      value = Integer.reverseBytes(value);
+    }
+    value = ~value;
+    return Integer.numberOfTrailingZeros(value) +1;
+  }
+  
+  /**
+   * Get offset of a first bit set in a byte value (1 byte)
+   * @param addr address to read value from
+   * @return offset of first '1', or -1 if not found 
+   */
+  public static int firstBitSetByte(long addr) {
+    byte value= theUnsafe.getByte(addr);
+    if (value == 0) return -1;
+    return Integer.numberOfLeadingZeros(Byte.toUnsignedInt(value)) - 24;
+  }
+  
+  
+  /**
+   * Get offset of a first bit unset in a byte value (1 byte)
+   * @param addr address to read value from
+   * @return offset of first '0', or -1 if not found 
+   */
+  public static int firstBitUnSetByte(long addr) {
+    byte value= theUnsafe.getByte(addr);
+    if (value == (byte) 0xff) return -1;
+    // TODO: test it
+    value =(byte) ~value;
+    return Integer.numberOfLeadingZeros(Byte.toUnsignedInt(value)) - 24;
+  }
+  
+  /**
+   * Get offset of a first bit set in a short value (2 bytes)
+   * @param addr address to read value from
+   * @return offset of first '1', or -1 if not found 
+   */
+  public static int firstBitSetShort(long addr) {
+    short value= theUnsafe.getShort(addr);
+    if (value == 0) return -1;
+    if (littleEndian) {
+      value = Short.reverseBytes(value);
+    }
+    return Integer.numberOfLeadingZeros(Short.toUnsignedInt(value)) - 16;
+  }
+  
+  
+  /**
+   * Get offset of a first bit unset in a short value (2 bytes)
+   * @param addr address to read value from
+   * @return offset of first '0', or -1 if not found 
+   */
+  public static int firstBitUnSetShort(long addr) {
+    short value= theUnsafe.getShort(addr);
+    if (value == (short)0xffff) return -1;
+    if (littleEndian) {
+      value = Short.reverseBytes(value);
+    }
+    value = (short)~value;
+    return Integer.numberOfLeadingZeros(Short.toUnsignedInt(value)) - 16;
+  }
+  
+  /**
    * Converts a byte array to an int value considering it was written in big-endian format.
    * @param bytes byte array
    * @param offset offset into array
@@ -152,6 +271,7 @@ public final class UnsafeAccess {
     }
   }
 
+  
   /**
    * Converts a byte array to a long value considering it was written in big-endian format.
    * @param bytes byte array

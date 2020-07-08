@@ -49,6 +49,7 @@ public class StringSetBit extends Operation {
         this.keySizes[0] = keySize;
         this.values[0] = valuePtr;
         this.valueSizes[0] = valueSize;
+        this.reuseValues[0] = true;
       }
     } else {
       // new K-V
@@ -59,6 +60,8 @@ public class StringSetBit extends Operation {
       this.keySizes[0] = keySize;
       this.values[0] = valuePtr;
       this.valueSizes[0] = valueSize;
+      this.reuseValues[0] = true;
+
     }
     this.bit = getsetbit(valuePtr, valueSize);
     return true;

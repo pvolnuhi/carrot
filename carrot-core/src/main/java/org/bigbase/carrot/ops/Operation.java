@@ -58,6 +58,13 @@ public abstract class Operation {
    * Update types for updates: false - PUT, true - Delete
    */
   protected boolean[] updateTypes = new boolean[] {false, false};
+  
+  /* 
+   * Reuse values for updates if possible
+   * 
+   */
+  protected boolean[] reuseValues = new boolean[] {false, false};
+  
   /*
    * Number of results (0, 1,  2 updates/puts/ deletes) 
    */
@@ -116,6 +123,8 @@ public abstract class Operation {
     this.updateTypes[0] = false;
     this.updateTypes[1] = false;
     this.floorKey = false;
+    this.reuseValues[0] = false;
+    this.reuseValues[1] = false;
   }
   
   public final void setFloorKey(boolean b) {
@@ -190,5 +199,12 @@ public abstract class Operation {
    */
   public final boolean[] updateTypes() {
     return updateTypes;
+  }
+  /**
+   * Get reuse values
+   * @return reuse values
+   */
+  public final boolean[] reuseValues() {
+    return reuseValues;
   }
 }

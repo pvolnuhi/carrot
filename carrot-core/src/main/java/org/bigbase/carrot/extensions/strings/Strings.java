@@ -2,8 +2,14 @@ package org.bigbase.carrot.extensions.strings;
 
 import static org.bigbase.carrot.extensions.Commons.KEY_SIZE;
 
+import java.util.List;
+
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.Key;
+import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.extensions.DataType;
+import org.bigbase.carrot.extensions.KeysLocker;
+import org.bigbase.carrot.extensions.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -39,6 +45,13 @@ public class Strings {
     @Override
     protected Integer initialValue() {
       return 512;
+    }
+  };
+  
+  static ThreadLocal<Key> key = new ThreadLocal<Key>() {
+    @Override
+    protected Key initialValue() {
+      return new Key(0,0);
     }
   };
   
@@ -123,6 +136,25 @@ public class Strings {
   };
   
   /**
+   * Thread local updates String SetRange
+   */
+  private static ThreadLocal<StringSetRange> stringSetrange = new ThreadLocal<StringSetRange>() {
+    @Override
+    protected StringSetRange initialValue() {
+      return new StringSetRange();
+    } 
+  };
+  
+  /**
+   * Thread local updates String BitPos
+   */
+  private static ThreadLocal<StringBitPos> stringBitpos = new ThreadLocal<StringBitPos>() {
+    @Override
+    protected StringBitPos initialValue() {
+      return new StringBitPos();
+    } 
+  };
+  /**
    * Checks key arena size
    * @param required size
    */
@@ -182,18 +214,28 @@ public class Strings {
    * @return the length of the string after the append operation (Integer).
    */
   public static int append(BigSortedMap map, long keyPtr, int keySize, long valuePtr, int valueSize) {
-    int kSize = buildKey(keyPtr, keySize);
-    StringAppend append = stringAppend.get();
-    append.reset();
-    append.setKeyAddress(keyArena.get());
-    append.setKeySize(kSize);
-    append.setAppendValue(valuePtr, valueSize);
-    // version?    
-    boolean result = map.execute(append);
-    if(result) {
-      return append.getSizeAfterAppend();
-    } else {
-      return -1;
+    
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    
+    try {
+      KeysLocker.writeLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringAppend append = stringAppend.get();
+      append.reset();
+      append.setKeyAddress(keyArena.get());
+      append.setKeySize(kSize);
+      append.setAppendValue(valuePtr, valueSize);
+      // version?
+      boolean result = map.execute(append);
+      if (result) {
+        return append.getSizeAfterAppend();
+      } else {
+        return -1;
+      }
+    } finally {
+      KeysLocker.writeUnlock(kk);
     }
   }
   
@@ -210,19 +252,27 @@ public class Strings {
    * @param keyPtr key address
    * @param keySize key size
    * @param start start offset(inclusive)
-   * @param end end offset (inclusive)
+   * @param end end offset (inclusive), if Common.NULL_LONG - unspecified
    * @return number of bits set or 0, if key does not exists
    */
   
-  public static long bitCount(BigSortedMap map, long keyPtr, int keySize, int start, int end) {
-    int kSize = buildKey(keyPtr, keySize);
-    StringBitCount bitcount = stringBitcount.get();
-    bitcount.reset();
-    bitcount.setKeyAddress(keyArena.get());
-    bitcount.setKeySize(kSize);
-    bitcount.setFromTo(start, end);
-    map.execute(bitcount);
-    return bitcount.getKeyAddress();
+  public static long bitCount(BigSortedMap map, long keyPtr, int keySize, long start, long end) {
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.readLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringBitCount bitcount = stringBitcount.get();
+      bitcount.reset();
+      bitcount.setKeyAddress(keyArena.get());
+      bitcount.setKeySize(kSize);
+      bitcount.setStartEnd(start, end);
+      map.execute(bitcount);
+      return bitcount.getBitCount();
+    } finally {
+      KeysLocker.readUnlock(kk);
+    }
   }
   
   /**
@@ -325,10 +375,20 @@ public class Strings {
    * @return size of a value, or -1 if not found. if size is greater than valueBufLength,
    *         the call must be repeated with appropriately sized value buffer
    */
-  public static long get(BigSortedMap map, long keyPtr, int keyLength, long valueBuf, int valueBufLength) {
-    int kLength = buildKey(keyPtr, keyLength); 
-    long kPtr = keyArena.get();
-    return map.get(kPtr, kLength, valueBuf, valueBufLength, Long.MAX_VALUE);
+  public static long get(BigSortedMap map, long keyPtr, int keyLength, long valueBuf,
+      int valueBufLength) {
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keyLength;
+    try {
+      KeysLocker.readLock(kk);
+      int kLength = buildKey(keyPtr, keyLength);
+      long kPtr = keyArena.get();
+      return map.get(kPtr, kLength, valueBuf, valueBufLength, Long.MAX_VALUE);
+    } finally {
+      KeysLocker.readUnlock(kk);
+
+    }
   }
   
   /**
@@ -344,14 +404,22 @@ public class Strings {
    * @return 1 or 0
    */
   public static int getBit(BigSortedMap map, long keyPtr, int keySize, long offset) {
-    int kSize = buildKey(keyPtr, keySize);
-    StringGetBit getbit = stringGetbit.get();
-    getbit.reset();
-    getbit.setKeyAddress(keyArena.get());
-    getbit.setKeySize(kSize);
-    getbit.setOffset(offset);
-    map.execute(getbit);
-    return getbit.getBit();
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.readLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringGetBit getbit = stringGetbit.get();
+      getbit.reset();
+      getbit.setKeyAddress(keyArena.get());
+      getbit.setKeySize(kSize);
+      getbit.setOffset(offset);
+      map.execute(getbit);
+      return getbit.getBit();
+    } finally {
+      KeysLocker.readUnlock(kk);
+    }
   }
   
   /**
@@ -369,15 +437,23 @@ public class Strings {
    * @return old bit value (0 if did not exists)
    */
   public static int setBit(BigSortedMap map, long keyPtr, int keySize, long offset, int bit) {
-    int kSize = buildKey(keyPtr, keySize);
-    StringSetBit setbit = stringSetbit.get();
-    setbit.reset();
-    setbit.setKeyAddress(keyArena.get());
-    setbit.setKeySize(kSize);
-    setbit.setOffset(offset);
-    setbit.setBit(bit);
-    map.execute(setbit);
-    return setbit.getOldBit();
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.writeLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringSetBit setbit = stringSetbit.get();
+      setbit.reset();
+      setbit.setKeyAddress(keyArena.get());
+      setbit.setKeySize(kSize);
+      setbit.setOffset(offset);
+      setbit.setBit(bit);
+      map.execute(setbit);
+      return setbit.getOldBit();
+    } finally {
+      KeysLocker.writeUnlock(kk);
+    }
   }
   
   /**
@@ -389,13 +465,21 @@ public class Strings {
    * @return size of a value or 0 if does not exists
    */
   public static int strLength(BigSortedMap map, long keyPtr, int keySize) {
-    int kSize = buildKey(keyPtr, keySize);
-    StringLength strlen = stringLength.get();
-    strlen.reset();
-    strlen.setKeyAddress(keyArena.get());
-    strlen.setKeySize(kSize);
-    map.execute(strlen);
-    return strlen.getLength();
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.readLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringLength strlen = stringLength.get();
+      strlen.reset();
+      strlen.setKeyAddress(keyArena.get());
+      strlen.setKeySize(kSize);
+      map.execute(strlen);
+      return strlen.getLength();
+    } finally {
+      KeysLocker.readUnlock(kk);
+    }
   }
   /**
    * Returns the substring of the string value stored at key, determined by the offsets 
@@ -413,15 +497,23 @@ public class Strings {
    */
   public static int getRange(BigSortedMap map, long keyPtr, int keySize , int start, int end, 
       long bufferPtr, int bufferSize) {
-    int kSize = buildKey(keyPtr, keySize);
-    StringGetRange getrange = stringGetrange.get();
-    getrange.reset();
-    getrange.setKeyAddress(keyArena.get());
-    getrange.setKeySize(kSize);
-    getrange.setFromTo(start, end);
-    getrange.setBuffer(bufferPtr, bufferSize);
-    map.execute(getrange);
-    return getrange.getRangeLength();
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.readLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringGetRange getrange = stringGetrange.get();
+      getrange.reset();
+      getrange.setKeyAddress(keyArena.get());
+      getrange.setKeySize(kSize);
+      getrange.setFromTo(start, end);
+      getrange.setBuffer(bufferPtr, bufferSize);
+      map.execute(getrange);
+      return getrange.getRangeLength();
+    } finally {
+      KeysLocker.readUnlock(kk);
+    }
   }
   
   /**
@@ -441,15 +533,23 @@ public class Strings {
   public static int getSet(BigSortedMap map, long keyPtr, int keySize, long valuePtr, int valueSize,
       long bufferPtr, int bufferSize) 
   {
-    int kSize = buildKey(keyPtr, keySize);
-    StringGetSet getset = stringGetset.get();
-    getset.reset();
-    getset.setKeyAddress(keyArena.get());
-    getset.setKeySize(kSize);
-    getset.setBuffer(bufferPtr, bufferSize);
-    getset.setValue(valuePtr, valueSize);
-    map.execute(getset);
-    return getset.getPreviousVersionLength();
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.writeLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringGetSet getset = stringGetset.get();
+      getset.reset();
+      getset.setKeyAddress(keyArena.get());
+      getset.setKeySize(kSize);
+      getset.setBuffer(bufferPtr, bufferSize);
+      getset.setValue(valuePtr, valueSize);
+      map.execute(getset);
+      return getset.getPreviousVersionLength();
+    } finally {
+      KeysLocker.writeUnlock(kk);
+    }
   }
 
   /**
@@ -464,26 +564,97 @@ public class Strings {
    * @param valuePtr value address
    * @param valueSize value size
    * @param expire expiration time (0 - does not expire)
-   * @param ifDoesNotExist true - put only if does not exists (INSERT), 
-   * false - if only exists (UPDATE)
+   * @param opts mutation options (NONE, NX, XX) 
+   * 
    * @param keepTTL keep current TTL
    * @return true on success, false - otherwise
    */
-  public static boolean set(BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize, 
-      long expire, boolean ifDoesNotExist, boolean keepTTL)
-  {
-    int kSize = buildKey(keyPtr, keySize);
-    StringSet set = stringSet.get();
-    set.reset();
-    set.setKeyAddress(keyArena.get());
-    set.setKeySize(kSize);
-    set.setValue(valuePtr, valueSize);
-    set.setKeepTTL(keepTTL);
-    set.setIfDoesNotExist(ifDoesNotExist);
-    boolean result = map.execute(set);
-    return result;
+  public static boolean set(BigSortedMap map, long keyPtr, int keySize, long valuePtr,
+      int valueSize, long expire, MutationOptions opts, boolean keepTTL) {
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.writeLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringSet set = stringSet.get();
+      set.reset();
+      set.setKeyAddress(keyArena.get());
+      set.setKeySize(kSize);
+      set.setValue(valuePtr, valueSize);
+      set.setKeepTTL(keepTTL);
+      set.setMutationOptions(opts);
+      boolean result = map.execute(set);
+      return result;
+    } finally {
+      KeysLocker.writeUnlock(kk);
+    }
   }
 
+  /**
+   * Set key to hold string value if key does not exist. In that case, it is equal 
+   * to SET. When key already holds a value, no operation is performed. 
+   * SETNX is short for "SET if Not eXists".
+   * Return value
+   *  Integer reply, specifically:
+   * 1 if the key was set
+   * 0 if the key was not set
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param valuePtr value address
+   * @param valueSize value size
+   * @return true on success, false - otherwise
+   */
+  public static boolean setnx (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize) {
+    return set(map, keyPtr, keySize, valuePtr, valueSize, 0, MutationOptions.NX, false);
+  }
+  
+  
+  /**
+   * Set key to hold the string value and set key to timeout after a given number of seconds. 
+   * This command is equivalent to executing the following commands:
+   *   SET mykey value
+   *   EXPIRE mykey seconds
+   * SETEX is atomic, and can be reproduced by using the previous two commands inside an MULTI / EXEC block. 
+   * It is provided as a faster alternative to the given sequence of operations, because this operation is 
+   * very common when Redis is used as a cache.
+   *   An error is returned when seconds is invalid.
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param valuePtr value address
+   * @param valueSize value size
+   * @param expire expiration time
+   * @return true, false
+   */
+  public static boolean setex (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize,
+      long expire) {
+    return set(map, keyPtr, keySize, valuePtr, valueSize, expire, MutationOptions.NONE, false);
+  }  
+  
+  /**
+   * Set key to hold the string value and set key to timeout after a given number of milliseconds. 
+   * This command is equivalent to executing the following commands:
+   *   SET mykey value
+   *   EXPIRE mykey seconds
+   * SETEX is atomic, and can be reproduced by using the previous two commands inside an MULTI / EXEC block. 
+   * It is provided as a faster alternative to the given sequence of operations, because this operation is 
+   * very common when Redis is used as a cache.
+   *   An error is returned when seconds is invalid.
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param valuePtr value address
+   * @param valueSize value size
+   * @param expire expiration time
+   * @return true, false
+   */
+  public static boolean psetex (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize,
+      long expire) {
+    return set(map, keyPtr, keySize, valuePtr, valueSize, expire, MutationOptions.NONE, false);
+  }  
+  
   /**
    * Overwrites part of the string stored at key, starting at the specified offset, 
    * for the entire length of value. If the offset is larger than the current length of the string at key, 
@@ -500,7 +671,134 @@ public class Strings {
    * @return new size of key's value
    */
   public static int setRange(BigSortedMap map, long keyPtr, int keySize, int offset, long valuePtr, int valueSize) {
-    return 0;
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.writeLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringSetRange setrange = stringSetrange.get();
+      setrange.reset();
+      setrange.setKeyAddress(keyArena.get());
+      setrange.setKeySize(kSize);
+      setrange.setValue(valuePtr, valueSize);
+      setrange.setOffset(offset);
+      map.execute(setrange);
+      return setrange.getValueLength();
+    } finally {
+      KeysLocker.writeUnlock(kk);
+    }
+  }
+  
+  /**
+   * Return the position of the first bit set to 1 or 0 in a string.
+   * The position is returned, thinking of the string as an array of bits from left to right, 
+   * where the first byte's most significant bit is at position 0, the second byte's most 
+   * significant bit is at position 8, and so forth.
+   * The same bit position convention is followed by GETBIT and SETBIT.
+   * By default, all the bytes contained in the string are examined. It is possible to look for 
+   * bits only in a specified interval passing the additional arguments start and end 
+   * (it is possible to just pass start, the operation will assume that the end is the last byte 
+   * of the string. However there are semantic differences as explained later). The range is interpreted 
+   * as a range of bytes and not a range of bits, so start=0 and end=2 means to look at the first three bytes.
+   * Note that bit positions are returned always as absolute values starting from bit zero even when start 
+   * and end are used to specify a range.
+   * Like for the GETRANGE command start and end can contain negative values in order to index bytes starting from the end of the string, where -1 is the last byte, -2 is the penultimate, and so forth.
+   * Non-existent keys are treated as empty strings.
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param bit bit value to look for
+   * @param start start offset (in bytes) inclusive
+   * @param end end position (in bytes) inclusive, if Commons.NULL_LONG - means unspecified 
+   * @return The command returns the position of the first bit set to 1 or 0 according to the request.
+   * If we look for set bits (the bit argument is 1) and the string is empty or composed of just zero bytes,
+   *  -1 is returned.
+   * If we look for clear bits (the bit argument is 0) and the string only contains bit set to 1, 
+   * the function returns the first bit not part of the string on the right. So if the string is three bytes 
+   * set to the value 0xff the command BITPOS key 0 will return 24, since up to bit 23 all the bits are 1.
+   * Basically, the function considers the right of the string as padded with zeros if you look for clear 
+   * bits and specify no range or the start argument only.
+   * However, this behavior changes if you are looking for clear bits and specify a range with both start 
+   * and end. If no clear bit is found in the specified range, the function returns -1 as the user specified 
+   * a clear range and there are no 0 bits in that range.
+   */
+  public static long bitPos(BigSortedMap map, long keyPtr, int keySize, int bit, long start, long end) {
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.size = keySize;
+    try {
+      KeysLocker.readLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      StringBitPos bitcount = stringBitpos.get();
+      bitcount.reset();
+      bitcount.setKeyAddress(keyArena.get());
+      bitcount.setKeySize(kSize);
+      bitcount.setStartEnd(start, end);
+      map.execute(bitcount);
+      return bitcount.getPosition();
+    } finally {
+      KeysLocker.readUnlock(kk);
+    }
+  }
+  
+  /**
+   * Sets the given keys to their respective values. MSET replaces existing values with new values,
+   * just as regular SET. See MSETNX if you don't want to overwrite existing values.
+   * MSET is atomic, so all given keys are set at once. It is not possible for clients to see that some 
+   * of the keys were updated while others are unchanged.
+   * @param map sorted map storage
+   * @param kvs list of key-values to set
+   */
+  public static void mset(BigSortedMap map, List<KeyValue> kvs) {
+    
+    try {
+      KeysLocker.writeLockAll(kvs);
+      for(int i =0; i < kvs.size(); i++) {
+        KeyValue kv = kvs.get(i);
+        set(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
+          MutationOptions.NONE, false);
+      }
+    } finally {
+      KeysLocker.writeUnlockAll(kvs);
+    }
+  }
+  
+  /**
+   * Sets the given keys to their respective values. MSETNX will not perform any operation 
+   * at all even if just a single key already exists.
+   * Because of this semantic MSETNX can be used in order to set different keys representing 
+   * different fields of an unique logic object in a way that ensures that either all the fields 
+   * or none at all are set.
+   * MSETNX is atomic, so all given keys are set at once. It is not possible for clients to see 
+   * that some of the keys were updated while others are unchanged.
+   * Return value
+   * Integer reply, specifically:
+   *  1 if the all the keys were set.
+   *   0 if no key was set (at least one key already existed).
+   * @param map sorted map storage
+   * @param kvs list of key-values to set
+   * @return true on success, false - otherwise
+   */
+  public static boolean msetnx(BigSortedMap map, List<KeyValue> kvs) {
+    
+    try {
+      KeysLocker.writeLockAll(kvs);
+      for (int i=0; i < kvs.size(); i++) {
+        KeyValue kv = kvs.get(i);
+        if (map.exists(kv.keyPtr, kv.keySize)) {
+          return false;
+        }
+      }
+      for(int i =0; i < kvs.size(); i++) {
+        KeyValue kv = kvs.get(i);
+        set(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
+          MutationOptions.NONE, false);
+      }
+    } finally {
+      KeysLocker.writeUnlockAll(kvs);
+    }
+    return true;
   }
 }
 

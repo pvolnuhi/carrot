@@ -431,6 +431,7 @@ public class BigSortedMap {
         long valuePtr = op.values()[0];
         int valueLength = op.valueSizes()[0];
         boolean updateType = op.updateTypes()[0];
+        boolean reuseValue = op.reuseValues()[0];
         IndexBlock bb = null;
         boolean isBB = false;
 
@@ -447,12 +448,12 @@ public class BigSortedMap {
           }
           
         } else { // PUT
-          result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+          result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
           if (!result && getTotalAllocatedMemory() < maxMemory) {
             bb = b.split();
             if (!bb.isLessThanMin(keyPtr, keyLength, version)) {
               // Insert into new block
-              result = bb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+              result = bb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
               // This should succeed?
               if (!result) {
                 // TODO: We failed to insert into non-full index block
@@ -461,7 +462,7 @@ public class BigSortedMap {
               isBB = true;
             } else {
               // try again into b
-              result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+              result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
               if (!result) {
                 // TODO: We failed to insert into non-full index block
                 return false;
@@ -488,14 +489,15 @@ public class BigSortedMap {
         valuePtr = op.values()[1];
         valueLength = op.valueSizes()[1];
         updateType = op.updateTypes()[1];
-        result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+        reuseValue = op.reuseValues()[1];
+        result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
         if (!result) {
           // We do not check allocated memory limit b/c it can break
           // the transaction
           IndexBlock ibb = block.split();          
           if (!ibb.isLessThanMin(keyPtr, keyLength, version)) {
             // Insert into new block
-            result = ibb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+            result = ibb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
             // This should succeed?
             if (!result) {
               // TODO: We failed to insert into non-full index block
@@ -503,7 +505,7 @@ public class BigSortedMap {
             }
           } else {
             // try again into block
-            result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire());
+            result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
             if (!result) {
               // TODO: We failed to insert into non-full index block
               return false;
@@ -524,7 +526,6 @@ public class BigSortedMap {
       }
     }
   }
-
   /**
    * Put key-value operation
    * @param keyPtr key address
@@ -533,8 +534,24 @@ public class BigSortedMap {
    * @param valueLength value length
    * @param expire expiration time
    * @return true, if success, false otherwise
+   */ 
+  public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, 
+      long expire) {
+    return put(keyPtr, keyLength, valuePtr, valueLength, expire, false);
+  }
+  
+  /**
+   * Put key-value operation
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param valuePtr value address
+   * @param valueLength value length
+   * @param expire expiration time
+   * @param reuseValue reuse value allocation if possible, otherwise free it
+   * @return true, if success, false otherwise
    */
-  public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long expire) {
+  public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, 
+      long expire, boolean reuseValue) {
 
     long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
@@ -554,7 +571,7 @@ public class BigSortedMap {
           }
         }
         boolean result =
-            b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
+            b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire, reuseValue);
         if (!result && getTotalAllocatedMemory() < maxMemory) {
           IndexBlock bb = null;
           bb = b.split();

@@ -1,6 +1,7 @@
 package org.bigbase.carrot.extensions.strings;
 
 import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.extensions.Commons;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -20,10 +21,10 @@ import org.bigbase.carrot.util.Utils;
  */
 public class StringBitCount extends Operation {
 
-  int from;
-  int to;
+  long start;
+  long end;
   long count;
-  boolean fromToSet = false;
+  boolean startEndSet = false;
   
   @Override
   public boolean execute() {
@@ -42,35 +43,38 @@ public class StringBitCount extends Operation {
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
     int valueSize =DataBlock.valueLength(foundRecordAddress);
     
-    if (fromToSet) {
+    if (startEndSet) {
       // sanity checks
-      if (from < 0) {
-        from = valueSize + from;
+      if (start < 0) {
+        start = valueSize + start;
       }
-      if (to < 0) {
-        to = valueSize + to;
+      if (end == Commons.NULL_LONG) {
+        end = valueSize -1;
       }
-      if (from < 0 || from > valueSize -1) {
+      if (end < 0) {
+        end = valueSize + end;
+      }
+      if (start < 0 || start > valueSize -1) {
         return true;
       }
-      if (to < 0 || to > valueSize -1) {
+      if (end < 0 || end > valueSize -1) {
         return true;
       }
-      if (from > to) {
+      if (start > end) {
         // 0
         return true;
       }
     } else {
-      from = 0;
-      to = valueSize -1;
+      start = 0;
+      end = valueSize -1;
     }
     this.count = bitcount(valuePtr, valueSize);
     return true;
   }
   
   private long bitcount(long valuePtr, int valueSize) {
-    valuePtr += from;
-    valueSize = to -from + 1;
+    valuePtr += start;
+    valueSize = (int)(end -start + 1);
     int num8 = valueSize / Utils.SIZEOF_LONG;
     int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
     long c = 0;
@@ -106,17 +110,17 @@ public class StringBitCount extends Operation {
   @Override
   public void reset() {
     super.reset();
-    this.from = 0;
-    this.to = 0;
+    this.start = 0;
+    this.end = 0;
     this.count = 0;
-    this.fromToSet = false;
+    this.startEndSet = false;
   }
   
   
-  public void setFromTo (int from, int to) {
-    this.from = from;
-    this.to = to;
-    this.fromToSet = true;
+  public void setStartEnd (long from, long to) {
+    this.start = from;
+    this.end = to;
+    this.startEndSet = true;
   }
   
   public long getBitCount() {
