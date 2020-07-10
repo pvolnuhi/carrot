@@ -13,6 +13,7 @@ import static org.bigbase.carrot.extensions.Commons.setNumElements;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.extensions.DataType;
+import org.bigbase.carrot.extensions.MutationOptions;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -86,7 +87,7 @@ public class HashSet extends Operation{
   }
   private long fieldValueAddress;
   private int fieldValueSize;
-  private boolean ifNotExists = false;
+  private MutationOptions opts;
   
   public HashSet() {
     setFloorKey(true);
@@ -98,7 +99,7 @@ public class HashSet extends Operation{
     setFloorKey(true);
     this.fieldValueAddress = 0;
     this.fieldValueSize = 0;
-    this.ifNotExists = false;
+    this.opts = null;
   }
   
   /**
@@ -111,8 +112,8 @@ public class HashSet extends Operation{
     this.fieldValueSize = size;
   }
   
-  public void setIfNotExists(boolean b) {
-    this.ifNotExists = b;
+  public void setOptions(MutationOptions opts) {
+    this.opts = opts;
   }
   
   @Override
@@ -139,8 +140,9 @@ public class HashSet extends Operation{
     // First two bytes are number of elements in a value
     long addr = Hashes.insertSearch(foundRecordAddress, fieldPtr, fieldSize);
     // check if the same element
-    if (Hashes.compareFields(addr, fieldPtr, fieldSize) == 0 && ifNotExists) {
-      // Can not insert, because it is already there (ifNotExists = true)
+    boolean exists = Hashes.compareFields(addr, fieldPtr, fieldSize) == 0;
+    if ( exists && opts == MutationOptions.NX || !exists && opts == MutationOptions.XX) {
+      // Can not insert, because of mutaion options
       return false;
     }
     // found

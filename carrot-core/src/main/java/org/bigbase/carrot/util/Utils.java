@@ -618,9 +618,257 @@ public class Utils {
     return h;
 
   }
-            
-            
-            
+  
+  /**
+   * Conversion string-number utility methods
+   */
+  
+  /**
+   * All possible chars for representing a number as a String
+   */
+  final static byte[] digits = {
+      '0' , '1' , '2' , '3' , '4' , '5' ,
+      '6' , '7' , '8' , '9' , 'a' , 'b' ,
+      'c' , 'd' , 'e' , 'f' , 'g' , 'h' ,
+      'i' , 'j' , 'k' , 'l' , 'm' , 'n' ,
+      'o' , 'p' , 'q' , 'r' , 's' , 't' ,
+      'u' , 'v' , 'w' , 'x' , 'y' , 'z'
+  };
+  final static byte [] DigitTens = {
+      '0', '0', '0', '0', '0', '0', '0', '0', '0', '0',
+      '1', '1', '1', '1', '1', '1', '1', '1', '1', '1',
+      '2', '2', '2', '2', '2', '2', '2', '2', '2', '2',
+      '3', '3', '3', '3', '3', '3', '3', '3', '3', '3',
+      '4', '4', '4', '4', '4', '4', '4', '4', '4', '4',
+      '5', '5', '5', '5', '5', '5', '5', '5', '5', '5',
+      '6', '6', '6', '6', '6', '6', '6', '6', '6', '6',
+      '7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
+      '8', '8', '8', '8', '8', '8', '8', '8', '8', '8',
+      '9', '9', '9', '9', '9', '9', '9', '9', '9', '9',
+      } ;
+
+  final static byte [] DigitOnes = {
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      } ;
+  /**
+   * Convert string representation to a long value
+   * @param ptr address, where string starts
+   * @param size size of a string
+   * @return
+   */
+  public static long strToLong(long ptr, int size) throws NumberFormatException {
+
+    long result = 0;
+    boolean negative = false;
+    int i = 0, len = size;
+    long limit = -Long.MAX_VALUE;
+    long multmin;
+    int digit;
+
+    if (len > 0) {
+      byte firstChar = UnsafeAccess.toByte(ptr + i);
+      if (firstChar < '0') { // Possible leading "+" or "-"
+        if (firstChar == '-') {
+          negative = true;
+          limit = Long.MIN_VALUE;
+        } else if (firstChar != '+') throw new NumberFormatException();
+
+        if (len == 1) // Cannot have lone "+" or "-"
+          throw new NumberFormatException();
+        i++;
+      }
+      multmin = limit / 10;
+      while (i < len) {
+        // Accumulating negatively avoids surprises near MAX_VALUE
+        digit = UnsafeAccess.toByte(ptr + i++) - (byte)'0';
+        if (digit < 0) {
+          throw new NumberFormatException();
+        }
+        if (result < multmin) {
+          throw new NumberFormatException();
+        }
+        result *= 10;
+        if (result < limit + digit) {
+          throw new NumberFormatException();
+        }
+        result -= digit;
+      }
+    } else {
+      throw new NumberFormatException();
+    }
+    return negative ? result : -result;
+  }
+  /**
+   * Converts long to string representation and stores it in memory
+   * @param v long value
+   * @param ptr memory address
+   * @param size memory size
+   * @return size of a string, if it il's larger than 'size', call fails
+   */
+  public static int longToStr(long i, long ptr, int size) {
+    if (i == Long.MIN_VALUE) {
+      byte[] buf = "-9223372036854775808".getBytes();
+      if (buf.length > size) {
+        return buf.length;
+      }
+      UnsafeAccess.copy(buf, 0, ptr, buf.length);
+      return buf.length;
+    }
+    int s = (i < 0) ? stringSize(-i) + 1 : stringSize(i);
+    if (s > size) {
+      return s;
+    }
+    int sign = 0;
+    if (i < 0) {
+      sign = -1;
+      i = -i;
+    }
+    long value = i;
+    int index = s - 1;
+    while (value > 0) {
+      long old = value;
+      value /= 10; 
+      long rem = old - 10 * value;
+      UnsafeAccess.putByte( ptr + index--, (byte)(rem + '0'));
+    }
+    if (sign != 0) {
+      UnsafeAccess.putByte(ptr, (byte)'-');
+    }
+    return s;
+  }
+  
+  
+  
+  /**
+   * Places characters representing the integer i into the
+   * character array buf. The characters are placed into
+   * the buffer backwards starting with the least significant
+   * digit at the specified index (exclusive), and working
+   * backwards from there.
+   *
+   * Will fail if i == Long.MIN_VALUE
+   */
+  static void getChars(long i, long buf, int size) {
+      long q;
+      int r;
+      int charPos = size;
+      byte sign = 0;
+
+      if (i < 0) {
+          sign = '-';
+          i = -i;
+      }
+
+      // Get 2 digits/iteration using longs until quotient fits into an int
+      while (i > Integer.MAX_VALUE) {
+          q = i / 100;
+          // really: r = i - (q * 100);
+          r = (int)(i - ((q << 6) + (q << 5) + (q << 2)));
+          i = q;
+          UnsafeAccess.putByte(buf + (--charPos), DigitOnes[r]);
+          UnsafeAccess.putByte(buf + (--charPos), DigitTens[r]);
+      }
+
+      // Get 2 digits/iteration using ints
+      int q2;
+      int i2 = (int)i;
+      while (i2 >= 65536) {
+          q2 = i2 / 100;
+          // really: r = i2 - (q * 100);
+          r = i2 - ((q2 << 6) + (q2 << 5) + (q2 << 2));
+          i2 = q2;
+          UnsafeAccess.putByte(buf + (--charPos), DigitOnes[r]);
+          UnsafeAccess.putByte(buf + (--charPos), DigitTens[r]);
+      }
+
+      // Fall thru to fast mode for smaller numbers
+      // assert(i2 <= 65536, i2);
+      for (;;) {
+          q2 = (i2 * 52429) >>> (16+3);
+          r = i2 - ((q2 << 3) + (q2 << 1));  // r = i2-(q2*10) ...
+          UnsafeAccess.putByte(buf + (--charPos), digits[r]);
+          i2 = q2;
+          if (i2 == 0) break;
+      }
+      if (sign != 0) {
+        UnsafeAccess.putByte(buf + (--charPos), sign);
+      }
+  }
+
+  
+  // Requires positive x
+  static int stringSize(long x) {
+      long p = 10;
+      for (int i=1; i<19; i++) {
+          if (x < p)
+              return i;
+          p = 10*p;
+      }
+      return 19;
+  }
+  
+  
+  
+  
+  /**
+   * String - Double conversion
+   *
+   */
+  
+  /**
+   * Converts string representation to double
+   * @param ptr address of a string 
+   * @param size size of a string
+   * @return double
+   */
+  public static final double strToDouble (long ptr, int size) 
+  {
+    
+    MutableString str = MutableString.get();
+    char[] buf = str.getBuffer(size);
+    if (buf == null) {
+      throw new NumberFormatException();
+    }
+    for (int i=0; i < size; i++) {
+      buf[i] = (char) (UnsafeAccess.toByte(ptr + i) & 0xff);
+    }
+    str.setBuffer(buf);
+    String s = str.toString();
+    return Double.parseDouble(s);
+  }
+  
+  /**
+   * Converts double into string and stores it at memory address 'ptr'
+   * @param d double value
+   * @param ptr memory address
+   * @param size memory size
+   * @return size of a string representation, if size is greater than memory buffer
+   *        size, call must be repeated
+   */
+  public final static int doubleToStr(double d, long ptr, int size) {
+    MutableString str = MutableString.get();
+    FloatingDecimal.toJavaFormatMutableString(d, str);
+    String s = str.toString();
+    int len = s.length();
+    if (len > size) {
+      return len;
+    }
+    for (int i=0; i < len; i++) {
+      UnsafeAccess.putByte(ptr + i, (byte)s.charAt(i));
+    }
+    return len;
+  }
+  
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

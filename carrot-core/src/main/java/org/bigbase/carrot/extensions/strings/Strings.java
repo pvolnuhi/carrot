@@ -213,7 +213,7 @@ public class Strings {
    * @param valueSize value size
    * @return the length of the string after the append operation (Integer).
    */
-  public static int append(BigSortedMap map, long keyPtr, int keySize, long valuePtr, int valueSize) {
+  public static int APPEND(BigSortedMap map, long keyPtr, int keySize, long valuePtr, int valueSize) {
     
     Key kk = key.get();
     kk.address = keyPtr;
@@ -256,7 +256,7 @@ public class Strings {
    * @return number of bits set or 0, if key does not exists
    */
   
-  public static long bitCount(BigSortedMap map, long keyPtr, int keySize, long start, long end) {
+  public static long BITCOUNT(BigSortedMap map, long keyPtr, int keySize, long start, long end) {
     Key kk = key.get();
     kk.address = keyPtr;
     kk.size = keySize;
@@ -286,7 +286,7 @@ public class Strings {
    * @param value increment value
    * @return value after increment
    */
-  public static long incrementBy(BigSortedMap map, long keyPtr, int keySize, long value) {
+  public static long INCRBY(BigSortedMap map, long keyPtr, int keySize, long value) {
     return 0;
   }
   
@@ -305,8 +305,8 @@ public class Strings {
    * @param keySize key size
    * @return value of the key after increment
    */
-  public static long increment(BigSortedMap map, long keyPtr, int keySize) {
-    return incrementBy(map, keyPtr, keySize, 1);
+  public static long INCR(BigSortedMap map, long keyPtr, int keySize) {
+    return INCRBY(map, keyPtr, keySize, 1);
   }
   /**
    * Decrements the number stored at key by one. If the key does not exist, it is set to 0 
@@ -318,7 +318,7 @@ public class Strings {
    * @param keySize key size
    * @return key value after decrement
    */
-  public static long decrement(BigSortedMap map, long keyPtr, int keySize) {
+  public static long DECR(BigSortedMap map, long keyPtr, int keySize) {
     return 0;
   }
   
@@ -333,7 +333,7 @@ public class Strings {
    * @param value value to decrement by
    * @return key value after decrement
    */
-  public static long decrementBy(BigSortedMap map, long keyPtr, int keySize, long value) {
+  public static long DECRBY(BigSortedMap map, long keyPtr, int keySize, long value) {
     return 0;
   }
   
@@ -359,7 +359,7 @@ public class Strings {
    * @param value value to increment by
    * @return key value after increment
    */
-  public static double incrementByFloat(BigSortedMap map, long keyPtr, int keySize, double value) {
+  public static double INCRBYFLOAT(BigSortedMap map, long keyPtr, int keySize, double value) {
     return 0;
   }
   
@@ -375,7 +375,7 @@ public class Strings {
    * @return size of a value, or -1 if not found. if size is greater than valueBufLength,
    *         the call must be repeated with appropriately sized value buffer
    */
-  public static long get(BigSortedMap map, long keyPtr, int keyLength, long valueBuf,
+  public static long GET(BigSortedMap map, long keyPtr, int keyLength, long valueBuf,
       int valueBufLength) {
     Key kk = key.get();
     kk.address = keyPtr;
@@ -403,7 +403,7 @@ public class Strings {
    * @param offset offset to lookup bit
    * @return 1 or 0
    */
-  public static int getBit(BigSortedMap map, long keyPtr, int keySize, long offset) {
+  public static int GETBIT(BigSortedMap map, long keyPtr, int keySize, long offset) {
     Key kk = key.get();
     kk.address = keyPtr;
     kk.size = keySize;
@@ -436,7 +436,7 @@ public class Strings {
    * @param bit bit value (0 or 1)
    * @return old bit value (0 if did not exists)
    */
-  public static int setBit(BigSortedMap map, long keyPtr, int keySize, long offset, int bit) {
+  public static int SETBIT(BigSortedMap map, long keyPtr, int keySize, long offset, int bit) {
     Key kk = key.get();
     kk.address = keyPtr;
     kk.size = keySize;
@@ -464,7 +464,7 @@ public class Strings {
    * @param keySize
    * @return size of a value or 0 if does not exists
    */
-  public static int strLength(BigSortedMap map, long keyPtr, int keySize) {
+  public static int STRLEN(BigSortedMap map, long keyPtr, int keySize) {
     Key kk = key.get();
     kk.address = keyPtr;
     kk.size = keySize;
@@ -495,7 +495,7 @@ public class Strings {
    * @return size of a range, or -1, if key does not exists,
    *  if size > buferSize, the call must be repeated with appropriately sized buffer
    */
-  public static int getRange(BigSortedMap map, long keyPtr, int keySize , int start, int end, 
+  public static int GETRANGE(BigSortedMap map, long keyPtr, int keySize , int start, int end, 
       long bufferPtr, int bufferSize) {
     Key kk = key.get();
     kk.address = keyPtr;
@@ -530,7 +530,7 @@ public class Strings {
    *         the call must be repeated
    *         with appropriately sized buffer
    */
-  public static int getSet(BigSortedMap map, long keyPtr, int keySize, long valuePtr, int valueSize,
+  public static int GETSET(BigSortedMap map, long keyPtr, int keySize, long valuePtr, int valueSize,
       long bufferPtr, int bufferSize) 
   {
     Key kk = key.get();
@@ -569,7 +569,7 @@ public class Strings {
    * @param keepTTL keep current TTL
    * @return true on success, false - otherwise
    */
-  public static boolean set(BigSortedMap map, long keyPtr, int keySize, long valuePtr,
+  public static boolean SET(BigSortedMap map, long keyPtr, int keySize, long valuePtr,
       int valueSize, long expire, MutationOptions opts, boolean keepTTL) {
     Key kk = key.get();
     kk.address = keyPtr;
@@ -606,8 +606,8 @@ public class Strings {
    * @param valueSize value size
    * @return true on success, false - otherwise
    */
-  public static boolean setnx (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize) {
-    return set(map, keyPtr, keySize, valuePtr, valueSize, 0, MutationOptions.NX, false);
+  public static boolean SETNX (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize) {
+    return SET(map, keyPtr, keySize, valuePtr, valueSize, 0, MutationOptions.NX, false);
   }
   
   
@@ -628,9 +628,9 @@ public class Strings {
    * @param expire expiration time
    * @return true, false
    */
-  public static boolean setex (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize,
+  public static boolean SETEX (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize,
       long expire) {
-    return set(map, keyPtr, keySize, valuePtr, valueSize, expire, MutationOptions.NONE, false);
+    return SET(map, keyPtr, keySize, valuePtr, valueSize, expire, MutationOptions.NONE, false);
   }  
   
   /**
@@ -650,9 +650,9 @@ public class Strings {
    * @param expire expiration time
    * @return true, false
    */
-  public static boolean psetex (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize,
+  public static boolean PSETEX (BigSortedMap map, long keyPtr, int keySize, long valuePtr,  int valueSize,
       long expire) {
-    return set(map, keyPtr, keySize, valuePtr, valueSize, expire, MutationOptions.NONE, false);
+    return SET(map, keyPtr, keySize, valuePtr, valueSize, expire, MutationOptions.NONE, false);
   }  
   
   /**
@@ -670,7 +670,7 @@ public class Strings {
    * @param valueSize value size
    * @return new size of key's value
    */
-  public static int setRange(BigSortedMap map, long keyPtr, int keySize, int offset, long valuePtr, int valueSize) {
+  public static int SETRANGE(BigSortedMap map, long keyPtr, int keySize, int offset, long valuePtr, int valueSize) {
     Key kk = key.get();
     kk.address = keyPtr;
     kk.size = keySize;
@@ -723,7 +723,7 @@ public class Strings {
    * and end. If no clear bit is found in the specified range, the function returns -1 as the user specified 
    * a clear range and there are no 0 bits in that range.
    */
-  public static long bitPos(BigSortedMap map, long keyPtr, int keySize, int bit, long start, long end) {
+  public static long BITPOS(BigSortedMap map, long keyPtr, int keySize, int bit, long start, long end) {
     Key kk = key.get();
     kk.address = keyPtr;
     kk.size = keySize;
@@ -750,13 +750,13 @@ public class Strings {
    * @param map sorted map storage
    * @param kvs list of key-values to set
    */
-  public static void mset(BigSortedMap map, List<KeyValue> kvs) {
+  public static void MSET(BigSortedMap map, List<KeyValue> kvs) {
     
     try {
       KeysLocker.writeLockAll(kvs);
       for(int i =0; i < kvs.size(); i++) {
         KeyValue kv = kvs.get(i);
-        set(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
+        SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
           MutationOptions.NONE, false);
       }
     } finally {
@@ -780,7 +780,7 @@ public class Strings {
    * @param kvs list of key-values to set
    * @return true on success, false - otherwise
    */
-  public static boolean msetnx(BigSortedMap map, List<KeyValue> kvs) {
+  public static boolean MSETNX(BigSortedMap map, List<KeyValue> kvs) {
     
     try {
       KeysLocker.writeLockAll(kvs);
@@ -792,7 +792,7 @@ public class Strings {
       }
       for(int i =0; i < kvs.size(); i++) {
         KeyValue kv = kvs.get(i);
-        set(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
+        SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
           MutationOptions.NONE, false);
       }
     } finally {

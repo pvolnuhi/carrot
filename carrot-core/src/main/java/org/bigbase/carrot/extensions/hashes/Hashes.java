@@ -2,18 +2,22 @@ package org.bigbase.carrot.extensions.hashes;
 
 import static org.bigbase.carrot.extensions.Commons.KEY_SIZE;
 import static org.bigbase.carrot.extensions.Commons.NUM_ELEM_SIZE;
-import static org.bigbase.carrot.extensions.Commons.numElementsInValue;
-import static org.bigbase.carrot.extensions.Commons.keySize;
 import static org.bigbase.carrot.extensions.Commons.keySizeWithPrefix;
-
+import static org.bigbase.carrot.extensions.Commons.numElementsInValue;
+import static org.bigbase.carrot.extensions.KeysLocker.readLock;
+import static org.bigbase.carrot.extensions.KeysLocker.readUnlock;
+import static org.bigbase.carrot.extensions.KeysLocker.writeLock;
+import static org.bigbase.carrot.extensions.KeysLocker.writeUnlock;
 
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.Key;
 import org.bigbase.carrot.extensions.DataType;
 import org.bigbase.carrot.extensions.IncrementType;
+import org.bigbase.carrot.extensions.MutationOptions;
 import org.bigbase.carrot.extensions.OperationFailedException;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -53,6 +57,14 @@ public class Hashes {
     @Override
     protected Integer initialValue() {
       return 512;
+    }
+  };
+  
+  static int INCR_ARENA_SIZE = 64;
+  static ThreadLocal<Long> incrArena = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(INCR_ARENA_SIZE);
     }
   };
   
@@ -96,15 +108,6 @@ public class Hashes {
     } 
   };
   
-  /**
-   * Thread local updates Hash Increment
-   */
-  private static ThreadLocal<HashIncrement> hashIncrement = new ThreadLocal<HashIncrement>() {
-    @Override
-    protected HashIncrement initialValue() {
-      return new HashIncrement();
-    } 
-  };
   
   /**
    * Thread local updates Hash Value Length
@@ -114,6 +117,14 @@ public class Hashes {
     protected HashValueLength initialValue() {
       return new HashValueLength();
     } 
+  };
+  
+  
+  private static ThreadLocal<Key> key = new ThreadLocal<Key>() {
+    @Override
+    protected Key initialValue() {
+      return new Key(0,0);
+    }   
   };
   /**
    * Checks key arena size
@@ -168,29 +179,76 @@ public class Hashes {
     }
     return kSize;
   }
+  
   /**
-   * Add field-value to a set defined by key
+   * Gets and initializes Key
+   * @param ptr key address
+   * @param size key size
+   * @return key instance
+   */
+  private static Key getKey(long ptr, int size) {
+    Key k = key.get();
+    k.address = ptr;
+    k.size = size;
+    return k;
+  }
+  
+  /**
+   * Sets field in the hash stored at key to value. If key does not exist, a new key holding 
+   * a hash is created. If field already exists in the hash, it is overwritten.
+   * As of Redis 4.0.0, HSET is variadic and allows for multiple field/value pairs.
+   * Return value
+   * Integer reply: The number of fields that were added.   
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
    * @param valuePtr value address
    * @param valueSize value size
-   * @return true if success, false is map is full
+   * @return The number of fields that were added.
    */
-  public static boolean setFieldValue(BigSortedMap map, long keyPtr, int keySize, 
-      long fieldPtr, int fieldSize, long valuePtr, int valueSize) {
-    
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashSet set = hashSet.get();
-    set.reset();
-    set.setKeyAddress(keyArena.get());
-    set.setKeySize(kSize);
-    set.setFieldValue(valuePtr, valueSize);
-    set.setIfNotExists(false);
-    // version?    
-    return map.execute(set);
+  public static int HSET(BigSortedMap map, long keyPtr, int keySize, long[] fieldPtrs,
+      int[] fieldSizes, long[] valuePtrs, int[] valueSizes) {
+
+    Key k = getKey(keyPtr, keySize);
+    int count = 0;
+    try {
+      writeLock(k);
+      for(int i=0; i < fieldPtrs.length; i++) {
+        long fieldPtr = fieldPtrs[i];
+        int fieldSize = fieldSizes[i];
+        long valuePtr = valuePtrs[i];
+        int valueSize = valueSizes[i];
+        int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+        HashSet set = hashSet.get();
+        set.reset();
+        set.setKeyAddress(keyArena.get());
+        set.setKeySize(kSize);
+        set.setFieldValue(valuePtr, valueSize);
+        set.setOptions(MutationOptions.NONE);
+        // version?
+        if(map.execute(set)) {
+          count++;
+        }
+      }
+      return count;
+    } finally {
+      writeUnlock(k);
+    }
   }
-  
+  /**
+   * HMSET - obsolete
+   * @param map sorted map
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param valuePtr value address
+   * @param valueSize value size
+   * @return The number of fields that were added.
+   */
+  public static int HMSET(BigSortedMap map, long keyPtr, int keySize, long[] fieldPtrs,
+      int[] fieldSizes, long[] valuePtrs, int[] valueSizes) {
+    return HSET(map, keyPtr, keySize, fieldPtrs, fieldSizes, valuePtrs, valueSizes);
+  }
+
   /**
    * Add field-value to a set defined by key if not exists
    * @param map sorted map
@@ -200,45 +258,62 @@ public class Hashes {
    * @param valueSize value size
    * @return true if success, false is map is full
    */
-  public static boolean setFieldValueIfNotExists(BigSortedMap map, long keyPtr, int keySize, 
+  public static boolean HSETNX(BigSortedMap map, long keyPtr, int keySize, 
       long fieldPtr, int fieldSize, long valuePtr, int valueSize) {
     
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashSet set = hashSet.get();
-    set.reset();
-    set.setKeyAddress(keyArena.get());
-    set.setKeySize(kSize);
-    set.setFieldValue(valuePtr, valueSize);
-    set.setIfNotExists(true);
-    // version?    
-    return map.execute(set);
+    Key k = getKey(keyPtr, keySize);
+   
+    try {
+      writeLock(k);
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashSet set = hashSet.get();
+      set.reset();
+      set.setKeyAddress(keyArena.get());
+      set.setKeySize(kSize);
+      set.setFieldValue(valuePtr, valueSize);
+      set.setOptions(MutationOptions.NX);
+      // version?    
+      return map.execute(set);
+    } finally {
+      writeUnlock(k);
+    }
   }
   
   /**
-   * Returns total number of elements in this set
+   * Returns the number of fields contained in the hash stored at key.
+   * Return value
+   * Integer reply: number of fields in the hash, or 0 when key does not exist.   
    * @param map
    * @param keyPtr
    * @param keySize
    * @return number of elements(fields)
    */
-  public static long getNumberOfFieldsInHash(BigSortedMap map, long keyPtr, int keySize) {
-    int kSize = buildKey(keyPtr, keySize, 0, 0);
-    long ptr = keyArena.get();
-    BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
-    if (scanner == null) {
-      return 0; // empty or does not exists
-    }
-    long total = 0;
+  public static long HLEN(BigSortedMap map, long keyPtr, int keySize) {
+    
+    Key k = getKey(keyPtr, keySize);
+
     try {
-      while (scanner.hasNext()) {
-        long valuePtr = scanner.valueAddress();
-        total += numElementsInValue(valuePtr);
+      readLock(k);
+      int kSize = buildKey(keyPtr, keySize, 0, 0);
+      long ptr = keyArena.get();
+      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      if (scanner == null) {
+        return 0; // empty or does not exists
       }
-      scanner.close();
-    } catch (IOException e) {
-      // should never be thrown
+      long total = 0;
+      try {
+        while (scanner.hasNext()) {
+          long valuePtr = scanner.valueAddress();
+          total += numElementsInValue(valuePtr);
+        }
+        scanner.close();
+      } catch (IOException e) {
+        // should never be thrown
+      }
+      return total;
+    } finally {
+      readUnlock(k);
     }
-    return total;
   }
   
   /**
@@ -249,66 +324,114 @@ public class Hashes {
    * @return hash size in bytes
    */
   public static long getHashSizeInBytes(BigSortedMap map, long keyPtr, int keySize) {
-    int kSize = buildKey(keyPtr, keySize, 0, 0);
-    long ptr = keyArena.get();
-    BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
-    if (scanner == null) {
-      return 0; // empty or does not exists
-    }
-    long total = 0;
+    Key k = getKey(keyPtr, keySize);
+
     try {
-      while (scanner.hasNext()) {
-        long valueSize = scanner.valueSize();
-        total += valueSize - NUM_ELEM_SIZE;
+      readLock(k);      
+      int kSize = buildKey(keyPtr, keySize, 0, 0);
+      long ptr = keyArena.get();
+      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      if (scanner == null) {
+        return 0; // empty or does not exists
       }
-      scanner.close();
-    } catch (IOException e) {
-      // should never be thrown
+      long total = 0;
+      try {
+        while (scanner.hasNext()) {
+          long valueSize = scanner.valueSize();
+          total += valueSize - NUM_ELEM_SIZE;
+        }
+        scanner.close();
+      } catch (IOException e) {
+        // should never be thrown
+      }
+      return total;
+    } finally {
+      readUnlock(k);
     }
-    return total;
   }
   
+  
+  
   /**
-   * Deletes element of a set
+   * Available since 2.0.0. Atomic operation
+   * Time complexity: O(N) where N is the number of fields to be removed.
+   * Removes the specified fields from the hash stored at key. Specified fields that do not exist 
+   * within this hash are ignored. If key does not exist, it is treated as an empty hash and this 
+   * command returns 0.
+   * Return value
+   * Integer reply: the number of fields that were removed from the hash, not including 
+   * specified but non existing fields.
+   *  History
+   *  >= 2.4: Accepts multiple field arguments. Redis versions older than 2.4 can only remove a field per call.
+   *  To remove multiple fields from a hash in an atomic fashion in earlier versions, use a MULTI / EXEC block.
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
    * @param valuePtr value address
    * @param valueSize value size
-   * @return true or false
+   * @return the number of fields that were removed from the hash
    */
   
-  public static boolean deleteField(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize) {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashDelete update = hashDelete.get();
-    update.reset();
-    update.setMap(map);
-    update.setKeyAddress(keyArena.get());
-    update.setKeySize(kSize);
-    // version?    
-    return map.execute(update);
+  public static int HDEL(BigSortedMap map, long keyPtr, int keySize, long[] fieldPtrs, int[] fieldSizes) {
+    
+    Key k = getKey(keyPtr, keySize);
+    int deleted = 0;
+    try {
+      writeLock(k);
+      if (!map.exists(keyPtr, keySize)) {
+        return 0;
+      }
+      for (int i = 0; i < fieldPtrs.length; i++) {
+        long fieldPtr = fieldPtrs[i];
+        int fieldSize = fieldSizes[i];
+
+        int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+        HashDelete update = hashDelete.get();
+        update.reset();
+        update.setMap(map);
+        update.setKeyAddress(keyArena.get());
+        update.setKeySize(kSize);
+        // version?
+        if (map.execute(update)) {
+          deleted++;
+        }
+      }
+      return deleted;
+    } finally {
+      writeUnlock(k);
+    }
   }
   /**
-   * Determine if hash filed exists
+   * Returns if field is an existing field in the hash stored at key.
+   * Return value
+   * Integer reply, specifically:
+   * 1 if the hash contains field.
+   * 0 if the hash does not contain field, or key does not exist.
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
    * @param fieldPtr field address
    * @param fieldSize field size
-   * @return
+   * @return 1 if field exists, 0 - otherwise
    */
-  public static boolean exists(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize) {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashExists update = hashExists.get();
-    update.reset();
-    update.setKeyAddress(keyArena.get());
-    update.setKeySize(kSize);
-    // version?    
-    return map.execute(update);  
+  public static int HEXISTS (BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize) {
+    Key k = getKey(keyPtr, keySize);
+    try {
+      readLock(k);
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashExists update = hashExists.get();
+      update.reset();
+      update.setKeyAddress(keyArena.get());
+      update.setKeySize(kSize);
+      // version?
+      return map.execute(update)? 1 : 0;
+    } finally {
+      readUnlock(k);
+    }
   }
   
   /**
-   * Get field's value into provided buffer
+   *  Returns the value associated with field in the hash stored at key.
    * @param map ordered map
    * @param keyPtr hash key address
    * @param keySize hash key size
@@ -317,52 +440,110 @@ public class Hashes {
    * @param valueBuf value buffer
    * @param valueBufSize value buffer size
    * @return size of value, one should check this and if it is greater than valueBufSize
-   *         means that call should be repeated with an appropriately sized value buffer
+   *         means that call should be repeated with an appropriately sized value buffer, 
+   *         -1 - if does not exists
    */
-  public static int getFieldValue (BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
+  public static int HGET (BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
       long valueBuf, int valueBufSize) {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashGet get = hashGet.get();
-    get.reset();
-    get.setKeyAddress(keyArena.get());
-    get.setKeySize(kSize);
-    get.setBufferPtr(valueBuf);
-    get.setBufferSize(valueBufSize);
-    // version?    
-    map.execute(get);
-    return get.getFoundValueSize();
-  }
-  
-  /**
-   * Integer counter increment, the size of value is expected exactly 4 bytes
-   * @param map ordered map
-   * @param keyPtr hash key address
-   * @param keySize hash key size
-   * @param fieldPtr field to lookup address
-   * @param fieldSize field size
-   * @param value increment
-   * @return new counter value
-   */
-  public static int increment(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, int value)
-    throws OperationFailedException
-  {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashIncrement incr = hashIncrement.get();
-    incr.reset();
-    incr.setKeyAddress(keyArena.get());
-    incr.setKeySize(kSize);
-    incr.setIncrementType(IncrementType.INTEGER);
-    incr.setIntValue(value);
-    // version?    
-    boolean result = map.execute(incr);
-    if (result == false) {
-      throw new OperationFailedException();
+    Key k = getKey(keyPtr, keySize);
+    try {
+      readLock(k);
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashGet get = hashGet.get();
+      get.reset();
+      get.setKeyAddress(keyArena.get());
+      get.setKeySize(kSize);
+      get.setBufferPtr(valueBuf);
+      get.setBufferSize(valueBufSize);
+      // version?
+      map.execute(get);
+      return get.getFoundValueSize();
+    } finally {
+      readUnlock(k);
     }
-    return incr.getIntPostIncrement();
   }
   
   /**
-   * Long counter increment, the size of value is expected exactly 8 bytes
+   * Returns the values associated with the specified fields in the hash stored at key.
+   * For every field that does not exist in the hash, a nil value is returned. Because 
+   * non-existing keys are treated as empty hashes, running HMGET against a non-existing key will 
+   * return a list of nil values.
+   * Return value:
+   * Array reply: list of values associated with the given fields, in the same order as they are requested. 
+   * 
+   * Serialized buffer format:
+   * [NUM_VALUES] - 8 bytes
+   * [VALUE]+
+   * [VALUE] :
+   *   [SIZE] 4 bytes
+   *   [VALUE_DATA]
+   *   
+   * @param map sorted map 
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param fieldPtrs field pointers
+   * @param fieldSizes field sizes
+   * @param valueBuf values buffer
+   * @param valueBufSize values buffer size
+   * @return total size of serialized values, if this size is greater than
+   *          valueBufSize, the call must be repeated with appropriately sized buffer,
+   *          -1 if key does not exist
+   *          Special value size is reserved for NULL -> -1
+   */
+    
+   
+  public static long HMGET (BigSortedMap map, long keyPtr, int keySize, long[] fieldPtrs, int[] fieldSizes,
+      long valueBuf, int valueBufSize) {
+    Key k = getKey(keyPtr, keySize);
+    HashScanner scanner = null;
+    try {
+      readLock(k);
+      scanner = getHashScanner(map, keyPtr, keySize, false);
+      if (scanner == null) {        
+        return -1;
+      }
+      long ptr = valueBuf + Utils.SIZEOF_LONG;
+      
+      long count = 0;
+      long totalSize = 0;
+      try {
+        while(scanner.hasNext()) {
+          long vptr = scanner.valueAddress();
+          int size = scanner.valueSize();
+          count++;
+          totalSize += size + Utils.SIZEOF_INT;
+          if (ptr + Utils.SIZEOF_INT + size < valueBuf + valueBufSize) {
+            // copy
+            UnsafeAccess.putInt(ptr, size);
+            UnsafeAccess.copy(vptr, ptr + Utils.SIZEOF_INT, size);
+          }
+          ptr += size + Utils.SIZEOF_INT;
+          scanner.next();         
+        }
+      } catch (IOException e) {
+        // It does not throw this exception
+      }
+      UnsafeAccess.putLong(valueBuf, count);
+      return totalSize;
+    } finally {
+      if (scanner != null) {
+        try {
+          scanner.close();
+        } catch (IOException e) {
+          // It does not throw this exception
+        }
+      }
+      readUnlock(k);
+    }
+  }
+  
+  /**
+   * Increments the number stored at field in the hash stored at key by increment. 
+   * If key does not exist, a new key holding a hash is created. If field does not 
+   * exist the value is set to 0 before the operation is performed.
+   * The range of values supported by HINCRBY is limited to 64 bit signed integers.
+   * Return value
+   * Integer reply: the value at field after the increment operation.   
    * @param map ordered map
    * @param keyPtr hash key address
    * @param keySize hash key size
@@ -372,26 +553,55 @@ public class Hashes {
    * @return new counter value
    * @throws OperationFailedException 
    */
-  public static long increment(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, long value)
-      throws OperationFailedException
-  {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashIncrement incr = hashIncrement.get();
-    incr.reset();
-    incr.setKeyAddress(keyArena.get());
-    incr.setKeySize(kSize);
-    incr.setIncrementType(IncrementType.LONG);
-    incr.setLongValue(value);
-    // version?    
-    boolean result = map.execute(incr);
-    if (result == false) {
-      throw new OperationFailedException();
+  public static long HINCRBY(BigSortedMap map, long keyPtr, int keySize, long fieldPtr,
+      int fieldSize, long incr) throws OperationFailedException {
+    Key k = getKey(keyPtr, keySize);
+    try {
+      writeLock(k);
+      long value = 0;
+      int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, incrArena.get(), INCR_ARENA_SIZE);
+      if (size > INCR_ARENA_SIZE) {
+        throw new NumberFormatException();
+      } else if (size > 0) {
+        value = Utils.strToLong(incrArena.get(), size);
+      }
+      value += incr;
+      size = Utils.longToStr(value, incrArena.get(), INCR_ARENA_SIZE);
+      // Execute single HSET
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashSet set = hashSet.get();
+      set.reset();
+      set.setKeyAddress(keyArena.get());
+      set.setKeySize(kSize);
+      set.setFieldValue(incrArena.get(), size);
+      set.setOptions(MutationOptions.NONE);
+      // version?
+      if(map.execute(set)) {
+        return value;
+      } else {
+        throw new OperationFailedException();
+      }
+    } finally {
+      writeUnlock(k);
     }
-    return incr.getLongPostIncrement(); 
-   }
+  }
+  
+
   
   /**
-   * Float counter increment, the size of value is expected exactly 4 bytes
+   * Increment the specified field of a hash stored at key, and representing a floating point 
+   * number, by the specified increment. If the increment value is negative, the result is to 
+   * have the hash field value decremented instead of incremented. If the field does not exist, 
+   * it is set to 0 before performing the operation. An error is returned if one of the following
+   *  conditions occur:
+   * The field contains a value of the wrong type (not a string).
+   * The current field content or the specified increment are not parsable as a double precision 
+   * floating point number.
+   * The exact behavior of this command is identical to the one of the INCRBYFLOAT command,
+   *  please refer to the documentation of INCRBYFLOAT for further information.
+   * 
+   * Return value:
+   * Bulk string reply: the value of field after the increment.   
    * @param map ordered map
    * @param keyPtr hash key address
    * @param keySize hash key size
@@ -401,52 +611,44 @@ public class Hashes {
    * @return new counter value
    * @throws OperationFailedException 
    */
-  public static float increment(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, float value) throws OperationFailedException
-  {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashIncrement incr = hashIncrement.get();
-    incr.reset();
-    incr.setKeyAddress(keyArena.get());
-    incr.setKeySize(kSize);
-    incr.setIncrementType(IncrementType.FLOAT);
-    incr.setFloatValue(value);
-    // version?    
-    boolean result = map.execute(incr);
-    if (result == false) {
-      throw new OperationFailedException();
+  public static double HINCRBYFLOAT(BigSortedMap map, long keyPtr, int keySize, long fieldPtr,
+      int fieldSize, double incr) throws OperationFailedException {
+    Key k = getKey(keyPtr, keySize);
+    try {
+      writeLock(k);
+      double value = 0;
+      int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, incrArena.get(), INCR_ARENA_SIZE);
+      if (size > INCR_ARENA_SIZE) {
+        throw new NumberFormatException();
+      } else if (size > 0) {
+        value = Utils.strToDouble(incrArena.get(), size);
+      }
+      value += incr;
+      size = Utils.doubleToStr(value, incrArena.get(), INCR_ARENA_SIZE);
+      // Execute single HSET
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashSet set = hashSet.get();
+      set.reset();
+      set.setKeyAddress(keyArena.get());
+      set.setKeySize(kSize);
+      set.setFieldValue(incrArena.get(), size);
+      set.setOptions(MutationOptions.NONE);
+      // version?
+      if(map.execute(set)) {
+        return value;
+      } else {
+        throw new OperationFailedException();
+      }
+    } finally {
+      writeUnlock(k);
     }
-    return incr.getFloatPostIncrement(); 
-  }
-  
-  /**
-   * Double counter increment, the size of value is expected exactly 8 bytes
-   * @param map ordered map
-   * @param keyPtr hash key address
-   * @param keySize hash key size
-   * @param fieldPtr field to lookup address
-   * @param fieldSize field size
-   * @param value increment
-   * @return new counter value
-   * @throws OperationFailedException 
-   */
-  public static double increment(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, double value) throws OperationFailedException
-  {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashIncrement incr = hashIncrement.get();
-    incr.reset();
-    incr.setKeyAddress(keyArena.get());
-    incr.setKeySize(kSize);
-    incr.setIncrementType(IncrementType.DOUBLE);
-    incr.setDoubleValue(value);
-    // version?    
-    boolean result = map.execute(incr);
-    if (result == false) {
-      throw new OperationFailedException();
-    }
-    return incr.getDoublePostIncrement();
   }
   /**
-   * Get the length of the value of a hash field
+   * Returns the string length of the value associated with field in the hash stored at key. 
+   * If the key or the field do not exist, 0 is returned.
+   * Return value
+   * Integer reply: the string length of the value associated with field, or zero when field 
+   * is not present in the hash or key does not exist at all.   
    * @param map ordered map
    * @param keyPtr key address
    * @param keySize key size
@@ -454,15 +656,21 @@ public class Hashes {
    * @param fieldSize field size
    * @return length of value
    */
-  public static int getValueLength(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize) {
-    int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
-    HashValueLength get = hashValueLength.get();
-    get.reset();
-    get.setKeyAddress(keyArena.get());
-    get.setKeySize(kSize);
-    // version?    
-    map.execute(get);
-    return get.getFoundValueSize();
+  public static int HSTRLEN(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize) {
+    Key k = getKey(keyPtr, keySize);
+    try {
+      readLock(k);
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashValueLength get = hashValueLength.get();
+      get.reset();
+      get.setKeyAddress(keyArena.get());
+      get.setKeySize(kSize);
+      // version?    
+      map.execute(get);
+      return get.getFoundValueSize();
+    } finally {
+      readUnlock(k);
+    }
   }
   /**
    * TODO: pattern matching

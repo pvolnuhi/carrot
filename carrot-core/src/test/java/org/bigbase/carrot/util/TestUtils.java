@@ -90,6 +90,48 @@ public class TestUtils {
 
   }  
   
+  
+  @Test
+  public void testDoubleConversions() {
+    System.out.println("testDoubleConversions");
+    long ptr = UnsafeAccess.malloc(30);
+    int size = 30;
+    
+    Random r = new Random();
+    long start = System.currentTimeMillis();
+    double total = 0;
+    for(int i=0; i < 1000000; i++) {
+      double d = r.nextDouble();
+      int len = Utils.doubleToStr(d, ptr, size);
+      double dd = Utils.strToDouble(ptr, len);
+      //System.out.println(d+" " + dd);
+      total += dd;
+    }
+    long end = System.currentTimeMillis();
+    System.out.println ("Time =" + (end-start) + " total="+total);
+  }
+  
+  @Test
+  public void testLongConversions() {
+    System.out.println("testLongConversions");
+    long ptr = UnsafeAccess.malloc(30);
+    int size = 30;
+    
+    Random r = new Random();
+    long start = System.currentTimeMillis();
+    long total = 0;
+    for(int i=0; i < 10000000; i++) {
+      long d = r.nextLong();
+      int len = Utils.longToStr(d, ptr, size);
+      long dd = Utils.strToLong(ptr, len);
+      assertEquals(d, dd);
+      //System.out.println(d+" " + dd);
+      total += dd;
+    }
+    long end = System.currentTimeMillis();
+    System.out.println ("Time =" + (end-start) + " total="+total);
+  }
+  
   @Test
   public void testUnsignedVaribaleInt() {
     int [] values = new int[1000];
