@@ -544,13 +544,29 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     }
     return DataBlock.keyAddress(this.curPtr);
   }
-  
+  /**
+   * Get version of a current key
+   * @return
+   */
   public long keyVersion() {
     // TODO Auto-generated method stub
     return DataBlock.version(curPtr);
   }
   
+  /**
+   * Get current Key type : DELETE or PUT
+   * @return
+   */
   public Op keyOpType() {
     return DataBlock.getRecordType(curPtr);
+  }
+  
+  /**
+   * Delete current Key
+   * @return true if success, false - otherwise
+   */
+  public boolean delete() {
+    //TODO
+    return false;
   }
 }

@@ -8,7 +8,10 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 public class Commons {
-
+  public final static long ZERO = UnsafeAccess.malloc(1);  
+  static {
+    UnsafeAccess.putByte(ZERO,  (byte)0);
+  }
   public final static int NULL_INT = Integer.MIN_VALUE;
   public final static long NULL_LONG = Long.MIN_VALUE;
   /*

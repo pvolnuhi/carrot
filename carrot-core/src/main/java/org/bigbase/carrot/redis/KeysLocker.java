@@ -108,7 +108,7 @@ public class KeysLocker {
    * Read lock list of KeyValues
    * @param kvs list of KeyValues
    */
-  public static void readLockAll(List<KeyValue> kvs) {
+  public static void readLockAllKeyValues(List<KeyValue> kvs) {
     // Sort them first to avoid deadlocks in a future
     Collections.sort(kvs);
     for(int i=0; i < kvs.size(); i++) {
@@ -119,7 +119,7 @@ public class KeysLocker {
    * Read unlock list of KeyValues
    * @param kvs list of KeyValues
    */
-  public static void readUnlockAll(List<KeyValue> kvs) {
+  public static void readUnlockAllKeyValues(List<KeyValue> kvs) {
     for(int i=0; i < kvs.size(); i++) {
       readUnlock(kvs.get(i));
     }
@@ -129,7 +129,7 @@ public class KeysLocker {
    * Write lock list of KeyValues
    * @param kvs list of KeyValues
    */
-  public static void writeLockAll(List<KeyValue> kvs) {
+  public static void writeLockAllKeyValues(List<KeyValue> kvs) {
     // Sort them first to avoid deadlocks in a future
     Collections.sort(kvs);
     for(int i=0; i < kvs.size(); i++) {
@@ -140,7 +140,49 @@ public class KeysLocker {
    * Write unlock list of KeyValues
    * @param kvs list of KeyValues
    */
-  public static void writeUnlockAll(List<KeyValue> kvs) {
+  public static void writeUnlockAllKeyValues(List<KeyValue> kvs) {
+    for(int i=0; i < kvs.size(); i++) {
+      writeUnlock(kvs.get(i));
+    }
+  }
+  
+  /**
+   * Write lock list of Keys
+   * @param kvs list of Keys
+   */
+  public static void writeLockAllKeys(List<Key> kvs) {
+    // Sort them first to avoid deadlocks in a future
+    Collections.sort(kvs);
+    for(int i=0; i < kvs.size(); i++) {
+      writeLock(kvs.get(i));
+    }
+  }
+  /**
+   * Write unlock list of Keys
+   * @param kvs list of Keys
+   */
+  public static void writeUnlockAllKeys(List<Key> kvs) {
+    for(int i=0; i < kvs.size(); i++) {
+      writeUnlock(kvs.get(i));
+    }
+  }
+  
+  /**
+   * Read lock list of Keys
+   * @param kvs list of Keys
+   */
+  public static void readLockAllKeys(List<Key> kvs) {
+    // Sort them first to avoid deadlocks in a future
+    Collections.sort(kvs);
+    for(int i=0; i < kvs.size(); i++) {
+      readLock(kvs.get(i));
+    }
+  }
+  /**
+   * Read unlock list of Keys
+   * @param kvs list of Keys
+   */
+  public static void readUnlockAllKeys(List<Key> kvs) {
     for(int i=0; i < kvs.size(); i++) {
       readUnlock(kvs.get(i));
     }

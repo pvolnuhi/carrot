@@ -489,4 +489,13 @@ public final class DataBlockScanner implements Closeable{
   public Op keyOpType() {
     return DataBlock.getRecordType(curPtr);
   }
+  
+  /**
+   * Delete current Key
+   * @return tru if success, false - otherwise
+   */
+  public boolean delete() {
+    //TODO
+    return false;
+  }
 }

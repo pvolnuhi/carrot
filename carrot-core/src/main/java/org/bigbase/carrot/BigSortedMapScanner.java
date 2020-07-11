@@ -309,4 +309,21 @@ public class BigSortedMapScanner implements Closeable{
     }
   }
   
+  /**
+   * Delete current Key
+   * @return true if success, false - otherwise
+   */
+  public boolean delete() {
+    //TODO
+    return false;
+  }
+  
+  /**
+   * Delete all Keys in this scanner
+   * @return true on success, false?
+   */
+  public boolean deleteAll() {
+    return false;
+  }
+  
 }

@@ -1,5 +1,6 @@
 package org.bigbase.carrot.util;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -16,7 +17,7 @@ public class Utils {
   public final static int SIZEOF_SHORT = 2;
   public final static int SIZEOF_BYTE = 1;
   
-
+  private static Random rnd = new Random();
   /**
    * Returns true if x1 is less than x2, when both values are treated as unsigned long. Both values
    * are passed as is read by Unsafe. When platform is Little Endian, have to convert to
@@ -868,6 +869,71 @@ public class Utils {
     return len;
   }
   
+  
+  /**
+   * Generated random array (with possible repeats)
+   * @param max max value
+   * @param count total random elements count
+   * @return random  (array) sorted
+   */
+  public static int[] randomArray(int max, int count) {
+     int[] ret = new int[count];
+     for (int i=0; i < count; i++) {
+       ret[i] = rnd.nextInt(max) + 1;
+     }
+     Arrays.sort(ret);
+     return ret;
+  }
+  
+  /**
+   * TODO: test
+   * Generated random array (with no possible repeats)
+   * @param max max value
+   * @param count total random elements count
+   * @return random  distinct (array) sorted
+   */
+  public static int[] randomDistinctArray(int max, int count) {
+     boolean reverseBuild = count > max/2;
+     if (reverseBuild) count = max - count;
+     int[] ret = new int[count];
+     for (int i=0; i < count; i++) {
+       while (true) {
+         int v = rnd.nextInt(max) + 1;
+         if (!contains(ret, v)) {
+           ret[i] = v;
+           break;
+         }
+       }
+     }
+     Arrays.sort(ret);
+     if (!reverseBuild) {
+       return ret;
+     } else {
+       int[] arr = new int[max - count];
+       int k = 0;
+       for (int i=0; i < ret.length; i++) {
+         for(; k < ret[i]; k++) {
+           arr[k] = k;
+         }
+         k++;// skip ret[i]
+       }
+       // already sorted
+       return arr;
+     }
+     
+  }
+  /**
+   * Checks if array contains the element
+   * @param arr integer array
+   * @param v element
+   * @return tru, if - yes, false - otherwise
+   */
+  private static boolean contains(int[] arr, int v) {
+    for (int i = 0; i < arr.length; i++) {
+      if (arr[i] == v) return true;
+    }  
+    return false;
+  }
   
   public static void main(String[] args) {
     int count =0;

@@ -4,6 +4,7 @@ import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 import static org.bigbase.carrot.redis.Commons.numElementsInValue;
+import static org.bigbase.carrot.redis.Commons.ZERO;
 import static org.bigbase.carrot.redis.KeysLocker.readLock;
 import static org.bigbase.carrot.redis.KeysLocker.readUnlock;
 import static org.bigbase.carrot.redis.KeysLocker.writeLock;
@@ -16,7 +17,7 @@ import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.IncrementType;
+import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.OperationFailedException;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -191,6 +192,30 @@ public class Hashes {
     k.address = ptr;
     k.size = size;
     return k;
+  }
+  
+  /**
+   * Delete hash by Key
+   * @param map sorted map
+   * @param keyPtr key address
+   * @param keySize key size
+   */
+  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+    Key k = getKey(keyPtr, keySize);
+    HashScanner scanner = null;
+    try {
+      KeysLocker.writeLock(k);
+      scanner = getHashScanner(map, keyPtr, keySize, false);
+      scanner.deleteAll();
+    } finally {
+      if (scanner != null) {
+        try {
+          scanner.close();
+        } catch (IOException e) {
+        }
+      }
+      KeysLocker.writeUnlock(k);
+    }
   }
   
   /**
@@ -378,7 +403,7 @@ public class Hashes {
     int deleted = 0;
     try {
       writeLock(k);
-      if (!map.exists(keyPtr, keySize)) {
+      if (!keyExists(map, keyPtr, keySize)) {
         return 0;
       }
       for (int i = 0; i < fieldPtrs.length; i++) {
@@ -401,6 +426,12 @@ public class Hashes {
       writeUnlock(k);
     }
   }
+  
+  public static boolean keyExists(BigSortedMap map, long keyPtr, int keySize) {
+    int kSize = buildKey(keyPtr, keySize, ZERO, 1);
+    return map.exists(keyArena.get(), kSize);
+  }
+  
   /**
    * Returns if field is an existing field in the hash stored at key.
    * Return value

@@ -319,4 +319,12 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
       indexBlock.readUnlock();
     } 
   }
+  /**
+   * Delete current Key
+   * @return true if success, false - otherwise
+   */
+  public boolean delete() {
+    //TODO
+    return false;
+  }
 }

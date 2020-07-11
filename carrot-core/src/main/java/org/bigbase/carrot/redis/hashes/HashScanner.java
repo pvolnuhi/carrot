@@ -223,5 +223,20 @@ public class HashScanner implements Closeable{
     }
     mapScanner.close();
   }
+  /**
+   * Delete current field-value
+   * @return true if success, false - otherwise
+   */
+  public boolean delete() {
+    //TODO
+    return false;
+  }
   
+  /**
+   * Delete all fields in this scanner
+   * @return true on success, false?
+   */
+  public boolean deleteAll() {
+    return false;
+  }
 }

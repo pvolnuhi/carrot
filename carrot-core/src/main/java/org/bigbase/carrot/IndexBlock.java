@@ -997,10 +997,10 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
 	/**
 	 * Type is PUT for this call
-	 * @param keyPtr
-	 * @param keyLength
-	 * @param version
-	 * @return tru/false
+	 * @param keyPtr key address
+	 * @param keyLength key length
+	 * @param version version
+	 * @return true/false 
 	 */
 	boolean isLessThanMin(long keyPtr, int keyLength, long version) 
 	  throws RetryOperationException
@@ -1020,9 +1020,74 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  return false;
 	}
 	
+	 /**
+   * Type is PUT for this call
+   * @param keyPtr
+   * @param keyLength
+   * @param version
+   * @return true/false
+   */
+  boolean isLessOrEqualsThanMin(long keyPtr, int keyLength, long version) 
+    throws RetryOperationException
+    
+  {
+    byte[] firstKey = getFirstKey();
+    int result = Utils.compareTo(firstKey, 0, firstKey.length, keyPtr, keyLength);
+    if (result != 0) {
+      return result > 0;
+    }  
+    //TODO - version?
+    return true;
+  }
+  
 	public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version, 
       long expire) throws RetryOperationException {
 	  return put(keyPtr, keyLength, valuePtr, valueLength, version, expire, false);
+	}
+	
+	/**
+	 * Deletes range of Key-Value pairs
+	 * @param startKeyPtr start key address (inclusive)
+	 * @param startKeySize start key 
+	 * @param endKeyPtr
+	 * @param endkeySize
+	 * @param version
+	 * @return number of deleted records
+	 */
+	public long deleteRange(long startKeyPtr, int startKeySize, long endKeyPtr, 
+	    int endKeySize, long version) {
+	  
+	  long deleted = 0;
+	  try {
+	    writeLock();
+	    if (isLessOrEqualsThanMin(endKeyPtr, endKeySize, version)) {
+	      return 0;
+	    }
+	    long ptr = this.dataPtr;
+	    if(!isLessOrEqualsThanMin(startKeyPtr, startKeySize, version)) {
+	       ptr = search(startKeyPtr, startKeySize, version, Op.PUT);
+	    }
+      // Try to insert, split if necessary (if split is possible)
+      // return false if splitting of index block is required
+      DataBlock b = block.get();
+      b.set(this, ptr - dataPtr);
+      do {  
+        long del = b.deleteRange(startKeyPtr, startKeySize, endKeyPtr, endKeySize, version);
+        if (del == 0) {
+          break;
+        }
+        deleted += del;
+        if (b.isEmpty()) {
+          deleteBlock(b);
+        } else {
+          // TODO 
+        }
+      } while ((b = nextBlock(b)) != null);
+	  } finally {
+	    writeUnlock();
+	  }
+	  
+	  return deleted;
 	}
 	
 	/**

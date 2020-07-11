@@ -1,6 +1,7 @@
 package org.bigbase.carrot.redis.strings;
 
 import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
+import static org.bigbase.carrot.redis.Commons.ZERO;
 import static org.bigbase.carrot.redis.KeysLocker.writeLock;
 import static org.bigbase.carrot.redis.KeysLocker.writeUnlock;
 
@@ -13,7 +14,6 @@ import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.OperationFailedException;
-import org.bigbase.carrot.redis.hashes.HashSet;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -227,6 +227,18 @@ public class Strings {
     k.address = ptr;
     k.size = size;
     return k;
+  }
+
+  /**
+   * Checks if key exists
+   * @param map sorted map 
+   * @param keyPtr key address
+   * @param keySize key size
+   * @return true if - yes, false - otherwise
+   */
+  public static boolean keyExists(BigSortedMap map, long keyPtr, int keySize) {
+    int kSize = buildKey(keyPtr, keySize);
+    return map.exists(keyArena.get(), kSize);
   }
   /**
    * If key already exists and is a string, this command appends the value at the end of the string. 
@@ -845,14 +857,14 @@ public class Strings {
   public static void MSET(BigSortedMap map, List<KeyValue> kvs) {
     
     try {
-      KeysLocker.writeLockAll(kvs);
+      KeysLocker.writeLockAllKeyValues(kvs);
       for(int i =0; i < kvs.size(); i++) {
         KeyValue kv = kvs.get(i);
         SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
           MutationOptions.NONE, false);
       }
     } finally {
-      KeysLocker.writeUnlockAll(kvs);
+      KeysLocker.writeUnlockAllKeyValues(kvs);
     }
   }
   
@@ -875,10 +887,10 @@ public class Strings {
   public static boolean MSETNX(BigSortedMap map, List<KeyValue> kvs) {
     
     try {
-      KeysLocker.writeLockAll(kvs);
+      KeysLocker.writeLockAllKeyValues(kvs);
       for (int i=0; i < kvs.size(); i++) {
         KeyValue kv = kvs.get(i);
-        if (map.exists(kv.keyPtr, kv.keySize)) {
+        if (keyExists(map, kv.keyPtr, kv.keySize)) {
           return false;
         }
       }
@@ -888,7 +900,7 @@ public class Strings {
           MutationOptions.NONE, false);
       }
     } finally {
-      KeysLocker.writeUnlockAll(kvs);
+      KeysLocker.writeUnlockAllKeyValues(kvs);
     }
     return true;
   }

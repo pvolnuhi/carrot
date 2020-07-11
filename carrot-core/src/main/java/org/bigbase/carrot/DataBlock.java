@@ -300,7 +300,7 @@ public final class DataBlock  {
     this.indexPtr = indexBlock.getAddress() + off;
     setDataPtr(this.dataPtr);
     setBlockSize(this.blockSize);
-    setDataSize(dataInBlockSize);
+    setDataInBlockSize(dataInBlockSize);
     setNumberOfRecords(numRecords);
     setNumberOfDeletedAndUpdatedRecords(numDeletedAndUpdatedRecords);
     setSeqNumberSplitOrMerge(seqNumberSplitOrMerge);
@@ -474,7 +474,7 @@ public final class DataBlock  {
    * Set data size
    * @param v data size
    */
-  final void setDataSize(short v) {
+  final void setDataInBlockSize(short v) {
     UnsafeAccess.putShort(indexPtr + dataSizeOffset, v);
     UnsafeAccess.storeFence();
   }
@@ -484,7 +484,7 @@ public final class DataBlock  {
    */
   final void incrDataSize(short val) {
     short v = getDataInBlockSize();
-    setDataSize((short) (v + val));
+    setDataInBlockSize((short) (v + val));
     if (!isThreadSafe()) {
       BigSortedMap.totalDataInDataBlocksSize.addAndGet(val);
       BigSortedMap.totalDataSize.addAndGet(val);     
@@ -2000,6 +2000,178 @@ public final class DataBlock  {
   }
 
   /**
+   * Checks if this data block is in between two keys
+   * @param start start key address
+   * @param startSize start key size
+   * @param end end key address
+   * @param endSize end key size
+   * @param version version
+   * @return true, if - yes, false - otherwise
+   */
+  public boolean between(long start /*Inclusive*/, int startSize, long end /*Exclusive*/, 
+      int endSize, long version)
+  {
+    return compareTo(start, startSize, version, Op.PUT) >=0 && isLargerThanMax(end, endSize, version);
+  }
+  
+  /**
+   * Bulk delete operation - for delete range operation. 
+   * Additional handling is required at IndexBlock, such as updating first key
+   * Deletes all up to a specified Key (exclusive)
+   * Lock is not required
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param version version
+   * @return number of deleted records
+   */
+  
+  public int deleteTo(long keyPtr, int keyLength, long version) {
+    int deleted  = 0;
+    int deletedSize = 0;
+    int numRecords = getNumberOfRecords();
+    int dataSize = getDataInBlockSize();
+    long ptr = this.dataPtr;
+    int off = 0;
+    if (isFirstBlock()) {
+      // skip first record in a first block
+      int keylen = keyLength(ptr);
+      int vallen = valueLength(ptr);
+      off = keylen + vallen + RECORD_TOTAL_OVERHEAD;
+      ptr += off;
+    }
+    long limit = this.dataPtr + dataSize;
+    while (ptr < limit) {
+      long kPtr = keyAddress(ptr);
+      int keylen = keyLength(ptr);
+      int vallen = valueLength(ptr);
+      if (Utils.compareTo(kPtr, keylen, keyPtr, keyLength) >=0) {
+        break;
+      }
+      deallocateIfExternalRecord(ptr);
+      deleted++;
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    }
+    
+    if (deleted > 0) {
+      UnsafeAccess.copy( ptr, this.dataPtr + off, dataSize - (ptr - this.dataPtr));
+      setDataInBlockSize((short)(dataSize - (ptr - this.dataPtr) + off));
+      setNumberOfRecords((short)(numRecords - deleted));
+    }
+    return deleted;
+  }
+  
+  /**
+   * Bulk delete operation - for delete range operation. 
+   * Deletes all records after a specified Key (inclusive)
+   * Lock is not required
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param version version
+   * @return number of deleted records
+   */
+  
+  public int deleteFrom(long keyPtr, int keyLength, long version) {
+    int deleted  = 0;
+    int deletedSize = 0;
+    int numRecords = getNumberOfRecords();
+    int dataSize = getDataInBlockSize();
+    
+    long ptr = search(keyPtr, keyLength, version);
+    
+    while (ptr < this.dataPtr + dataSize) {
+      long kPtr = keyAddress(ptr);
+      int keylen = keyLength(ptr);
+      int vallen = valueLength(ptr);
+      deallocateIfExternalRecord(ptr);
+      deleted++;
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    }
+    
+    if (deleted > 0) {
+      setDataInBlockSize((short)(ptr - this.dataPtr));
+      setNumberOfRecords((short)(numRecords - deleted));
+    }
+    return deleted;
+  }
+  
+  /**
+   * Bulk delete operation - for delete range operation. 
+   * Deletes all records after a specified Key (inclusive)
+   * Lock is not required
+   * @param startKeyPtr key address
+   * @param startKeySize key length
+   * @param endKeyPtr end key address (exclusive)
+   * @param end key size
+   * @param version version
+   * @return number of deleted records
+   */
+  
+  public int deleteFromTo(long startKeyPtr, int startKeySize, long endKeyPtr, 
+      int endKeySize, long version) {
+    int deleted  = 0;
+    int deletedSize = 0;
+    int numRecords = getNumberOfRecords();
+    int dataSize = getDataInBlockSize();
+    
+    long ptr = search(startKeyPtr, startKeySize, version);
+    
+    while (ptr < this.dataPtr + dataSize) {
+      long kPtr = keyAddress(ptr);
+      int keylen = keyLength(ptr);
+
+      if (Utils.compareTo(kPtr, keylen, endKeyPtr, endKeySize) >=0) {
+        break;
+      }
+      int vallen = valueLength(ptr);
+      deallocateIfExternalRecord(ptr);
+      deleted++;
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    }
+    
+    if (deleted > 0) {
+      setDataInBlockSize((short)(ptr - this.dataPtr));
+      setNumberOfRecords((short)(numRecords - deleted));
+    }
+    return deleted;
+  }
+  
+  /**
+   * Deletes range of Key Values. The range is not necessary
+   * inside this data block, so one should check all possible
+   * situations. 
+   * @param startKeyPtr
+   * @param startKeySize
+   * @param endKeyPtr
+   * @param endKeySize
+   * @param version
+   * @return
+   */
+  public int deleteRange(long startKeyPtr, int startKeySize, long endKeyPtr, int endKeySize, 
+      long version)
+  {
+    boolean startInside = false;
+    boolean endInside = false;
+    // check if we out of range
+    if (compareTo(endKeyPtr, endKeySize, version, Op.PUT) < 0) {
+      return 0;
+    }
+    
+    startInside = compareTo(startKeyPtr, startKeySize, version, Op.PUT) >=0;
+    endInside = !isLargerThanMax(endKeyPtr, endKeySize, version);
+    
+    if (!startInside  && !endInside) {
+      // Block is completely covered by range - delete all
+      return deleteTo(endKeyPtr, endKeySize, version);
+    } else if (startInside && !endInside) {
+      return deleteFrom(startKeyPtr, startKeySize, version);
+    } else if (!startInside && endInside) {
+      return deleteTo(endKeyPtr, endKeySize, version);
+    } else {
+      return deleteFromTo(startKeyPtr, startKeySize, endKeyPtr, endKeySize, version);
+    }
+  }
+  
+  /**
    * Delete operation TODO: compact on deletion
    * @param keyPtr
    * @param keyOffset
@@ -2868,7 +3040,7 @@ public final class DataBlock  {
       }
       
       int oldDataSize = getDataInBlockSize();
-      setDataSize((short) off);
+      setDataInBlockSize((short) off);
       setNumberOfRecords((short)num);
       int rightDataSize = oldDataSize - off;
       int rightBlockSize = getMinSizeGreaterThan(getBlockSize(), rightDataSize);
@@ -3110,8 +3282,9 @@ public final class DataBlock  {
 
   
   /**
-   * Free block memory and ext alloc (true/false) 
-   * @param freeExternalAllocs
+   * Free block memory and external allocations (true/false) 
+   * @param freeExternalAllocs if true, free all the memory of 
+   *        external Key-Value allocations
    */
   final void free(boolean freeExternalAllocs) {
     long ptr = dataPtr;

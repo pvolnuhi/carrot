@@ -2,6 +2,8 @@ package org.bigbase.carrot.redis.sets;
 
 import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
+import static org.bigbase.carrot.redis.Commons.ZERO;
+
 import static org.bigbase.carrot.redis.Commons.addNumElements;
 import static org.bigbase.carrot.redis.Commons.canSplit;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
@@ -28,10 +30,10 @@ import org.bigbase.carrot.util.Utils;
  */
 public class SetAdd extends Operation{
   
-  static long ZERO = UnsafeAccess.malloc(0);  
-  static {
-    UnsafeAccess.putByte(ZERO,  (byte)0);
-  }
+ 
+  /*
+   * Thread local key arena storage
+   */
   
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
@@ -39,7 +41,9 @@ public class SetAdd extends Operation{
       return UnsafeAccess.malloc(512);
     }
   };
-  
+  /*
+   * Size of a key arena
+   */
   private static ThreadLocal<Integer> keyArenaSize = new ThreadLocal<Integer>() {
     @Override
     protected Integer initialValue() {
@@ -47,6 +51,9 @@ public class SetAdd extends Operation{
     }
   };
   
+  /**
+   * Constructor
+   */
   public SetAdd() {
     setFloorKey(true);
   }
@@ -196,7 +203,7 @@ public class SetAdd extends Operation{
   }
   
   /**
-   * Insert new K-V with a given element
+   * Insert new Key-Value with a given element
    * @param elKeyPtr element address
    * @param elKeySize element size
    */
@@ -250,6 +257,5 @@ public class SetAdd extends Operation{
 
     UnsafeAccess.copy(addr + toAdd, ptr, valueSize - (addr - valueAddress));
   }
-  
 
 }
