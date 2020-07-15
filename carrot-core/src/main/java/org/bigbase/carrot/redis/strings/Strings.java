@@ -1,7 +1,6 @@
 package org.bigbase.carrot.redis.strings;
 
 import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
-import static org.bigbase.carrot.redis.Commons.ZERO;
 import static org.bigbase.carrot.redis.KeysLocker.writeLock;
 import static org.bigbase.carrot.redis.KeysLocker.writeUnlock;
 
@@ -139,7 +138,7 @@ public class Strings {
   };
   
   /**
-   * Thread local updates String GetSet
+   * Thread local updates String Set
    */
   private static ThreadLocal<StringSet> stringSet = new ThreadLocal<StringSet>() {
     @Override
@@ -225,7 +224,7 @@ public class Strings {
   private static Key getKey(long ptr, int size) {
     Key k = key.get();
     k.address = ptr;
-    k.size = size;
+    k.length = size;
     return k;
   }
 
@@ -255,7 +254,7 @@ public class Strings {
     
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     
     try {
       KeysLocker.writeLock(kk);
@@ -297,7 +296,7 @@ public class Strings {
   public static long BITCOUNT(BigSortedMap map, long keyPtr, int keySize, long start, long end) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.readLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -483,7 +482,7 @@ public class Strings {
       int valueBufLength) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keyLength;
+    kk.length = keyLength;
     try {
       KeysLocker.readLock(kk);
       int kLength = buildKey(keyPtr, keyLength);
@@ -510,7 +509,7 @@ public class Strings {
   public static int GETBIT(BigSortedMap map, long keyPtr, int keySize, long offset) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.readLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -543,7 +542,7 @@ public class Strings {
   public static int SETBIT(BigSortedMap map, long keyPtr, int keySize, long offset, int bit) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.writeLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -571,7 +570,7 @@ public class Strings {
   public static int STRLEN(BigSortedMap map, long keyPtr, int keySize) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.readLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -603,7 +602,7 @@ public class Strings {
       long bufferPtr, int bufferSize) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.readLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -639,7 +638,7 @@ public class Strings {
   {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.writeLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -677,7 +676,7 @@ public class Strings {
       int valueSize, long expire, MutationOptions opts, boolean keepTTL) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.writeLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -777,7 +776,7 @@ public class Strings {
   public static int SETRANGE(BigSortedMap map, long keyPtr, int keySize, int offset, long valuePtr, int valueSize) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.writeLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -830,7 +829,7 @@ public class Strings {
   public static long BITPOS(BigSortedMap map, long keyPtr, int keySize, int bit, long start, long end) {
     Key kk = key.get();
     kk.address = keyPtr;
-    kk.size = keySize;
+    kk.length = keySize;
     try {
       KeysLocker.readLock(kk);
       int kSize = buildKey(keyPtr, keySize);

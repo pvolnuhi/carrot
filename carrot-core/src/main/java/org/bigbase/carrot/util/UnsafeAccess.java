@@ -606,10 +606,28 @@ public final class UnsafeAccess {
       destAddr += size;
     }
   }
-  
+  /**
+   * Allocate native memory and copy array
+   * @param arr array to copy
+   * @param off offset
+   * @param len length
+   * @return address
+   */
   public static long allocAndCopy(byte[] arr, int off, int len) {
     long ptr = malloc(len);
     copy(arr, 0, ptr, len);
+    return ptr;
+  }
+  
+  /**
+   * Allocate native memory and copy source 
+   * @param src source data
+   * @param size size of a source data
+   * @return address
+   */
+  public static long allocAndCopy(long src, int size) {
+    long ptr = malloc(size);
+    copy(src, ptr, size);
     return ptr;
   }
   

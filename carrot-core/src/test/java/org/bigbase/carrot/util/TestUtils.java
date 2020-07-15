@@ -3,8 +3,11 @@ package org.bigbase.carrot.util;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Random;
 
+import org.bigbase.carrot.Key;
 import org.junit.Test;
 
 public class TestUtils {
@@ -163,5 +166,37 @@ public class TestUtils {
     for(int i=0; i < arr.length; i++) {
       arr[i] = r.nextInt(maxValue);
     }
+  }
+  
+  @Test
+  public void testDoubleToLex() {
+    Random r = new Random();
+    int N = 10000;
+    double[] arr = new double[N];
+    long ptr = UnsafeAccess.malloc( N * Utils.SIZEOF_LONG);
+    for(int i = 0; i < N ; i++) {
+      double d = r.nextDouble();
+      arr[i] = d * r.nextInt();
+      Utils.doubleToLex(ptr + i * Utils.SIZEOF_LONG, arr[i]);
+    }
+    
+    for (int i=0; i < N ; i++) {
+      double d = Utils.lexToDouble(ptr + i * Utils.SIZEOF_LONG);
+      assertEquals(arr[i], d);
+    }
+    
+    ArrayList<Key> keys = new ArrayList<Key>(N);
+    for(int i =0; i < N; i++) {
+      keys.add( new Key(ptr + i * Utils.SIZEOF_LONG, Utils.SIZEOF_LONG));
+    }
+    
+    Utils.sortKeys(keys);
+    Arrays.sort(arr);
+    for (int i=0; i < arr.length; i++) {
+      double d = Utils.lexToDouble(keys.get(i).address);
+      assertEquals(arr[i], d);
+    }
+   // keys.stream().map(x-> Utils.lexToDouble(x.address)).forEach(System.out::println);
+    
   }
 }

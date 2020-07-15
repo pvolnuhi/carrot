@@ -1925,7 +1925,7 @@ public final class DataBlock  {
   }
 
   /**
-   * Search position of a first key which is less or equals to a given key
+   * Search position of a largest key which is less or equals to a given key
    * @param keyPtr
    * @param keyLength
    * @return address to insert (or update)
@@ -2739,7 +2739,30 @@ public final class DataBlock  {
       readUnlock();
     }
   }
+  
+  public long lastRecordAddress() {
+    int n = getNumberOfRecords();
+    if (n == 0 || (n == 1 && isFirstBlock())) {
+      return NOT_FOUND;
+    }
+    int c = 0;
+    long ptr = this.dataPtr;
+    while(c++ < (n - 1)) {
+      int vallen = blockValueLength(ptr);
+      int keylen = blockKeyLength(ptr);
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    }
+    return ptr;
+  }
 
+  /**
+   * Get address of K-V record
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param version version
+   * @param floor if true, the largest key which is less or equals
+   * @return position of a record, or NOT_FOUND
+   */
   public long get(long keyPtr, int keyLength, long version, boolean floor) {
     if (!floor) {
       return get(keyPtr, keyLength, version);

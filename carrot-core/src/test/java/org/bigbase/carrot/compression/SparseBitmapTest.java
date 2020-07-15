@@ -13,8 +13,7 @@ public class SparseBitmapTest {
   
   public void runTest() {
     CodecFactory factory = CodecFactory.getInstance();
-    Codec codec = factory.getCodec(CodecType.LZ4HC);
-    
+    Codec codec = factory.getCodec(CodecType.LZ4);
     long src = UnsafeAccess.mallocZeroed(size);
     long dst = UnsafeAccess.mallocZeroed(2* size);
     

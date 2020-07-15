@@ -51,7 +51,7 @@ public class IndexBlockDirectMemoryScannerTest {
     keys = keys.subList(0, stopRowIndex);
     System.out.println("Selected "+ keys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, stopRow.size, Long.MAX_VALUE);
+        IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, stopRow.length, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
@@ -71,7 +71,7 @@ public class IndexBlockDirectMemoryScannerTest {
     keys = keys.subList(startRowIndex, keys.size());
     System.out.println("Selected "+ keys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.size,0 , 0, Long.MAX_VALUE);
+        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length,0 , 0, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
@@ -94,8 +94,8 @@ public class IndexBlockDirectMemoryScannerTest {
     keys = keys.subList(startRowIndex, stopRowIndex);
     System.out.println("Selected "+ keys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.size, 
-          stopRow.address, stopRow.size, Long.MAX_VALUE);
+        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length, 
+          stopRow.address, stopRow.length, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
   }
@@ -111,13 +111,13 @@ public class IndexBlockDirectMemoryScannerTest {
         Key key = keys.get(count-1);
         int keySize = dbscn.keySize();
         int valSize = dbscn.valueSize();
-        assertEquals(key.size, keySize);
-        assertEquals(key.size, valSize);
+        assertEquals(key.length, keySize);
+        assertEquals(key.length, valSize);
         byte[] buf = new byte[keySize];
         dbscn.key(buf, 0);
-        assertTrue(Utils.compareTo(buf, 0, keySize, key.address, key.size) == 0);
+        assertTrue(Utils.compareTo(buf, 0, keySize, key.address, key.length) == 0);
         dbscn.value(buf, 0);
-        assertTrue(Utils.compareTo(buf, 0, valSize, key.address, key.size) == 0);
+        assertTrue(Utils.compareTo(buf, 0, valSize, key.address, key.length) == 0);
         dbscn.next();
       } 
     } 

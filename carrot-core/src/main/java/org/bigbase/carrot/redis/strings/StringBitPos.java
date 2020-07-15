@@ -98,105 +98,12 @@ public class StringBitPos extends Operation {
       start = 0;
       end = valueSize -1;
     }
-    this.position = bit == 1? bitpos1(valuePtr, valueSize): 
-      bitpos0(valuePtr, valueSize);
+    this.position = bit == 1? Utils.bitposSet(valuePtr + start, (int)(end -start) +1): 
+      Utils.bitposUnset(valuePtr + start, (int)(end - start) +1);
+    if (this.position == -1 && bit == 0 && !startEndSet) {
+      this.position = valueSize * Utils.SIZEOF_BYTE;
+    }
     return true;
-  }
-  
-  private long bitpos1(long valuePtr, int valueSize) {
-
-    valueSize = (int)(end -start + 1);
-    int num8 = valueSize / Utils.SIZEOF_LONG;
-    int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
-    long c = 0;
-    long ptr = valuePtr + start;
-    int pos = 0;
-    for(int i=0; i < num8; i++) {
-      pos = firstBitSetLong(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-      ptr += Utils.SIZEOF_LONG;
-    }
-    int num4 = rem8 / Utils.SIZEOF_INT;
-    int rem4 = rem8 - Utils.SIZEOF_INT * num4;
-    for(int i=0; i < num4; i++) {
-      pos = firstBitSetInt(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-      ptr += Utils.SIZEOF_INT;
-    }
-    
-    int num2 = rem4 / Utils.SIZEOF_SHORT;
-    int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
-    
-    for(int i=0; i < num2; i++) {
-      pos = firstBitSetShort(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-      ptr += Utils.SIZEOF_SHORT;
-    }
-    
-    if (rem2 == 1) {
-      pos = firstBitSetByte(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-    }
-    
-    return -1;
-  }
-
-  private long bitpos0(long valuePtr, int valueSize) {
-    int vSize = valueSize;
-    valueSize = (int)(end -start + 1);
-    int num8 = valueSize / Utils.SIZEOF_LONG;
-    int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
-    long c = 0;
-    long ptr = valuePtr + start;
-    int pos = 0;
-    for(int i=0; i < num8; i++) {
-      pos = firstBitUnSetLong(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-      ptr += Utils.SIZEOF_LONG;
-    }
-    int num4 = rem8 / Utils.SIZEOF_INT;
-    int rem4 = rem8 - Utils.SIZEOF_INT * num4;
-    for(int i=0; i < num4; i++) {
-      pos = firstBitUnSetInt(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-      ptr += Utils.SIZEOF_INT;
-    }
-    
-    int num2 = rem4 / Utils.SIZEOF_SHORT;
-    int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
-    
-    for(int i=0; i < num2; i++) {
-      pos = firstBitUnSetShort(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-      ptr += Utils.SIZEOF_SHORT;
-    }
-    
-    if (rem2 == 1) {
-      pos = firstBitUnSetByte(ptr);
-      if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
-      }
-    }
-    
-    if (startEndSet) {
-      return -1;
-    } else {
-      return vSize * Utils.SIZEOF_BYTE;
-    }
   }
   
   @Override

@@ -20,7 +20,7 @@ public class DataBlockTestBase {
   
   protected boolean contains(long key, int keySize, List<Key> keys) {
     for (Key k : keys) {
-      if (Utils.compareTo(k.address, k.size, key, keySize) == 0) {
+      if (Utils.compareTo(k.address, k.length, key, keySize) == 0) {
         return true;
       }
     }
@@ -31,12 +31,12 @@ public class DataBlockTestBase {
   protected boolean isValidFailure(DataBlock b,  Key key, int valLen, int oldValLen) {
     int dataSize = b.getDataInBlockSize();
     int blockSize = b.getBlockSize();
-    int newRecSize = key.size + valLen + DataBlock.RECORD_TOTAL_OVERHEAD;
-    if (DataBlock.mustStoreExternally(key.size, valLen)) {
+    int newRecSize = key.length + valLen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (DataBlock.mustStoreExternally(key.length, valLen)) {
       newRecSize = 12 + DataBlock.RECORD_TOTAL_OVERHEAD;
     }
-    int oldRecSize = key.size + oldValLen + DataBlock.RECORD_TOTAL_OVERHEAD;
-    if (DataBlock.mustStoreExternally(key.size, oldValLen)) {
+    int oldRecSize = key.length + oldValLen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    if (DataBlock.mustStoreExternally(key.length, oldValLen)) {
       oldRecSize = 12 + DataBlock.RECORD_TOTAL_OVERHEAD;
     }
     

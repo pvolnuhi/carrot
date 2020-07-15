@@ -190,7 +190,7 @@ public class Hashes {
   private static Key getKey(long ptr, int size) {
     Key k = key.get();
     k.address = ptr;
-    k.size = size;
+    k.length = size;
     return k;
   }
   
@@ -202,20 +202,24 @@ public class Hashes {
    */
   public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
-    HashScanner scanner = null;
     try {
       KeysLocker.writeLock(k);
-      scanner = getHashScanner(map, keyPtr, keySize, false);
-      scanner.deleteAll();
+      int newKeySize = keySize + KEY_SIZE + Utils.SIZEOF_BYTE;
+      long kPtr = UnsafeAccess.malloc(newKeySize);
+      UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
+      UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+      UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
+
+      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
+
+      UnsafeAccess.free(kPtr);
+      UnsafeAccess.free(endKeyPtr);
+
     } finally {
-      if (scanner != null) {
-        try {
-          scanner.close();
-        } catch (IOException e) {
-        }
-      }
       KeysLocker.writeUnlock(k);
     }
+
   }
   
   /**

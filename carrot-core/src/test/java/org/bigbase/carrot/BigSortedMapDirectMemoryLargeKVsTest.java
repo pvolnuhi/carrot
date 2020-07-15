@@ -61,8 +61,8 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     int counter = 0;
     for(Key key: keys) {
       
-      if (!map.exists(key.address, key.size)) {
-        fail("FAILED index=" + counter+" key length=" + key.size+" key=" + key.address);
+      if (!map.exists(key.address, key.length)) {
+        fail("FAILED index=" + counter+" key length=" + key.length+" key=" + key.address);
       }
       counter++;
     }
@@ -113,18 +113,18 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     int delta = 0;
     while(scanner.hasNext()) {
       int keySize = scanner.keySize();
-      if (keySize != keys.get(counter + delta).size) {
+      if (keySize != keys.get(counter + delta).length) {
         System.out.println("counter="+counter+" expected key size="+ 
-            keys.get(counter).size + " found="+keySize);
+            keys.get(counter).length + " found="+keySize);
         delta ++;
       }
       long buf = UnsafeAccess.malloc(keySize);
       Key key = keys.get(counter + delta);
       scanner.key(buf, keySize);
-      assertTrue(Utils.compareTo(buf, keySize, key.address, key.size) == 0);
+      assertTrue(Utils.compareTo(buf, keySize, key.address, key.length) == 0);
       int size = scanner.value(buf, keySize);
       assertEquals(keySize, size);
-      assertTrue(Utils.compareTo(buf, keySize, key.address, key.size) == 0);
+      assertTrue(Utils.compareTo(buf, keySize, key.address, key.length) == 0);
       
       UnsafeAccess.free(buf);
       scanner.next();
@@ -194,12 +194,12 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     long start = System.currentTimeMillis();    
     for(Key key: keys) {
       
-      long valPtr = UnsafeAccess.malloc(key.size);
+      long valPtr = UnsafeAccess.malloc(key.length);
       
       try {
-        long size = map.get(key.address,  key.size, valPtr, key.size, Long.MAX_VALUE) ;
-        assertEquals(key.size, (int)size);
-        assertTrue(Utils.compareTo(key.address, key.size, valPtr, (int) size) == 0);
+        long size = map.get(key.address,  key.length, valPtr, key.length, Long.MAX_VALUE) ;
+        assertEquals(key.length, (int)size);
+        assertTrue(Utils.compareTo(key.address, key.length, valPtr, (int) size) == 0);
       } catch(Throwable t) {
         throw t;
       } finally {
@@ -219,7 +219,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     long start = System.currentTimeMillis();    
     for(Key key: keys) {
       try {
-        boolean result = map.exists(key.address,  key.size) ;
+        boolean result = map.exists(key.address,  key.length) ;
         assertTrue(result);
       } catch(Throwable t) {
         throw t;
@@ -247,8 +247,8 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
       scanner.key(key, keySize);
       scanner.value(value, valSize);
       Key kkey = keys.get((int)count);
-      assertEquals(0, Utils.compareTo(kkey.address, kkey.size, key, keySize));
-      assertEquals(0, Utils.compareTo(kkey.address, kkey.size, value, valSize));
+      assertEquals(0, Utils.compareTo(kkey.address, kkey.length, key, keySize));
+      assertEquals(0, Utils.compareTo(kkey.address, kkey.length, value, valSize));
       UnsafeAccess.free(key);
       UnsafeAccess.free(value);
       count++;
@@ -277,8 +277,8 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
       scanner.key(key, keySize);
       scanner.value(value, valSize);
       Key kkey = keys.get((int)count);
-      assertEquals(0, Utils.compareTo(kkey.address, kkey.size, key, keySize));
-      assertEquals(0, Utils.compareTo(kkey.address, kkey.size, value, valSize));
+      assertEquals(0, Utils.compareTo(kkey.address, kkey.length, key, keySize));
+      assertEquals(0, Utils.compareTo(kkey.address, kkey.length, value, valSize));
       UnsafeAccess.free(key);
       UnsafeAccess.free(value);
       count++;
@@ -308,15 +308,15 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     Key stopKey  = keys.get(stopIndex);
     
     BigSortedMapDirectMemoryScanner scanner = 
-        map.getScanner(0, 0, startKey.address, startKey.size);
+        map.getScanner(0, 0, startKey.address, startKey.length);
     long count1 = countRows(scanner);
     scanner.close();
     scanner = 
-        map.getScanner(startKey.address, startKey.size, stopKey.address, stopKey.size);
+        map.getScanner(startKey.address, startKey.length, stopKey.address, stopKey.length);
     long count2 = countRows(scanner);
     scanner.close();
     scanner = 
-        map.getScanner(stopKey.address, stopKey.size, 0, 0);
+        map.getScanner(stopKey.address, stopKey.length, 0, 0);
     long count3 = countRows(scanner);
     scanner.close();
     assertEquals(totalLoaded, count1 + count2 + count3); 
@@ -360,12 +360,12 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     while (numDeleted < num) {
       int i = r.nextInt((int)totalLoaded);
       Key key = keys.get(i);
-      long len = map.get(key.address, key.size, valPtr, 0, Long.MAX_VALUE);
+      long len = map.get(key.address, key.length, valPtr, 0, Long.MAX_VALUE);
       if (len == DataBlock.NOT_FOUND) {
         collisions++;
         continue;
       } else {
-        boolean res = map.delete(key.address, key.size);
+        boolean res = map.delete(key.address, key.length);
         assertTrue(res);
         numDeleted++;
         list.add(key);
@@ -387,7 +387,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     int count = 1;
     for (Key key: keys) {
       count++;
-      boolean res = map.put(key.address, key.size, key.address, key.size, 0);
+      boolean res = map.put(key.address, key.length, key.address, key.length, 0);
       if (res == false) {
         System.out.println("Count = "+count+" total="+ keys.size()+" memory ="+ 
       BigSortedMap.getTotalAllocatedMemory());

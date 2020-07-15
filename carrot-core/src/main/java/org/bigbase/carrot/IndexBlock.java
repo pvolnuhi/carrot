@@ -1,5 +1,7 @@
 package org.bigbase.carrot;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -14,6 +16,8 @@ import org.bigbase.carrot.util.Utils;
  *          
  * Records are sorted Format: [DATA_BLOCK_STATIC_PREFIX][BLOCK_START_KEY] 
  * 
+ * 
+ * TODO: reconsider overhead
  [DATA_BLOCK_STATIC_PREFIX] - 19 bytes
  
      dataPtr                  (8 bytes)
@@ -116,6 +120,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 */
 
 	static float[] BLOCK_RATIOS = new float[] { 0.25f, 0.5f, 0.75f, 1.0f };
+	static final int EXPANSION_SIZE = 512;
 	/*
 	 * Read-Write Lock TODO: StampedLock (Java 8)
 	 */
@@ -793,12 +798,41 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
     return true;
   }
+	
+	void expand(int required) {
+	  short increase = (short) Math.max(required, EXPANSION_SIZE);
+	  this.blockSize = (short)(this.blockSize + increase);
+	  this.dataPtr = UnsafeAccess.realloc(this.dataPtr, this.blockSize);
+	  incrSeqNumberSplitOrMerge();
+	}
+	/**
+	 * Updates first key at offset in index block
+	 * @param offset offset
+	 */
+	void updateFirstKeyAtOffset (long offset) 
+	{
+	  DataBlock b = block.get();
+	  b.set(this, offset);
+	  updateFirstKey(b, true);
+	}
+	
+	/**
+   * This method can be called during delete operation, if first
+   * key in a block were being deleted.
+   * @param block data block	 
+   * @return true on success
+	 */
+  boolean updateFirstKey(DataBlock block) {
+    return updateFirstKey(block, false);
+  }
+
 	/**
    * This method can be called during delete operation, if first
    * key in a block were being deleted.
    * @param block data block
+   * @param doNotSplit - do not split block - increase size
    */
-  boolean updateFirstKey(DataBlock block) {
+  boolean updateFirstKey(DataBlock block, boolean doNotSplit) {
     updateUnsafeModificationTime();
     if (block.isEmpty()) {
       deleteBlock(block);
@@ -816,21 +850,21 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     int required;
     if (mustAllocateExternally(keyLength)) {
       required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
-          ADDRESS_SIZE - recLength;
-      
-      if (required > available) {
-        // Required index block split
-        return false;
-      }
+          ADDRESS_SIZE - recLength;      
     } else {
       required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
            + keyLength - recLength;
-      
-      if (required > available) {
-        // Required index block split
-        return false;
-      }
     }
+    if (required > available && !doNotSplit) {
+      // Required index block split
+      return false;
+    } else if (required > available) {
+      long off = indexPtr - this.dataPtr;
+      expand (required - available);
+      block.set(this, off);
+      return updateFirstKey(block, true);
+    }
+    
     if (isExternalBlock(indexPtr)) {
       long address = getExternalAllocationAddress(indexPtr);
       // TODO: separate method for deallocation
@@ -1071,6 +1105,10 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       // return false if splitting of index block is required
       DataBlock b = block.get();
       b.set(this, ptr - dataPtr);
+      // List of blocks to be deleted
+      List<Key> toDelete = null; 
+      // List of blocks which requires update first key
+      List<Long> toUpdate = null;
       do {  
         long del = b.deleteRange(startKeyPtr, startKeySize, endKeyPtr, endKeySize, version);
         if (del == 0) {
@@ -1078,11 +1116,29 @@ public final class IndexBlock implements Comparable<IndexBlock> {
         }
         deleted += del;
         if (b.isEmpty()) {
-          deleteBlock(b);
+          long indexPtr = b.getIndexPtr();
+          long keyPtr = keyAddress(indexPtr);
+          int keySize = keyLength(indexPtr);
+          long kPtr = UnsafeAccess.allocAndCopy(keyPtr, keySize);
+          if (toDelete == null) {
+            toDelete = new ArrayList<Key>();
+          }
+          toDelete.add(new Key(kPtr, keySize));
+          
         } else {
-          // TODO 
+          if (updateRequired(b)) {
+            if (toUpdate == null) {
+              toUpdate = new ArrayList<Long>();
+            }
+            // Add offset of the block
+            toUpdate.add(b.getIndexPtr() - this.dataPtr);
+          }
         }
       } while ((b = nextBlock(b)) != null);
+      
+      processUpdates(toUpdate);
+      processDeletes(toDelete);
+      
 	  } finally {
 	    writeUnlock();
 	  }
@@ -1090,6 +1146,29 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  return deleted;
 	}
 	
+	private void processDeletes(List<Key> toDelete) {
+	  for(int i = 0; i < toDelete.size(); i++) {
+	    deleteBlockStartWith(toDelete.get(i));
+	  }
+  }
+
+  private void processUpdates(List<Long> toUpdate) {
+    // During bulk first key updates we can not split index block
+    // index block size will be increased
+    // We iterate from the end to preserve yet not processed offsets
+    for(int i = toUpdate.size() -1; i >= 0; i--) {
+      updateFirstKeyAtOffset(toUpdate.get(i));
+    }
+  }
+
+  private boolean updateRequired(DataBlock b) {
+	  long ptr = b.getIndexPtr();
+	  long keyPtr = keyAddress(ptr);
+	  int keySize = keyLength(ptr);
+	  long blockKeyPtr = DataBlock.keyAddress(b.getDataPtr());
+	  int blockKeySize = DataBlock.keyLength(b.getDataPtr());
+	  return Utils.compareTo(keyPtr,  keySize,  blockKeyPtr, blockKeySize) != 0;
+	}
 	/**
 	 * Put key-value operation
 	 * 
@@ -1854,12 +1933,26 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
 
   }
+  
+  /**
+   * Delete block, which start with a given key
+   * @param key key
+   */
+  private void deleteBlockStartWith(Key key) {
+    long ptr = search(key.address, key.length, Long.MAX_VALUE, Op.PUT);
+    DataBlock b = block.get();
+    b.set(this, ptr - dataPtr);
+    deleteBlock(b, true);
+  }
+  
 	// TODO: delete block when it had one record only
 	private void deleteBlock(DataBlock b) {
 	  deleteBlock(b, true);
   }
 	
   private void deleteBlock(DataBlock b, boolean extAllocs) {
+    updateUnsafeModificationTime();
+
     long indexPtr = b.getIndexPtr();
     int keyLength = keyLength(indexPtr);
     int blockKeyLength = blockKeyLength(indexPtr);
@@ -2015,7 +2108,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
    * @param key
    * @param keyOffset
    * @param keyLength
-   * @param floor if true returns the larges key which is less or equals
+   * @param floor if true returns the largest key which is less or equals
    * @return record offset or NOT_FOUND if not found
    * @throws RetryOperationException
    */
@@ -2034,13 +2127,79 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       DataBlock b = block.get();
       b.set(this, ptr - dataPtr);
       long res = b.get(keyPtr, keyLength, version, floor);
+      //TODO res = -1
+      if (res == NOT_FOUND && floor) {
+        // get previous
+        b = previous(b);
+        if (b == null) {
+          return NOT_FOUND;
+        } else {
+          // It is possible that this block is empty?
+          return b.lastRecordAddress();
+        }
+      }
       return res;
     } finally {
       readUnlock();
     }
   }
-	
+  
+  
+  /**
+   * Get last K-V record address in this index
+   * @return address or NOT_FOUND if index is empty
+   */
+  long lastRecordAddress() {
+    DataBlock b = getLastDataBlock();
+    if (b == null) {
+      return NOT_FOUND;
+    }
+    return b.lastRecordAddress();
+  }
+  
+  /**
+   * Get last data block in this index
+   * @return last data block
+   */
+  DataBlock getLastDataBlock() {
+    DataBlock b = block.get();
+    
+    long ptr = this.dataPtr;
+    final long limit = this.dataPtr + this.blockDataSize; 
+    while(ptr < limit) {
+      int keyLength = blockKeyLength(ptr);
+      if (ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength == limit) {
+        b.set(this, ptr - this.dataPtr);
+        return b;
+      }
+      ptr += + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+    }
+    return null;
+  }
+  
 	/**
+	 * Get previous data block
+	 * @param b current data block
+	 * @return previous data block or null
+	 */
+	private DataBlock previous(DataBlock b) {
+	  long bPtr = b.getIndexPtr();
+	  if (bPtr == this.dataPtr) {
+	    return null;
+	  }
+	  long ptr = this.dataPtr;
+	  while(ptr < bPtr) {
+	    int keyLength = blockKeyLength(ptr);
+	    if (ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength == bPtr) {
+	      b.set(this, ptr - this.dataPtr);
+	      return b;
+	    }
+	    ptr += + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+	  }
+    return null;
+  }
+
+  /**
 	 * Get key-value offset in a block
 	 * 
 	 * @param key

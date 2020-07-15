@@ -59,7 +59,7 @@ public class DataBlockDirectMemoryScannerTest {
     keys = keys.subList(0, stopRowIndex);
     System.out.println("Selected "+ keys.size()+" kvs");
     DataBlockDirectMemoryScanner scanner = 
-        DataBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, stopRow.size, Long.MAX_VALUE);
+        DataBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, stopRow.length, Long.MAX_VALUE);
     // Skip first system key
     scanner.next();
     verifyScanner(scanner, keys);
@@ -81,7 +81,7 @@ public class DataBlockDirectMemoryScannerTest {
     keys = keys.subList(startRowIndex, keys.size());
     System.out.println("Selected "+ keys.size()+" kvs");
     DataBlockDirectMemoryScanner scanner = 
-        DataBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.size, 0, 0, Long.MAX_VALUE);
+        DataBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length, 0, 0, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
@@ -106,8 +106,8 @@ public class DataBlockDirectMemoryScannerTest {
     keys = keys.subList(startRowIndex, stopRowIndex);
     System.out.println("Selected "+ keys.size()+" kvs");
     DataBlockDirectMemoryScanner scanner = 
-        DataBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.size, 
-          stopRow.address, stopRow.size, Long.MAX_VALUE);
+        DataBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length, 
+          stopRow.address, stopRow.length, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
@@ -122,13 +122,13 @@ public class DataBlockDirectMemoryScannerTest {
         Key key = keys.get(count-1);
         int keySize = scanner.keySize();
         int valSize = scanner.valueSize();
-        assertEquals(key.size, keySize);
-        assertEquals(key.size, valSize);
+        assertEquals(key.length, keySize);
+        assertEquals(key.length, valSize);
         byte[] buf = new byte[keySize];
         scanner.key(buf, 0);
-        assertTrue(Utils.compareTo(buf, 0, buf.length, key.address, key.size) == 0);
+        assertTrue(Utils.compareTo(buf, 0, buf.length, key.address, key.length) == 0);
         scanner.value(buf, 0);
-        assertTrue(Utils.compareTo(buf, 0, buf.length, key.address, key.size) == 0);
+        assertTrue(Utils.compareTo(buf, 0, buf.length, key.address, key.length) == 0);
         scanner.next();
       } 
      

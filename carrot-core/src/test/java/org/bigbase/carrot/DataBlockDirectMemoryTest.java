@@ -33,7 +33,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     for(int i = 0 ; i < n; i++) {
       int index = r.nextInt(keys.size());
       long keyPtr = keys.get(index).address;
-      int keyLength = keys.get(index).size;
+      int keyLength = keys.get(index).length;
       long off = b.get(keyPtr,  keyLength, Long.MAX_VALUE);
       int res = Utils.compareTo(DataBlock.keyAddress(off), keyLength, keyPtr, keyLength);
       assertTrue(res == 0);
@@ -141,14 +141,14 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     System.out.println("Total inserted ="+ keys.size());
     
     for (Key key: keys) {
-      OpResult result = b.delete(key.address, key.size, Long.MAX_VALUE);
+      OpResult result = b.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, result);
     }
     
     // We still expect 1 record left - its system {0}{0}
     assertEquals(1, (int)b.getNumberOfRecords());
     for (Key key: keys) {
-      long result = b.get(key.address, key.size, Long.MAX_VALUE);
+      long result = b.get(key.address, key.length, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
     }
     //b.free();
@@ -245,14 +245,14 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     System.out.println("Total inserted ="+ keys.size());
     
     for (Key key: keys) {
-      OpResult result = b.delete(key.address, key.size, Long.MAX_VALUE);
+      OpResult result = b.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, result);
     }
     
     assertEquals(1, (int)b.getNumberOfRecords());
     
     for (Key key: keys) {
-      long result = b.get(key.address, key.size, Long.MAX_VALUE);
+      long result = b.get(key.address, key.length, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
     }
     
@@ -279,7 +279,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     ArrayList<Key> deletedKeys = new ArrayList<Key>();
     for (Key key: keys) {
       if( r.nextDouble() < 0.5) {
-        OpResult result = b.delete(key.address, key.size, Long.MAX_VALUE);
+        OpResult result = b.delete(key.address, key.length, Long.MAX_VALUE);
         assertEquals(OpResult.OK, result);
         deletedKeys.add(key);
       }
@@ -288,7 +288,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     assertEquals(keys.size() - deletedKeys.size() +1, (int)b.getNumberOfRecords());
     
     for (Key key: deletedKeys) {
-      long result = b.get(key.address, key.size, Long.MAX_VALUE);
+      long result = b.get(key.address, key.length, Long.MAX_VALUE);
       assertEquals(DataBlock.NOT_FOUND, result);
     }
     
@@ -342,7 +342,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     // Delete one record
     Key oneKey = keys.get(0);
         
-    OpResult res = b.delete(oneKey.address, oneKey.size, Long.MAX_VALUE);
+    OpResult res = b.delete(oneKey.address, oneKey.length, Long.MAX_VALUE);
     dataSize = b.getDataInBlockSize();
     blockSize = b.getBlockSize();
     avail = blockSize - dataSize;
@@ -410,13 +410,13 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     DataBlock b = getDataBlock();
     List<Key> keys = fillDataBlock(b);
     for( Key key: keys) {
-      byte[] value = new byte[key.size];
+      byte[] value = new byte[key.length];
       r.nextBytes(value);
       long bufPtr = UnsafeAccess.malloc(value.length);
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
-      boolean res = b.put(key.address, key.size, valuePtr, value.length, 0, 0);
+      boolean res = b.put(key.address, key.length, valuePtr, value.length, 0, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+      long size = b.get(key.address, key.length, bufPtr, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(bufPtr, value.length,  valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
@@ -436,13 +436,13 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     DataBlock b = getDataBlock();
     List<Key> keys = fillDataBlock(b);
     for( Key key: keys) {
-      byte[] value = new byte[key.size-2]; // smaller values
+      byte[] value = new byte[key.length-2]; // smaller values
       r.nextBytes(value);
       long bufPtr = UnsafeAccess.malloc(value.length);
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
-      boolean res = b.put(key.address, key.size, valuePtr, value.length, 0, 0);
+      boolean res = b.put(key.address, key.length, valuePtr, value.length, 0, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+      long size = b.get(key.address, key.length, bufPtr, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(bufPtr, value.length,  valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
@@ -466,19 +466,19 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     int toDelete = keys.size()/2;
     for(int i=0; i < toDelete; i++) {
       Key key = keys.remove(0);
-      OpResult res = b.delete(key.address, key.size, Long.MAX_VALUE);
+      OpResult res = b.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, res);
     }
     assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
 
     for( Key key: keys) {
-      byte[] value = new byte[key.size+2]; // large values
+      byte[] value = new byte[key.length+2]; // large values
       r.nextBytes(value);
       long bufPtr = UnsafeAccess.malloc(value.length);
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
-      boolean res = b.put(key.address,  key.size, valuePtr, value.length, 0, 0);
+      boolean res = b.put(key.address,  key.length, valuePtr, value.length, 0, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+      long size = b.get(key.address, key.length, bufPtr, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
     }
@@ -496,7 +496,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     DataBlock b = getDataBlock();
     List<Key> keys = fillDataBlock(b);
     for( Key key: keys) {
-      boolean res = b.put(key.address, key.size, key.address, key.size, Long.MAX_VALUE, 0);
+      boolean res = b.put(key.address, key.length, key.address, key.length, Long.MAX_VALUE, 0);
       assertTrue(res);
     }
     //Again system record +1
@@ -508,7 +508,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     // Delete  first
     for (int i = 0; i < toDelete; i++) {
       Key key = keys.get(i);
-      OpResult res = b.delete(key.address, key.size, Long.MAX_VALUE);
+      OpResult res = b.delete(key.address, key.length, Long.MAX_VALUE);
       assertTrue(res == OpResult.OK);
 
     }
@@ -518,11 +518,11 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     // Now insert existing keys with val/2
     for (int i = 0; i < keys.size(); i++) {
       Key key = keys.get(i);
-      long addr = b.get(key.address, key.size, Long.MAX_VALUE);
+      long addr = b.get(key.address, key.length, Long.MAX_VALUE);
       int oldValLen = DataBlock.valueLength(addr);
-      boolean res = b.put(key.address, key.size, key.address, key.size/2, Long.MAX_VALUE, 0);
+      boolean res = b.put(key.address, key.length, key.address, key.length/2, Long.MAX_VALUE, 0);
       if (res == false) {
-        if (isValidFailure(b, key, key.size/2, oldValLen)) {
+        if (isValidFailure(b, key, key.length/2, oldValLen)) {
           continue;
         } else {
           fail("FAIL");
@@ -535,12 +535,12 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     // Now insert existing keys with original value
     for (Key key: keys) {
-      long addr = b.get(key.address, key.size, Long.MAX_VALUE);
+      long addr = b.get(key.address, key.length, Long.MAX_VALUE);
       assertTrue(addr > 0);
       int oldValLen = DataBlock.valueLength(addr);
-      boolean res = b.put(key.address, key.size, key.address, key.size, Long.MAX_VALUE, 0);
+      boolean res = b.put(key.address, key.length, key.address, key.length, Long.MAX_VALUE, 0);
       if (res == false) {
-        if (isValidFailure(b, key, key.size, oldValLen)) {
+        if (isValidFailure(b, key, key.length, oldValLen)) {
           continue;
         } else {
           fail("FAIL");
@@ -605,14 +605,14 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
   
   protected void verifyGets(DataBlock b, List<Key> keys) {
     for(Key key: keys) {
-      long address = b.get(key.address, key.size, Long.MAX_VALUE);
+      long address = b.get(key.address, key.length, Long.MAX_VALUE);
       
       assertTrue(address > 0);
       int klen = DataBlock.keyLength(address);
       int vlen = DataBlock.valueLength(address);
-      assertEquals(key.size, klen);
+      assertEquals(key.length, klen);
       long buf = UnsafeAccess.malloc(vlen);
-      long size = b.get(key.address, key.size, buf, vlen, Long.MAX_VALUE);
+      long size = b.get(key.address, key.length, buf, vlen, Long.MAX_VALUE);
       assertEquals(vlen, (int)size);
     }
   }

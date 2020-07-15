@@ -50,7 +50,7 @@ public class DataBlockDirectMemoryLargeKVsTest extends DataBlockDirectMemoryTest
       DataBlock b = getDataBlock();
       List<Key> keys = fillDataBlock(b);
       for (Key key : keys) {
-        int keySize = key.size;
+        int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
         if (type == DataBlock.AllocType.EMBEDDED) {
@@ -64,9 +64,9 @@ public class DataBlockDirectMemoryLargeKVsTest extends DataBlockDirectMemoryTest
         r.nextBytes(value);
         long bufPtr = UnsafeAccess.malloc(value.length);
         long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
-        boolean res = b.put(key.address, key.size, valuePtr, value.length, 0, 0);
+        boolean res = b.put(key.address, key.length, valuePtr, value.length, 0, 0);
         assertTrue(res);
-        long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+        long size = b.get(key.address, key.length, bufPtr, value.length, Long.MAX_VALUE);
         assertEquals(value.length, (int) size);
         assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
         UnsafeAccess.free(valuePtr);
@@ -93,7 +93,7 @@ public class DataBlockDirectMemoryLargeKVsTest extends DataBlockDirectMemoryTest
       DataBlock b = getDataBlock();
       List<Key> keys = fillDataBlock(b);
       for (Key key : keys) {
-        int keySize = key.size;
+        int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
         if (type == DataBlock.AllocType.EMBEDDED) {
@@ -109,9 +109,9 @@ public class DataBlockDirectMemoryLargeKVsTest extends DataBlockDirectMemoryTest
         r.nextBytes(value);
         long bufPtr = UnsafeAccess.malloc(value.length);
         long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
-        boolean res = b.put(key.address, key.size, valuePtr, value.length, 0, 0);
+        boolean res = b.put(key.address, key.length, valuePtr, value.length, 0, 0);
         assertTrue(res);
-        long size = b.get(key.address, key.size, bufPtr, value.length, Long.MAX_VALUE);
+        long size = b.get(key.address, key.length, bufPtr, value.length, Long.MAX_VALUE);
         assertEquals(value.length, (int) size);
         assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
       }

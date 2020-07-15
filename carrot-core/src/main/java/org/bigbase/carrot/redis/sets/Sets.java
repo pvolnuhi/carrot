@@ -17,7 +17,6 @@ import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
-import com.google.common.collect.Lists;
 
 
 
@@ -116,7 +115,7 @@ public class Sets {
   private static Key getKey(long ptr, int size) {
     Key k = key.get();
     k.address = ptr;
-    k.size = size;
+    k.length = size;
     return k;
   }
   /**
@@ -172,9 +171,7 @@ public class Sets {
     Key k = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(k);
-      if (!keyExists(map, keyPtr, keySize)) {
-        return 0;
-      }
+      
       int toAdd = elemPtrs.length;
       int count = 0;
       for (int i = 0; i < toAdd; i++) {
@@ -437,7 +434,9 @@ public class Sets {
       if (index == null) {
         // Return all elements
         long result = SMEMBERS(map, keyPtr, keySize, bufferPtr, bufferSize);
-        DELETE(map, keyPtr, keySize);
+        if (result >=0) {
+          DELETE(map, keyPtr, keySize);
+        }
         return result;
       }
       scanner = getSetScanner(map, keyPtr, keySize, false);
@@ -456,9 +455,8 @@ public class Sets {
         }
       }
       // Now delete all
-      scanner = getSetScanner(map, keyPtr, keySize, false);
-      deleteByIndex(scanner, index);
-      return index.length;
+      long deleted = bulkDelete(map, keyPtr, keySize, bufferPtr);
+      return deleted;
     } finally {
       if (scanner != null) {
         try {
@@ -473,6 +471,39 @@ public class Sets {
   }
   
   /**
+   * Deletes all members from a buffer
+   * @param map sorted map
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param bufferPtr buffer address
+   * @return number of deleted members
+   */
+  private static int bulkDelete(BigSortedMap map, final long keyPtr, final int keySize,
+      final long bufferPtr) {
+    // Reads total number of elements
+    int total = UnsafeAccess.toInt(bufferPtr);
+    int count = 0;
+    long ptr = bufferPtr + Utils.SIZEOF_INT;
+    // No locking - it is safe here
+    while (count++ < total) {
+      int eSize = Utils.readUVInt(ptr);
+      int eSizeSize = Utils.sizeUVInt(eSize);
+      int kSize = buildKey(keyPtr, keySize, ptr + eSizeSize, eSize);
+      SetDelete remove = setDelete.get();
+      remove.reset();
+      remove.setMap(map);
+      remove.setKeyAddress(keyArena.get());
+      remove.setKeySize(kSize);
+      // version?
+      if (map.execute(remove)) {
+        count++;
+      }
+      ptr += eSize + eSizeSize;
+    }
+    return count;
+
+  }
+  /**
    * Delete set by Key
    * @param map sorted map
    * @param keyPtr key address
@@ -480,19 +511,21 @@ public class Sets {
    */
   public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
-    SetScanner scanner = null;
     try {
       KeysLocker.writeLock(k);
-      scanner = getSetScanner(map, keyPtr, keySize, false);
-      scanner.deleteAll();
+      int newKeySize = keySize + KEY_SIZE + Utils.SIZEOF_BYTE;
+      long kPtr = UnsafeAccess.malloc(newKeySize);
+      UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
+      UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+      UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
+      
+      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
+      
+      UnsafeAccess.free(kPtr);
+      UnsafeAccess.free(endKeyPtr);
       
     } finally {
-      if (scanner != null) {
-        try {
-          scanner.close();
-        } catch (IOException e) {
-        }
-      }
       KeysLocker.writeUnlock(k);
     }
 
@@ -581,7 +614,7 @@ public class Sets {
   }
   
   private static long readByIndex(SetScanner scanner, int[] index, long bufferPtr, int bufferSize) {
-    long ptr = bufferPtr + Utils.SIZEOF_LONG;
+    long ptr = bufferPtr + Utils.SIZEOF_INT;
     
     for (int i=0; i < index.length; i++) {
       long pos = scanner.skipTo(index[i]);
@@ -598,24 +631,9 @@ public class Sets {
       UnsafeAccess.copy(ePtr,  ptr + eSizeSize, eSize);
       ptr += eSize + eSizeSize;     
     }
-    UnsafeAccess.putLong(bufferPtr, index.length);
+    UnsafeAccess.putInt(bufferPtr, index.length);
     return index.length;
   }
-  
-  private static long deleteByIndex(SetScanner scanner, int[] index) {
-    long prev = -1;
-    int deleted = 0;
-    for (int i=0; i < index.length; i++) {
-      long pos = scanner.skipTo(index[i] - deleted);
-      if (prev < 0 || pos != prev) {
-        scanner.delete();
-        deleted ++;
-      }
-      prev = pos;
-    }
-    return index.length;
-  }
-  
   
   /**
    * Returns all the members of the set value stored at key.

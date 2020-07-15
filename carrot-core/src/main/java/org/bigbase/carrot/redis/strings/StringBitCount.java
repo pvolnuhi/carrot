@@ -68,44 +68,11 @@ public class StringBitCount extends Operation {
       start = 0;
       end = valueSize -1;
     }
-    this.count = bitcount(valuePtr, valueSize);
+    this.count = Utils.bitcount(valuePtr + start, (int)(end -start + 1));
     return true;
   }
   
-  private long bitcount(long valuePtr, int valueSize) {
-    valuePtr += start;
-    valueSize = (int)(end -start + 1);
-    int num8 = valueSize / Utils.SIZEOF_LONG;
-    int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
-    long c = 0;
-    long ptr = valuePtr;
-    for(int i=0; i < num8; i++) {
-      long v = UnsafeAccess.toLong(ptr);
-      c += Long.bitCount(v);
-      ptr += Utils.SIZEOF_LONG;
-    }
-    int num4 = rem8 / Utils.SIZEOF_INT;
-    int rem4 = rem8 - Utils.SIZEOF_INT * num4;
-    for(int i=0; i < num4; i++) {
-      int v = UnsafeAccess.toInt(ptr);
-      c += Integer.bitCount(v);
-      ptr += Utils.SIZEOF_INT;
-    }
-    
-    int num2 = rem4 / Utils.SIZEOF_SHORT;
-    int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
-    
-    for(int i=0; i < num2; i++) {
-      short v = UnsafeAccess.toShort(ptr);
-      c += Utils.bitCount(v);
-      ptr += Utils.SIZEOF_SHORT;
-    }
-    if (rem2 == 1) {
-      byte v = UnsafeAccess.toByte(ptr);
-      c += Utils.bitCount(v);
-    }
-    return c;
-  }
+ 
 
   @Override
   public void reset() {

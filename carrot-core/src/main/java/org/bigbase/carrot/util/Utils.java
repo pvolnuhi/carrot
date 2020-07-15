@@ -1,5 +1,14 @@
 package org.bigbase.carrot.util;
 
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitSetByte;
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitSetInt;
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitSetLong;
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitSetShort;
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetByte;
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetInt;
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetLong;
+import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetShort;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -438,12 +447,13 @@ public class Utils {
     Collections.sort(list, new Comparator<Key> () {
       @Override
       public int compare(Key k1, Key k2) {
-        return Utils.compareTo(k1.address, k1.size, k2.address, k2.size);
+        return Utils.compareTo(k1.address, k1.length, k2.address, k2.length);
       }
     });
   }
   
   /**
+   * TODO: handle all 0xff key
    * Calculates end key for prefix scanner
    * @param start start key address
    * @param startSize start key size
@@ -933,6 +943,188 @@ public class Utils {
       if (arr[i] == v) return true;
     }  
     return false;
+  }
+  
+  /**
+   * Bit count in a memory block
+   * @param valuePtr start address
+   * @param valueSize length of a block
+   * @return
+   */
+  public static long bitcount(long valuePtr, int valueSize) {
+    
+    int num8 = valueSize / Utils.SIZEOF_LONG;
+    int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
+    long c = 0;
+    long ptr = valuePtr;
+    for(int i=0; i < num8; i++) {
+      long v = UnsafeAccess.toLong(ptr);
+      c += Long.bitCount(v);
+      ptr += Utils.SIZEOF_LONG;
+    }
+    int num4 = rem8 / Utils.SIZEOF_INT;
+    int rem4 = rem8 - Utils.SIZEOF_INT * num4;
+    for(int i=0; i < num4; i++) {
+      int v = UnsafeAccess.toInt(ptr);
+      c += Integer.bitCount(v);
+      ptr += Utils.SIZEOF_INT;
+    }
+    
+    int num2 = rem4 / Utils.SIZEOF_SHORT;
+    int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
+    
+    for(int i=0; i < num2; i++) {
+      short v = UnsafeAccess.toShort(ptr);
+      c += Utils.bitCount(v);
+      ptr += Utils.SIZEOF_SHORT;
+    }
+    if (rem2 == 1) {
+      byte v = UnsafeAccess.toByte(ptr);
+      c += Utils.bitCount(v);
+    }
+    return c;
+  }
+  /** 
+   * Returns first position of the set bit ('1')
+   * @param valuePtr memory address start
+   * @param valueSize memory block length
+   * @return position of a first set ('1') bit or -1 if no set bits
+   */
+  public static long bitposSet(long valuePtr, int valueSize) {
+
+    int num8 = valueSize / Utils.SIZEOF_LONG;
+    int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
+    long ptr = valuePtr;
+    int pos = 0;
+    for(int i=0; i < num8; i++) {
+      pos = firstBitSetLong(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+      ptr += Utils.SIZEOF_LONG;
+    }
+    int num4 = rem8 / Utils.SIZEOF_INT;
+    int rem4 = rem8 - Utils.SIZEOF_INT * num4;
+    for(int i=0; i < num4; i++) {
+      pos = firstBitSetInt(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+      ptr += Utils.SIZEOF_INT;
+    }
+    
+    int num2 = rem4 / Utils.SIZEOF_SHORT;
+    int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
+    
+    for(int i=0; i < num2; i++) {
+      pos = firstBitSetShort(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+      ptr += Utils.SIZEOF_SHORT;
+    }
+    
+    if (rem2 == 1) {
+      pos = firstBitSetByte(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+    }
+    return -1;
+  }
+
+  /** 
+   * Returns first position of a unset bit
+   * @param valuePtr memory address start
+   * @param valueSize memory block length
+   * @return position of a first unset ('0') bit or -1
+   */
+  public static long bitposUnset(long valuePtr, int valueSize) {
+    int num8 = valueSize / Utils.SIZEOF_LONG;
+    int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
+    long ptr = valuePtr;
+    int pos = 0;
+    for(int i=0; i < num8; i++) {
+      pos = firstBitUnSetLong(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+      ptr += Utils.SIZEOF_LONG;
+    }
+    int num4 = rem8 / Utils.SIZEOF_INT;
+    int rem4 = rem8 - Utils.SIZEOF_INT * num4;
+    for(int i=0; i < num4; i++) {
+      pos = firstBitUnSetInt(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+      ptr += Utils.SIZEOF_INT;
+    }
+    
+    int num2 = rem4 / Utils.SIZEOF_SHORT;
+    int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
+    
+    for(int i=0; i < num2; i++) {
+      pos = firstBitUnSetShort(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+      ptr += Utils.SIZEOF_SHORT;
+    }
+    
+    if (rem2 == 1) {
+      pos = firstBitUnSetByte(ptr);
+      if (pos >= 0) {
+        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+      }
+    }    
+    return -1;
+  }
+  
+  static final long FRACTION_MASK = 0x000fffffffffffffL; // 52 lower bits
+  static final long MAX_FRACTION = FRACTION_MASK;
+  static final long EXP_MASK = 0x7ff0000000000000L;
+  static final long MAX_EXP = EXP_MASK;
+  /**
+   * Convert double to lexicographically sortable sequence of bytes,
+   * which preserves double value order
+   * @param ptr address of a buffer
+   * @param v double value
+   */
+  public static void doubleToLex(long ptr, double v) {
+    v = -v;
+    long lv = Double.doubleToLongBits(v);
+    // check first bit
+    if ((lv >>> 63) == 1) {
+      UnsafeAccess.putLong(ptr, lv);
+    } else {
+      // negative
+      long exp = lv & EXP_MASK;
+      exp = MAX_EXP - exp;
+      long fraction = lv & FRACTION_MASK;
+      fraction = MAX_FRACTION - fraction;
+      lv = exp | fraction;
+      UnsafeAccess.putLong(ptr, lv);
+    }
+  }
+  
+  /**
+   * Reads double from a lexicographical stream of bytes
+   * @param ptr address
+   * @return double value
+   */
+  public static double lexToDouble(long ptr) {
+    long lv = UnsafeAccess.toLong(ptr);
+    if ((lv >>> 63) == 1) {
+      return -Double.longBitsToDouble(lv);
+    } else {
+      long fraction = lv & FRACTION_MASK;
+      fraction = MAX_FRACTION - fraction;
+      long exp = lv & EXP_MASK;
+      exp = MAX_EXP - exp;
+      lv = exp | fraction;
+      return -Double.longBitsToDouble(lv);
+    }
   }
   
   public static void main(String[] args) {

@@ -397,22 +397,34 @@ public class BigSortedMap {
     IndexBlock kvBlock = getThreadLocalBlock();
     op.setVersion(version);
     kvBlock.putForSearch(op.getKeyAddress(), op.getKeySize(), version);
+    IndexBlock b = null;
+    boolean lowerKey = false;
     while (true) {
-      IndexBlock b = null;
       try {
-        b = map.floorKey(kvBlock);
+        b = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
+        if (b == null) {
+          // TODO
+          return false;
+        }
         lock(b); // to prevent locking from another thread
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
-          IndexBlock bbb = map.floorKey(kvBlock);
+          IndexBlock bbb = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
           if (b != bbb) {
             continue;
           }
         }        
-        long recordAddress = b.get(op.getKeyAddress(), op.getKeySize(), version, op.isFloorKey());
-        //if (recordAddress <=0) {
-        //  return false;
-        //}
+        long recordAddress = lowerKey == false? 
+            b.get(op.getKeyAddress(), op.getKeySize(), version, op.isFloorKey()):
+              b.lastRecordAddress();
+        if (recordAddress < 0 && op.isFloorKey()) {
+          if (lowerKey) {
+            return false;
+          } else {
+            lowerKey = true;
+            continue;
+          }
+        }
         op.setFoundRecordAddress(recordAddress);
         // Execute operation
         boolean result = op.execute();
@@ -649,7 +661,62 @@ public class BigSortedMap {
       }
     }
   }
-  
+  /**
+   * Delete key range operation
+   * @param startKeyPtr key address
+   * @param startKeyLength key length
+   * @return true if success, false otherwise
+   */
+  public long deleteRange(long startKeyPtr, int startKeyLength, 
+      long endKeyPtr, int endKeyLength) {
+    IndexBlock kvBlock = getThreadLocalBlock();
+    long version = getSequenceId();
+    long deleted = 0;
+    kvBlock.putForSearch(startKeyPtr, startKeyLength, version);
+    IndexBlock b = null;
+    boolean firstBlock = true;
+    IndexBlock toDelete = null;
+    while (true) {
+      try {
+        b = firstBlock? map.floorKey(kvBlock): map.higherKey(b);
+        lock(b); // to prevent
+        if (b == null) {
+          return deleted;
+        }
+        if (b.hasRecentUnsafeModification()) {
+          IndexBlock bbb = firstBlock? map.floorKey(kvBlock): map.higherKey(b);
+          if (b != bbb) {
+            continue;
+          }
+        }
+        firstBlock = false;
+        long del = b.deleteRange(startKeyPtr, startKeyLength, endKeyPtr, endKeyLength, version);
+        if (del == 0) {
+          break;
+        }
+        deleted += del; 
+        if (toDelete != null) {
+          map.remove(toDelete);
+          toDelete.free();
+          toDelete = null;
+        }
+        if (b.isEmpty()) {
+          toDelete = b;
+        }
+        // and continue loop
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        unlock(b);
+      }
+    }
+    if (toDelete != null) {
+      map.remove(toDelete);
+      toDelete.free();
+      toDelete = null;
+    }
+    return deleted;
+  }
   /**
    * Delete key operation
    * @param keyPtr key address

@@ -38,7 +38,7 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
       List<Key> keys = fillIndexBlock(b);
       System.out.println("KEYS ="+ keys.size());
       for (Key key : keys) {
-        int keySize = key.size;
+        int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
         if (type == DataBlock.AllocType.EMBEDDED) {
@@ -79,7 +79,7 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
       IndexBlock b = getIndexBlock(4096);
       List<Key> keys = fillIndexBlock(b);
       for (Key key : keys) {
-        int keySize = key.size;
+        int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
         if (type == DataBlock.AllocType.EMBEDDED) {

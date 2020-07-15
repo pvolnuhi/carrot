@@ -22,10 +22,10 @@ public class IndexBlockDirectMemoryTest {
     ArrayList<Key> keys = fillIndexBlock(ib);
 
     for(Key key: keys) {
-      long valuePtr = UnsafeAccess.malloc(key.size);
-      long size = ib.get(key.address, key.size, valuePtr, key.size, Long.MAX_VALUE);
-      assertTrue(size == key.size);
-      int res = Utils.compareTo(key.address, key.size, valuePtr, key.size);
+      long valuePtr = UnsafeAccess.malloc(key.length);
+      long size = ib.get(key.address, key.length, valuePtr, key.length, Long.MAX_VALUE);
+      assertTrue(size == key.length);
+      int res = Utils.compareTo(key.address, key.length, valuePtr, key.length);
       assertEquals(0, res);
       UnsafeAccess.free(valuePtr);
     }
@@ -42,7 +42,7 @@ public class IndexBlockDirectMemoryTest {
     
     List<Key> toDelete = keys.subList(0, keys.size()/2);
     for(Key key : toDelete) {
-      OpResult res = ib.delete(key.address,  key.size, Long.MAX_VALUE);
+      OpResult res = ib.delete(key.address,  key.length, Long.MAX_VALUE);
       assertTrue(res == OpResult.OK);
     }
     int after = ib.getNumberOfDataBlock();
@@ -59,11 +59,11 @@ public class IndexBlockDirectMemoryTest {
     ArrayList<Key> keys = fillIndexBlock(ib);
 
     for(Key key: keys) {
-      long valuePtr = UnsafeAccess.malloc(key.size);
+      long valuePtr = UnsafeAccess.malloc(key.length);
 
-      long size = ib.get(key.address, key.size, valuePtr, key.size, Long.MAX_VALUE);
-      assertTrue(size == key.size);
-      int res = Utils.compareTo(key.address, key.size, valuePtr, key.size);
+      long size = ib.get(key.address, key.length, valuePtr, key.length, Long.MAX_VALUE);
+      assertTrue(size == key.length);
+      int res = Utils.compareTo(key.address, key.length, valuePtr, key.length);
       assertEquals(0, res);
       UnsafeAccess.free(valuePtr);
     }
@@ -72,21 +72,21 @@ public class IndexBlockDirectMemoryTest {
     List<Key> splitRequires = new ArrayList<Key>();
     for(Key key: keys) {
       
-      OpResult result = ib.delete(key.address, key.size, Long.MAX_VALUE);
+      OpResult result = ib.delete(key.address, key.length, Long.MAX_VALUE);
       if (result == OpResult.SPLIT_REQUIRED) {
         splitRequires.add(key);
         continue;
       }
       assertEquals(OpResult.OK, result);
       // try again
-      result = ib.delete(key.address, key.size, Long.MAX_VALUE);
+      result = ib.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.NOT_FOUND, result);
     }
     // Now try get them
     for(Key key: keys) {
-      long valuePtr = UnsafeAccess.malloc(key.size);
+      long valuePtr = UnsafeAccess.malloc(key.length);
 
-      long size = ib.get(key.address, key.size, valuePtr, key.size, Long.MAX_VALUE);
+      long size = ib.get(key.address, key.length, valuePtr, key.length, Long.MAX_VALUE);
       if (splitRequires.contains(key)) {
         assertTrue(size > 0);
       } else {
@@ -104,10 +104,10 @@ public class IndexBlockDirectMemoryTest {
     ArrayList<Key> keys = fillIndexBlock(ib);
 
     for(Key key: keys) {
-      long valuePtr = UnsafeAccess.malloc(key.size);
-      long size = ib.get(key.address, key.size, valuePtr, key.size, Long.MAX_VALUE);
-      assertTrue(size == key.size);
-      int res = Utils.compareTo(key.address, key.size, valuePtr, key.size);
+      long valuePtr = UnsafeAccess.malloc(key.length);
+      long size = ib.get(key.address, key.length, valuePtr, key.length, Long.MAX_VALUE);
+      assertTrue(size == key.length);
+      int res = Utils.compareTo(key.address, key.length, valuePtr, key.length);
       assertEquals(0, res);
       UnsafeAccess.free(valuePtr);
     }
@@ -118,20 +118,20 @@ public class IndexBlockDirectMemoryTest {
 
     for(Key key: toDelete) {
       
-      OpResult result = ib.delete(key.address, key.size, Long.MAX_VALUE);
+      OpResult result = ib.delete(key.address, key.length, Long.MAX_VALUE);
       if (result == OpResult.SPLIT_REQUIRED) {
         splitRequires.add(key);
         continue;
       }
       assertEquals(OpResult.OK, result);
       // try again
-      result = ib.delete(key.address, key.size, Long.MAX_VALUE);
+      result = ib.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.NOT_FOUND, result);
     }
     // Now try get them
     for(Key key: toDelete) {
-      long valuePtr = UnsafeAccess.malloc(key.size);
-      long size = ib.get(key.address, key.size, valuePtr, key.size, Long.MAX_VALUE);
+      long valuePtr = UnsafeAccess.malloc(key.length);
+      long size = ib.get(key.address, key.length, valuePtr, key.length, Long.MAX_VALUE);
       if (splitRequires.contains(key)) {
         assertTrue(size > 0);
       } else {
@@ -141,10 +141,10 @@ public class IndexBlockDirectMemoryTest {
     }
     // Now get the rest
     for(Key key: keys.subList(keys.size()/2, keys.size())) {
-      long valuePtr = UnsafeAccess.malloc(key.size);
-      long size = ib.get(key.address, key.size, valuePtr, key.size, Long.MAX_VALUE);
-      assertTrue(size == key.size);
-      int res = Utils.compareTo(key.address, key.size, valuePtr, key.size);
+      long valuePtr = UnsafeAccess.malloc(key.length);
+      long size = ib.get(key.address, key.length, valuePtr, key.length, Long.MAX_VALUE);
+      assertTrue(size == key.length);
+      int res = Utils.compareTo(key.address, key.length, valuePtr, key.length);
       assertEquals(0, res);
       UnsafeAccess.free(valuePtr);
     }
@@ -157,13 +157,13 @@ public class IndexBlockDirectMemoryTest {
     IndexBlock b = getIndexBlock(4096);
     List<Key> keys = fillIndexBlock(b);
     for( Key key: keys) {
-      byte[] value = new byte[key.size];
+      byte[] value = new byte[key.length];
       r.nextBytes(value);
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
       long buf = UnsafeAccess.malloc(value.length);
-      boolean res = b.put(key.address, key.size, valuePtr, value.length, Long.MAX_VALUE, 0);
+      boolean res = b.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.size, buf, value.length, Long.MAX_VALUE);
+      long size = b.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
@@ -179,13 +179,13 @@ public class IndexBlockDirectMemoryTest {
     IndexBlock b = getIndexBlock(4096);
     List<Key> keys = fillIndexBlock(b);
     for( Key key: keys) {
-      byte[] value = new byte[key.size-2];
+      byte[] value = new byte[key.length-2];
       r.nextBytes(value);
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
       long buf = UnsafeAccess.malloc(value.length);
-      boolean res = b.put(key.address, key.size, valuePtr, value.length, Long.MAX_VALUE, 0);
+      boolean res = b.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.size, buf, value.length, Long.MAX_VALUE);
+      long size = b.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
@@ -206,18 +206,18 @@ public class IndexBlockDirectMemoryTest {
     for(int i=0; i < toDelete; i++) {
       ///*DEBUG*/ System.out.println(i);
       Key key = keys.remove(0);
-      OpResult res = b.delete(key.address, key.size, Long.MAX_VALUE);
+      OpResult res = b.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, res);
     }
 
     for( Key key: keys) {
-      byte[] value = new byte[key.size + 2];
+      byte[] value = new byte[key.length + 2];
       r.nextBytes(value);      
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
       long buf = UnsafeAccess.malloc(value.length);
-      boolean res = b.put(key.address, key.size, valuePtr, value.length, Long.MAX_VALUE, 0);
+      boolean res = b.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.size, buf, value.length, Long.MAX_VALUE);
+      long size = b.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
@@ -262,7 +262,7 @@ public class IndexBlockDirectMemoryTest {
   }
   private boolean contains(long key, int size, List<Key> keys) {
     for (Key k : keys) {
-      if (Utils.compareTo(k.address, k.size, key, size) == 0) {
+      if (Utils.compareTo(k.address, k.length, key, size) == 0) {
         return true;
       }
     }
