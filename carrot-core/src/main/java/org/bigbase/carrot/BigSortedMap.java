@@ -989,6 +989,33 @@ public class BigSortedMap {
           stopRowPtr, stopRowLength, snapshotId); 
       } catch (RetryOperationException e) {
         continue;
+      } catch (IOException ee) {
+        // Legitimate exception
+        return null;
+      }
+    }
+  }
+  
+  /**
+   * Get scanner (single instance per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @param reverse is reverse scanner
+   * @return scanner
+   */
+  public BigSortedMapDirectMemoryScanner getScanner(long startRowPtr, int startRowLength, 
+      long stopRowPtr, int stopRowLength, boolean reverse) {
+    long snapshotId = getSequenceId();
+    while(true) {
+      try {
+        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+          stopRowPtr, stopRowLength, snapshotId, false, reverse); 
+      } catch (RetryOperationException e) {
+        continue;
+      } catch (IOException ee) {
+        return null;
       }
     }
   }
@@ -1007,9 +1034,35 @@ public class BigSortedMap {
     while(true) {
       try {
         return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
-          stopRowPtr, stopRowLength, snapshotId, true); 
+          stopRowPtr, stopRowLength, snapshotId, true, false); 
       } catch (RetryOperationException e) {
         continue;
+      } catch (IOException ee) {
+        return null;
+      }
+    }
+  }
+  
+  /**
+   * Get safe scanner (multiple instances per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength start row length
+   * @param stopRowPtr stop row address
+   * @param stopRowLength stop row length
+   * @param reverse is reverse scanner
+   * @return scanner
+   */
+  public BigSortedMapDirectMemoryScanner getSafeScanner(long startRowPtr, int startRowLength, 
+      long stopRowPtr, int stopRowLength, boolean reverse) {
+    long snapshotId = getSequenceId();
+    while(true) {
+      try {
+        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+          stopRowPtr, stopRowLength, snapshotId, true, reverse); 
+      } catch (RetryOperationException e) {
+        continue;
+      } catch (IOException ee) {
+        return null;
       }
     }
   }
@@ -1022,6 +1075,7 @@ public class BigSortedMap {
    */
   
   public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength) {
+    //TODO fix prefixKeyEnd
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
     if (endRowPtr == -1) {
       return null;
@@ -1029,6 +1083,25 @@ public class BigSortedMap {
     
     return getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
   }
+  
+  /**
+   * Get prefix scanner (single instance per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength stop row address
+   * @param reverse is reverse scanner
+   * @return scanner
+   */
+  
+  public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength, boolean reverse) {
+    //TODO fix prefixKeyEnd
+    long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
+    if (endRowPtr == -1) {
+      return null;
+    }
+    
+    return getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
+  }
+  
   
   /**
    * Get safe prefix scanner (multiple instances per thread)
@@ -1046,6 +1119,23 @@ public class BigSortedMap {
     return getSafeScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
   }
   
+  /**
+   * Get safe prefix scanner (multiple instances per thread)
+   * @param startRowPtr start row address
+   * @param startRowLength stop row address
+   * @param reverse is reverse scanner
+   * @return scanner
+   */
+  
+  public BigSortedMapDirectMemoryScanner getSafePrefixScanner(long startRowPtr, int startRowLength, 
+      boolean reverse) {
+    long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
+    if (endRowPtr == -1) {
+      return null;
+    }
+    
+    return getSafeScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
+  }
   /**
    * Disposes map, deallocate all the memory
    */

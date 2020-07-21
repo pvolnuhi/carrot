@@ -98,6 +98,9 @@ public class BigSortedMapScanner implements Closeable{
     }
   }
   public boolean hasNext() throws IOException {
+    if (blockScanner == null) {
+      return false;
+    }
     boolean result = blockScanner.hasNext();
     if (!result) {    
       result = nextBlockAndScanner();
@@ -109,6 +112,10 @@ public class BigSortedMapScanner implements Closeable{
   }
     
   public boolean next() {
+    // Block scanner can be NULL
+    if (blockScanner == null) {
+      return false;
+    }
     return blockScanner.next();
   }
   
@@ -308,22 +315,6 @@ public class BigSortedMapScanner implements Closeable{
       }
     }
   }
-  
-  /**
-   * Delete current Key
-   * @return true if success, false - otherwise
-   */
-  public boolean delete() {
-    //TODO
-    return false;
-  }
-  
-  /**
-   * Delete all Keys in this scanner
-   * @return true on success, false?
-   */
-  public boolean deleteAll() {
-    return false;
-  }
+ 
   
 }

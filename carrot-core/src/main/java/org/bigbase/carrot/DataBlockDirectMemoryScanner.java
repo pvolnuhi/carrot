@@ -1,15 +1,15 @@
 package org.bigbase.carrot;
 
-import java.io.Closeable;
 import java.io.IOException;
 
+import org.bigbase.carrot.util.BidirectionalScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 /**
  * Thread unsafe implementation
  */
-public final class DataBlockDirectMemoryScanner implements Closeable{
+public final class DataBlockDirectMemoryScanner implements BidirectionalScanner{
 
   /*
    * Start Row pointer
@@ -60,6 +60,12 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
    * We consider only records with sequenceId < snapshotId
    */
   long snapshotId;
+  
+  /*
+   * Is first block 
+   */
+  boolean isFirst;
+  
   /*
    * Thread local for scanner instance.
    * Multiple instances UNSAFE (can not be used in multiple 
@@ -90,9 +96,14 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
 
     DataBlockDirectMemoryScanner bs = scanner.get();
     bs.reset();
-    if (!b.isValid()) {
+    if (!b.isValid() || b.isEmpty()) {
       // Return null for now
       return null;
+    }
+    if (startRowPtr > 0 && stopRowPtr > 0) {
+      if (Utils.compareTo(startRowPtr, startRowLength, stopRowPtr, stopRowLength) >=0) {
+        return null;
+      }
     }
     bs.setBlock(b);
     bs.setSnapshotId(snapshotId);
@@ -122,9 +133,14 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     if (bs == null) { 
       bs = new DataBlockDirectMemoryScanner();
     }
-    if (!b.isValid()) {
+    if (!b.isValid() || b.isEmpty()) {
       // Return null for now
       return null;
+    }
+    if (startRowPtr > 0 && stopRowPtr > 0) {
+      if (Utils.compareTo(startRowPtr, startRowLength, stopRowPtr, stopRowLength) >=0) {
+        return null;
+      }
     }
     bs.setBlock(b);
     bs.setSnapshotId(snapshotId);
@@ -150,6 +166,7 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     this.numRecords = 0;
     this.numDeletedRecords = 0;
     this.snapshotId = Long.MAX_VALUE;
+    this.isFirst = false;
   }
   
   private void setStartRow(long ptr, int len) {
@@ -269,6 +286,7 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
       this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
       this.ptr = b.getAddress(); 
       this.curPtr = this.ptr;
+      this.isFirst = b.isFirstBlock();
   }
   
   protected void setSnapshotId(long snapshotId) {
@@ -561,12 +579,140 @@ public final class DataBlockDirectMemoryScanner implements Closeable{
     return DataBlock.getRecordType(curPtr);
   }
   
+
+  @Override
+  public boolean first() {
+    this.curPtr = this.ptr;
+    if (this.isFirst) { 
+      int keylen = DataBlock.blockKeyLength(this.ptr);
+      int vallen = DataBlock.blockValueLength(this.ptr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    if (startRowPtr > 0) {
+      int res = DataBlock.compareTo(this.curPtr, startRowPtr, startRowLength, 0, Op.PUT);
+      if (res <= 0) {
+        return true;
+      }
+    } else {
+      return true;
+    }
+    // OK now we should repeat scan with checking startRow
+
+    this.curPtr = this.ptr;
+    while(this.curPtr < this.ptr + dataSize) {
+      if (startRowPtr > 0) {
+        int res = DataBlock.compareTo(this.curPtr, this.startRowPtr, this.startRowLength, 0, Op.PUT);
+        if (res <= 0) {
+          break;
+        }
+      }
+      int keylen = DataBlock.blockKeyLength(this.curPtr);
+      int vallen = DataBlock.blockValueLength(this.curPtr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    return true;
+  }
+
   /**
-   * Delete current Key
-   * @return true if success, false - otherwise
+   * Set to the last record
    */
-  public boolean delete() {
-    //TODO
-    return false;
+  @Override
+  public boolean last() {
+    
+    long prev = 0;
+    this.curPtr = isFirst? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2: this.ptr;
+    while(this.curPtr < this.ptr + dataSize) {
+      prev = curPtr;
+      int keylen = DataBlock.blockKeyLength(this.curPtr);
+      int vallen = DataBlock.blockValueLength(this.curPtr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    this.curPtr = prev;
+    
+    if (stopRowPtr > 0) {
+      int res = DataBlock.compareTo(this.curPtr, this.stopRowPtr, this.stopRowLength, 0, Op.PUT);
+      if (res > 0) {
+        this.curPtr = prev;
+        return true;
+      }
+    } else {
+      this.curPtr = prev;
+      return true;
+    } 
+    prev = 0;
+    // OK now we should repeat scan with checking stopRow
+    this.curPtr = isFirst? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2: this.ptr;
+    while(this.curPtr < this.ptr + dataSize) {
+      if (stopRowPtr > 0) {
+        int res = DataBlock.compareTo(this.curPtr, this.stopRowPtr, this.stopRowLength, 0, Op.PUT);
+        if (res <= 0) {
+          break;
+        }
+      }
+      prev = curPtr;
+      int keylen = DataBlock.blockKeyLength(this.curPtr);
+      int vallen = DataBlock.blockValueLength(this.curPtr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    if (prev == 0) {
+      return false;
+    }
+    this.curPtr = prev;
+    return true;
+  }
+
+  @Override
+  public boolean previous() {
+    long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 : this.ptr;
+    long pptr = limit;
+    if (pptr == this.curPtr) {
+      return false;
+    }
+    while (pptr < this.curPtr) {
+      int keylen = DataBlock.blockKeyLength(pptr);
+      int vallen = DataBlock.blockValueLength(pptr);
+      if (pptr + keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD == this.curPtr) {
+        break;
+      } else {
+        pptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+      }
+    }
+
+    if (startRowPtr != 0) {
+      int res = DataBlock.compareTo(pptr, startRowPtr, startRowLength, 0, Op.PUT);
+      if (res > 0) {
+        return false;
+      }
+    }
+
+    this.curPtr = pptr;
+
+    return true;
+  }
+
+  @Override
+  public boolean hasPrevious() {
+    long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 : this.ptr;
+    long pptr = limit;
+    if (pptr == this.curPtr) {
+      return false;
+    }
+    while (pptr < this.curPtr) {
+      int keylen = DataBlock.blockKeyLength(pptr);
+      int vallen = DataBlock.blockValueLength(pptr);
+      if (pptr + keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD == this.curPtr) {
+        break;
+      } else {
+        pptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+      }
+    }
+
+    if (startRowPtr != 0) {
+      int res = DataBlock.compareTo(pptr, startRowPtr, startRowLength, 0, Op.PUT);
+      if (res > 0) {
+        return false;
+      }
+    }
+    return true;
   }
 }

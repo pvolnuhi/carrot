@@ -7,11 +7,14 @@ public class IndexBlockScannerLargeKVsTest extends IndexBlockScannerTest{
   protected ArrayList<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
-
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("FILL seed="+ seed);
+    
     int maxSize = 4096;
     boolean result = true;
     while(true) {
-      int len = r.nextInt(maxSize) + 1;
+      int len = r.nextInt(maxSize - 2) + 2;
       byte[] key = new byte[len];
       r.nextBytes(key);
       result = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
@@ -23,6 +26,7 @@ public class IndexBlockScannerLargeKVsTest extends IndexBlockScannerTest{
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 
         b.getDataInBlockSize()+" num records=" + keys.size());
+    b.dumpIndexBlockExt();
     return keys;
   }
 }

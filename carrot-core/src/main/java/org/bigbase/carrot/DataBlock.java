@@ -141,9 +141,11 @@ public final class DataBlock  {
    * @return true, if - yes, false - otherwise
    */
   public static AllocType getAllocType (int keySize, int valueSize) {
-    if( keySize + valueSize + RECORD_TOTAL_OVERHEAD < MAX_BLOCK_SIZE/2) {
+    if( keySize + valueSize + RECORD_TOTAL_OVERHEAD < MAX_BLOCK_SIZE/2 
+        -/*SAFE for first block*/ RECORD_TOTAL_OVERHEAD -2) {
       return AllocType.EMBEDDED;
-    } else if (keySize + RECORD_TOTAL_OVERHEAD + ADDRESS_SIZE + INT_SIZE < MAX_BLOCK_SIZE/2) {
+    } else if (keySize + RECORD_TOTAL_OVERHEAD + ADDRESS_SIZE + INT_SIZE < MAX_BLOCK_SIZE/2 -
+        /*SAFE for first block*/ RECORD_TOTAL_OVERHEAD - 2) {
       return AllocType.EXT_VALUE;
     } else {
       return AllocType.EXT_KEY_VALUE;
@@ -1947,8 +1949,10 @@ public final class DataBlock  {
       } else if (res == 0) {
         // check versions
         long ver = getRecordSeqId(ptr);
-        if (ver <= version) {
+        if (ver > version) {
           return ptr;
+        } else if (ver <= version) {
+          return prevPtr;
         } else if (version > txId) {
           return NOT_FOUND;
         }
@@ -2366,9 +2370,15 @@ public final class DataBlock  {
   }
 
   
+  /**
+   * Is block empty
+   * @return true, if empty, false - otherwise
+   */
   final boolean isEmpty() {
-    return getNumberOfRecords() == 0;
+    int n = getNumberOfRecords();
+    return n == 0 || n == 1 && isFirstBlock();
   }
+  
   /**
    * Delete operation 
    * TODO: update Index Block start key if we delete start key
@@ -2739,8 +2749,11 @@ public final class DataBlock  {
       readUnlock();
     }
   }
-  
-  public long lastRecordAddress() {
+  /**
+   * Last record in this block address
+   * @return last record address or NOT_FOUND if block is empty
+   */
+  public final long last() {
     int n = getNumberOfRecords();
     if (n == 0 || (n == 1 && isFirstBlock())) {
       return NOT_FOUND;
@@ -2755,6 +2768,55 @@ public final class DataBlock  {
     return ptr;
   }
 
+  /**
+   * Address of a first record
+   * @return address of a first record or NOT_FOUND,
+   *   if block is empty
+   */
+  public final long first() {
+    if (isEmpty()) return NOT_FOUND;
+    return this.dataPtr;
+  }
+  
+  /**
+   * Next record address
+   * @param ptr current record address
+   * @return next record address or NOT_FOUND if next record does not exists
+   *    in this block
+   */
+  public final long next(long ptr) {
+    if (ptr >= this.dataPtr + getDataInBlockSize()) {
+      return NOT_FOUND;
+    }
+    int vallen = blockValueLength(ptr);
+    int keylen = blockKeyLength(ptr);
+    ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    if (ptr >= this.dataPtr + getDataInBlockSize()) {
+      return NOT_FOUND;
+    } else {
+      return ptr;
+    }
+  }
+  
+  /**
+   * Previous record address or NOT_FOUND
+   * @param ptr current record address
+   * @return previous record address or NOT_FOUND
+   */
+  public final long previous(long ptr) {
+    if (ptr <= this.dataPtr) return NOT_FOUND;
+    long pptr = this.dataPtr;
+    while(pptr < ptr) {
+      int vallen = blockValueLength(pptr);
+      int keylen = blockKeyLength(pptr);
+      long prev = pptr;
+      pptr += keylen + vallen + RECORD_TOTAL_OVERHEAD; 
+      if (pptr == ptr) {
+        return prev;
+      }
+    }
+    return NOT_FOUND;
+  }
   /**
    * Get address of K-V record
    * @param keyPtr key address
@@ -3022,7 +3084,8 @@ public final class DataBlock  {
    * @return true if split can be done
    */
   final boolean canSplit() {
-    return getNumberOfRecords() > 1;
+    int num = getNumberOfRecords();
+    return isFirstBlock()? num > 2: num > 1;
   }
   /**
    * TODO: split won't work if we have only 1 record
@@ -3035,8 +3098,9 @@ public final class DataBlock  {
 
     try {
       writeLock();
+      boolean firstBlock = isFirstBlock();
       int oldNumRecords = getNumberOfRecords();
-      if (oldNumRecords <= 1) {
+      if (oldNumRecords <= 1 || (firstBlock && oldNumRecords <=2)) {
         return null; // split is not possible
       }
       // compact first
@@ -3053,8 +3117,9 @@ public final class DataBlock  {
       int off = 0;
       long ptr = dataPtr;
       int num = 0;
+      int limit = firstBlock? oldNumRecords/2 + 1: oldNumRecords/2;
       // Now we should have zero deleted records
-      while (num < oldNumRecords/2) {
+      while (num < limit) {
         int keylen = blockKeyLength(ptr + off);
         int vallen = blockValueLength(ptr + off);
         long old = off;
@@ -3131,6 +3196,7 @@ public final class DataBlock  {
   }
   
   /**
+   * TODO: TEST LAST CHANGE IN 
    * Utility method: compares given key with a key defined by address in this block 
    * @param addr address of a record
    * @param key key data array
@@ -3144,15 +3210,17 @@ public final class DataBlock  {
     if (res == 0) {
       long ver = getRecordSeqId(addr);
       if (ver > version) {
-        return -1;
+        return 1; // Changed from -1
       } else if (ver < version) {
-        return 1;
+        return -1; // Changed from 1
       } else {
         Op _type = getRecordType(addr);
-        if (_type.ordinal() <= type.ordinal()) {
+        if (_type.ordinal() < type.ordinal()) { //<=
           return 1; 
-        } else {
+        } else if (_type.ordinal() > type.ordinal()){
           return -1;
+        } else {
+          return 0; // Added
         }
       }
     } else {
@@ -3171,6 +3239,7 @@ public final class DataBlock  {
   }
   
   /**
+   *TODO : recent changes might break tests 
    * Utility method 
    * @param addr address of a record
    * @param key key data pointer
@@ -3186,15 +3255,17 @@ public final class DataBlock  {
     if (res == 0) {
       long ver = getRecordSeqId(addr);
       if (ver > version) {
-        return -1;
-      } else if (ver < version) {
         return 1;
+      } else if (ver < version) {
+        return -1;
       } else {
         Op _type = getRecordType(addr);
-        if (_type.ordinal() <= type.ordinal()) {
+        if (_type.ordinal() < type.ordinal()) {
           return 1; 
-        } else {
+        } else if(_type.ordinal() > type.ordinal()) {
           return -1;
+        } else {
+          return 0;
         }
       }
     } else {
@@ -3212,7 +3283,8 @@ public final class DataBlock  {
     // Now we should have zero deleted records
     int numRecords = getNumberOfRecords();
     int num = 0;
-    while (num < numRecords/2) {
+    int limit = isFirstBlock()? numRecords/2 +1: numRecords/2;
+    while (num < limit) {
       short keylen = blockKeyLength(ptr + off);
       short vallen = blockValueLength(ptr + off);
       off += keylen + vallen + RECORD_TOTAL_OVERHEAD;

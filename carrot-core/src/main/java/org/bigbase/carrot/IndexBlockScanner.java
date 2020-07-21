@@ -230,7 +230,7 @@ public final class IndexBlockScanner implements Closeable{
         this.curDataBlockScanner = null;
       } catch (IOException e) {
       }
-      this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock, !isMultiSafe);
+      this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock, isMultiSafe);
 
       if (this.currentDataBlock == null) {
         this.closed = true;

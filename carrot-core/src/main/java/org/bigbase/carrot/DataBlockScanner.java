@@ -1,8 +1,8 @@
 package org.bigbase.carrot;
 
-import java.io.Closeable;
 import java.io.IOException;
 
+import org.bigbase.carrot.util.BidirectionalScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -10,7 +10,7 @@ import org.bigbase.carrot.util.Utils;
  * Thread unsafe implementation
  * TODO: stopRow logic
  */
-public final class DataBlockScanner implements Closeable{
+public final class DataBlockScanner implements BidirectionalScanner{
 
   /*
    * Start Row
@@ -52,6 +52,10 @@ public final class DataBlockScanner implements Closeable{
   long snapshotId;
     
   /*
+   * Is first block
+   */
+  boolean isFirst;
+  /*
    * Thread local for scanner instance.
    * Multiple instances UNSAFE (can not be used in multiple 
    * instances in context of a one thread)
@@ -78,9 +82,14 @@ public final class DataBlockScanner implements Closeable{
 
     DataBlockScanner bs = scanner.get();
     bs.reset();
-    if (!b.isValid()) {
+    if (!b.isValid() || b.isEmpty()) {
       // Return null for now
       return null;
+    }
+    if (startRow != null && stopRow != null) {
+      if (Utils.compareTo(startRow, 0, startRow.length, stopRow, 0, stopRow.length) >=0) {
+        return null;
+      }
     }
     bs.setBlock(b);
     bs.setSnapshotId(snapshotId);
@@ -106,9 +115,14 @@ public final class DataBlockScanner implements Closeable{
     if (bs == null) {
       bs = new DataBlockScanner();
     }
-    if (!b.isValid()) {
+    if (!b.isValid() || b.isEmpty()) {
       // Return null for now
       return null;
+    }
+    if (startRow != null && stopRow != null) {
+      if (Utils.compareTo(startRow, 0, startRow.length, stopRow, 0, stopRow.length) >=0) {
+        return null;
+      }
     }
     bs.reset();
     bs.setBlock(b);
@@ -133,6 +147,7 @@ public final class DataBlockScanner implements Closeable{
     this.numRecords = 0;
     this.numDeletedRecords = 0;
     this.snapshotId = Long.MAX_VALUE;
+    this.isFirst = false;
   }
   
   private void setStartRow(byte[] row) {
@@ -186,7 +201,51 @@ public final class DataBlockScanner implements Closeable{
     // after the last record
     this.curPtr = this.ptr + dataSize;
   }
+  /**
+   * Search last record, which is less or equals to a given key
+   * @param key key array
+   * @param keyOffset offset in a key array
+   * @param keyLength  length of a key in bytes
+   * @param snapshotId snapshot Id of a scanner
+   * @param type op type 
+   */
+  void searchBefore(byte[] key, int keyOffset, int keyLength, long snapshotId, Op type) {
+    long ptr = this.ptr;
+    long prevPtr = ptr;
+    int count = 0;
+    while (count++ < numRecords) {
+      int keylen = DataBlock.keyLength(ptr);
+      int vallen = DataBlock.valueLength(ptr);
+      int res =
+          Utils.compareTo(key, keyOffset, keyLength, DataBlock.keyAddress(ptr), keylen);
+      if (res < 0) {
+        this.curPtr = prevPtr;
+        return;
+      } else if (res == 0) {
+        // check version
+        long version = DataBlock.version(ptr);
+        if (version < this.snapshotId) {
+          this.curPtr = ptr;
+          return;
+        } else if (version == this.snapshotId) {
+          Op type_ = DataBlock.getRecordType(ptr);
+          if (type.ordinal() <= type_.ordinal()) {
+            this.curPtr = ptr;
+            return;
+          }
+        }
+      }
+      keylen = DataBlock.blockKeyLength(ptr);
+      vallen = DataBlock.blockValueLength(ptr);
+      prevPtr = ptr;
+      ptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
 
+    }
+    // after the last record
+    this.curPtr = this.ptr + dataSize;
+  }
+  
+  
   private void setStopRow(byte[] row) {
     this.stopRow = row;
   }
@@ -206,6 +265,7 @@ public final class DataBlockScanner implements Closeable{
     this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
     this.ptr = b.getAddress();
     this.curPtr = this.ptr;
+    this.isFirst = b.isFirstBlock();
   }
   
   protected void setSnapshotId(long snapshotId) {
@@ -489,13 +549,140 @@ public final class DataBlockScanner implements Closeable{
   public Op keyOpType() {
     return DataBlock.getRecordType(curPtr);
   }
-  
+
+  @Override
+  public boolean first() {
+    this.curPtr = this.ptr;
+    if (this.isFirst) { 
+      int keylen = DataBlock.blockKeyLength(this.ptr);
+      int vallen = DataBlock.blockValueLength(this.ptr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    if (startRow != null) {
+      int res = DataBlock.compareTo(this.curPtr, startRow, 0, startRow.length, 0, Op.PUT);
+      if (res <= 0) {
+        return true;
+      }
+    } else {
+      return true;
+    }
+    // OK now we should repeat scan with checking startRow
+
+    this.curPtr = this.ptr;
+    while(this.curPtr < this.ptr + dataSize) {
+      if (startRow != null) {
+        int res = DataBlock.compareTo(this.curPtr, this.startRow, 0, this.startRow.length, 0, Op.PUT);
+        if (res <= 0) {
+          break;
+        }
+      }
+      int keylen = DataBlock.blockKeyLength(this.curPtr);
+      int vallen = DataBlock.blockValueLength(this.curPtr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    return true;
+  }
+
   /**
-   * Delete current Key
-   * @return tru if success, false - otherwise
+   * Set to the last record
    */
-  public boolean delete() {
-    //TODO
-    return false;
+  @Override
+  public boolean last() {
+    
+    long prev = 0;
+    this.curPtr = isFirst? this.ptr +DataBlock.RECORD_TOTAL_OVERHEAD + 2: this.ptr;
+    while(this.curPtr < this.ptr + dataSize) {
+      prev = curPtr;
+      int keylen = DataBlock.blockKeyLength(this.curPtr);
+      int vallen = DataBlock.blockValueLength(this.curPtr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    this.curPtr = prev;
+    
+    if (stopRow != null) {
+      int res = DataBlock.compareTo(this.curPtr, this.stopRow, 0, this.stopRow.length, 0, Op.PUT);
+      if (res > 0) {
+        this.curPtr = prev;
+        return true;
+      }
+    } else {
+      this.curPtr = prev;
+      return true;
+    } 
+    prev = 0;
+    // OK now we should repeat scan with checking stopRow
+    this.curPtr = isFirst? this.ptr +DataBlock.RECORD_TOTAL_OVERHEAD + 2: this.ptr;
+    while(this.curPtr < this.ptr + dataSize) {
+      if (stopRow != null) {
+        int res = DataBlock.compareTo(this.curPtr, this.stopRow, 0, this.stopRow.length, 0, Op.PUT);
+        if (res <= 0) {
+          break;
+        }
+      }
+      prev = curPtr;
+      int keylen = DataBlock.blockKeyLength(this.curPtr);
+      int vallen = DataBlock.blockValueLength(this.curPtr);
+      this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+    }
+    if (prev == 0) {
+      return false;
+    }
+    this.curPtr = prev;
+    return true;
+  }
+
+  @Override
+  public boolean previous() {
+    long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 : this.ptr;
+    long pptr = limit;
+    if (pptr == this.curPtr) {
+      return false;
+    }
+    while (pptr < this.curPtr) {
+      int keylen = DataBlock.blockKeyLength(pptr);
+      int vallen = DataBlock.blockValueLength(pptr);
+      if (pptr + keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD == this.curPtr) {
+        break;
+      } else {
+        pptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+      }
+    }
+
+    if (startRow != null) {
+      int res = DataBlock.compareTo(pptr, startRow, 0, startRow.length, 0, Op.PUT);
+      if (res > 0) {
+        return false;
+      }
+    }
+
+    this.curPtr = pptr;
+
+    return true;
+  }
+
+  @Override
+  public boolean hasPrevious() {
+    long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 : this.ptr;
+    long pptr = limit;
+    if (pptr == this.curPtr) {
+      return false;
+    }
+    while (pptr < this.curPtr) {
+      int keylen = DataBlock.blockKeyLength(pptr);
+      int vallen = DataBlock.blockValueLength(pptr);
+      if (pptr + keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD == this.curPtr) {
+        break;
+      } else {
+        pptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+      }
+    }
+
+    if (startRow != null) {
+      int res = DataBlock.compareTo(pptr, startRow, 0, startRow.length, 0, Op.PUT);
+      if (res > 0) {
+        return false;
+      }
+    }
+    return true;
   }
 }

@@ -252,7 +252,6 @@ public class Sets {
     
   /**
    * Build key for Set. It uses thread local key arena 
-   * TODO: data type prefix
    * @param keyPtr original key address
    * @param keySize original key size
    * @param elPtr element address

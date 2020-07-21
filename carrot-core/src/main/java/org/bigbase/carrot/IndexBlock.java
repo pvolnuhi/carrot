@@ -922,6 +922,22 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
   }
   
+  void dumpIndexBlockExt() {
+    int count =0;
+    long ptr = dataPtr;
+    System.out.println("Dump index block: numDataBlocks="+ numDataBlocks);
+    while(count++ < numDataBlocks) {
+      DataBlock b = block.get();
+      b.set(this,  ptr - dataPtr);
+      System.out.println(count +" dataSize=" + b.getDataInBlockSize() + " num="+ b.getNumberOfRecords());;
+      ptr += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(ptr);
+      
+    }
+    if (ptr - dataPtr != blockDataSize) {
+      System.out.println("FATAL: (ptr - dataPtr -dataSize)="+ (ptr - dataPtr - blockDataSize));
+    }
+  }
+  
 	/**
 	 * Must be called only after Block2.register
 	 * 
@@ -1227,6 +1243,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
             }
             continue;
           } else {
+
             // TODO: what is block can not be split? Is it possible? Seems, NO
             int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH +
                 (mustAllocateExternally(keyLength)? ADDRESS_SIZE: keyLength);
@@ -1446,8 +1463,12 @@ public final class IndexBlock implements Comparable<IndexBlock> {
    * @return block
    */
   DataBlock firstBlock(DataBlock b) {
+    
     if (isEmpty())
       return null;
+    if (b == null) {
+      b = new DataBlock();
+    }
     try {
       readLock();
       b.set(this, 0);
@@ -1456,9 +1477,35 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       readUnlock();
     }
   }
+  /**
+   * Get first block which contains given key
+   * @param b data block for reuse
+   * @param keyPtr key address
+   * @param keySize key size
+   * @return data block
+   */
+  DataBlock firstBlock(DataBlock b, long keyPtr, int keySize) {
+    if (keyPtr == 0) {
+      return firstBlock(b);
+    }
+    if (b == null) {
+      b = new DataBlock();
+    }
+    long ptr = this.dataPtr;
+    final long limit = this.dataPtr + this.blockDataSize; 
+    while(ptr < limit) {
+      int keyLength = blockKeyLength(ptr);
+      b.set(this, ptr - this.dataPtr);
+      if (!b.isLargerThanMax(keyPtr, keyLength, 0)) {
+        return b;
+      }
+      ptr += + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+    }
+    return null;
+  }
 	/**
 	 * Implement first block Public API, therefore we lock/unlock
-	 * Multiple instances UNSAFE
+	 * Multiple instances SAFE
 	 * @param blck current blck, can be null
 	 * @return block found or null
 	 */
@@ -1466,6 +1513,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		return nextBlock(blck, true);
 	}
 
+	
+	
+	
   /**
    * Implement first block Public API, therefore we lock/unlock
    * Multiple instances UNSAFE
@@ -1657,6 +1707,65 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
   }
 
+  /**
+   * Search largest block which is less than a given key
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param version version
+   * @param type type
+   * @return position of a data block
+   */
+  long searchLower(long keyPtr, int keyLength, long version, Op type) {
+    long ptr = dataPtr;
+    long prevPtr = NOT_FOUND;
+    int count = 0;
+    long recentTxId = BigSortedMap.getMostRecentActiveTxSeqId();
+    while (count++ < numDataBlocks) {
+      int keylen = keyLength(ptr);
+      int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
+      if (res < 0) {
+        if (prevPtr == NOT_FOUND) {
+          // It is possible situation (race condition when first key in
+          // index block was deleted after we found this block and before we locked it
+          return ptr = NOT_FOUND;
+        } else {
+          return prevPtr;
+        }
+      } else if (res == 0) {
+        // compare versions
+        long ver = version(ptr);
+        if (ver < recentTxId) {
+          if (ver < version) {
+            if (prevPtr == NOT_FOUND && count > 1) {
+              // FATAL error???
+              return ptr = NOT_FOUND;
+            }
+            return count > 1 ? prevPtr : ptr;
+          } else if (ver == version) {
+            byte _type = type(ptr);
+            if (_type > type.ordinal() && count > 1) {
+              if (prevPtr == NOT_FOUND) {
+                // FATAL error???
+                return ptr = NOT_FOUND;
+              }
+              return count > 1 ? prevPtr : ptr;
+            }
+          }
+        } else {
+          return prevPtr;
+        }
+      }
+      prevPtr = ptr;
+      if (isExternalBlock(ptr)) {
+        keylen = ADDRESS_SIZE;
+      }
+      ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+    }
+    // last data block
+    return prevPtr;
+
+  }
+  
 	/**
 	 * TODO: handle not found (new block) Search position of a block, which can
 	 * contain this key
@@ -1706,6 +1815,30 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	}
 	
 	 /**
+   * Search block which is lower than a given key 
+   * Multiple instance UNSAFE
+   * @param keyPtr
+   * @param keyLength
+   * @return address to insert (or update)
+   */
+	DataBlock searchLowerBlock(long keyPtr, int keyLength, long version, Op type) {
+	    try {
+	      readLock();
+	      long ptr = searchLower(keyPtr, keyLength, version, type);
+	      if (ptr == NOT_FOUND) {
+	        return null;
+	      } else {
+	        DataBlock b = block.get();
+	        b.set(this, ptr - dataPtr);
+	        return b;
+	      }
+	    } finally {
+	      //TODO: why unlock w/o lock?
+	      readUnlock();
+	    }
+	  }
+	
+	 /**
    * Search block by a given key equals to a given key
    * Multiple instance UNSAFE
    * @param keyPtr key address
@@ -1730,6 +1863,30 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
   }
 
+  /**
+  * Search block by a given key equals to a given key
+  * Multiple instance UNSAFE
+  * @param keyPtr key address
+  * @param keyLength key length
+  * @param version  version
+  * @param b data block to reuse
+  * @return address to insert (or update)
+  */
+ DataBlock searchLowerBlock(long keyPtr, int keyLength, long version, Op type, DataBlock b) {
+   try {
+     readLock();
+     long ptr = searchLower(keyPtr, keyLength, version, type);
+     if (ptr == NOT_FOUND) {
+       return null;
+     } else {
+       b.set(this, ptr - dataPtr);
+       return b;
+     }
+   } finally {
+     //TODO: why unlock w/o lock?
+     readUnlock();
+   }
+ }
 	/**
 	 * Delete operation.
 	 * @param key
@@ -2130,12 +2287,12 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       //TODO res = -1
       if (res == NOT_FOUND && floor) {
         // get previous
-        b = previous(b);
+        b = previousBlock(b);
         if (b == null) {
           return NOT_FOUND;
         } else {
           // It is possible that this block is empty?
-          return b.lastRecordAddress();
+          return b.last();
         }
       }
       return res;
@@ -2150,20 +2307,32 @@ public final class IndexBlock implements Comparable<IndexBlock> {
    * @return address or NOT_FOUND if index is empty
    */
   long lastRecordAddress() {
-    DataBlock b = getLastDataBlock();
+    DataBlock b = lastBlock();
     if (b == null) {
       return NOT_FOUND;
     }
-    return b.lastRecordAddress();
+    return b.last();
   }
   
   /**
    * Get last data block in this index
+   * Multiple scanner unsafe
    * @return last data block
    */
-  DataBlock getLastDataBlock() {
+  DataBlock lastBlock() {
     DataBlock b = block.get();
-    
+    return lastBlock(b);
+  }
+  
+  /**
+   * Get last data block in this index
+   * Multiple scanner SAFE
+   * @return last data block
+   */
+  DataBlock lastBlock(DataBlock b) {
+    if (b == null) {
+      b = new DataBlock();
+    }
     long ptr = this.dataPtr;
     final long limit = this.dataPtr + this.blockDataSize; 
     while(ptr < limit) {
@@ -2177,12 +2346,53 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     return null;
   }
   
+  /**
+   * Get last data block in this index, which is not greater than
+   * a given key
+   * Multiple scanner SAFE
+   * @return last data block
+   */
+  DataBlock lastBlock(DataBlock b, long keyPtr, int keySize) {
+    if (keyPtr == 0) {
+      return lastBlock(b);
+    }
+    if (b == null) {
+      b = new DataBlock();
+    }
+    long prevPtr = 0;
+    long ptr = this.dataPtr;
+    final long limit = this.dataPtr + this.blockDataSize; 
+    while(ptr < limit) {
+      int keyLength = blockKeyLength(ptr);
+      b.set(this, ptr - this.dataPtr);
+      if (b.compareTo(keyPtr, keyLength, 0, Op.PUT) <= 0) {
+        if (prevPtr > 0) {
+          b.set(this, prevPtr - this.dataPtr);
+          return b;
+        } else {
+          return null;
+        }
+      }
+      if (ptr + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength == limit) {
+        b.set(this, ptr - this.dataPtr);
+        return b;
+      }
+      prevPtr = ptr;
+      ptr += + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
+    }
+    return null;
+  }
+  
+  
 	/**
 	 * Get previous data block
 	 * @param b current data block
 	 * @return previous data block or null
 	 */
-	private DataBlock previous(DataBlock b) {
+	DataBlock previousBlock(DataBlock b) {
+	  if (b == null) {
+	    return null;
+	  }
 	  long bPtr = b.getIndexPtr();
 	  if (bPtr == this.dataPtr) {
 	    return null;

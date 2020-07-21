@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.util.Utils;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,19 @@ import org.slf4j.LoggerFactory;
 public class IndexBlockScannerTest {
   Logger LOG = LoggerFactory.getLogger(IndexBlockScannerTest.class);
   
+  
+  @Test
+  public void testAll() throws IOException {
+    for (int i = 0; i < 10000; i++) {
+      System.out.println("\nRUN "+ i+"\n");
+      testFullScan();
+      testOpenEndScan();
+      testOpenStartScan();
+      testSubScan();
+    }
+  }
+  
+  @Ignore
   @Test
   public void testFullScan() throws IOException {
     System.out.println("testFullScan");  
@@ -28,6 +42,7 @@ public class IndexBlockScannerTest {
     scanner.close();
   }
 
+  @Ignore
   @Test
   public void testOpenStartScan() throws IOException {
     System.out.println("testOpenStartScan");  
@@ -35,6 +50,9 @@ public class IndexBlockScannerTest {
     List<byte[]> keys = fillIndexBlock(ib);
     Utils.sort(keys);
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("testOpenStartScan seed="+ seed);
     int stopRowIndex = r.nextInt(keys.size());
     byte[] stopRow = keys.get(stopRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
@@ -45,6 +63,7 @@ public class IndexBlockScannerTest {
     scanner.close();
   }
   
+  @Ignore
   @Test
   public void testOpenEndScan() throws IOException {
     System.out.println("testOpenEndScan");  
@@ -52,6 +71,9 @@ public class IndexBlockScannerTest {
     List<byte[]> keys = fillIndexBlock(ib);
     Utils.sort(keys);
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("testOpenEndScan seed="+ seed);
     int startRowIndex = r.nextInt(keys.size());
     byte[] startRow = keys.get(startRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
@@ -62,6 +84,7 @@ public class IndexBlockScannerTest {
     scanner.close();
   }
   
+  @Ignore
   @Test
   public void testSubScan() throws IOException {
     System.out.println("testSubScan");  
@@ -69,8 +92,16 @@ public class IndexBlockScannerTest {
     List<byte[]> keys = fillIndexBlock(ib);
     Utils.sort(keys);
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("testSubScan seed="+ seed);
     int startRowIndex = r.nextInt(keys.size());
-    int stopRowIndex = r.nextInt(keys.size() - startRowIndex -1) +1 + startRowIndex;
+    int stopRowIndex = r.nextInt(keys.size());
+    int tmp = startRowIndex;
+    if (startRowIndex > stopRowIndex) {
+      startRowIndex = stopRowIndex;
+      stopRowIndex = tmp;
+    }
 
     byte[] startRow = keys.get(startRowIndex);
     byte[] stopRow = keys.get(stopRowIndex);
@@ -83,7 +114,7 @@ public class IndexBlockScannerTest {
   }
   
   
-  private void verifyScanner(IndexBlockScanner scanner, List<byte[]> keys) {
+  private void verifyScanner(IndexBlockScanner scanner, List<byte[]> keys) throws IOException {
     int count = 0;
     DataBlockScanner dbscn=null;
     
@@ -93,6 +124,7 @@ public class IndexBlockScannerTest {
         byte[] key = keys.get(count-1);
         int keySize = dbscn.keySize();
         int valSize = dbscn.valueSize();
+        //System.out.println("key expected size="+ key.length + " actual="+ keySize);
         assertEquals(key.length, keySize);
         assertEquals(key.length, valSize);
         byte[] buf = new byte[keySize];
@@ -102,6 +134,7 @@ public class IndexBlockScannerTest {
         assertTrue(Utils.compareTo(key, 0, key.length, buf, 0, buf.length) == 0);
         dbscn.next();
       } 
+      dbscn.close();
     } 
     assertEquals(keys.size(), count);
   }
@@ -115,6 +148,9 @@ public class IndexBlockScannerTest {
   protected List<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("FILL seed="+ seed);
     int kvSize = 32;
     boolean result = true;
     while(true) {

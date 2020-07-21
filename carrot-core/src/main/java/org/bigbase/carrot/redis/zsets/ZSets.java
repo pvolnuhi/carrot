@@ -28,26 +28,33 @@ import org.bigbase.carrot.util.Utils;
  * 
  * Implementation details:
  * 
- *  ZSET uses two hash maps (see Hashes):
- *  1. One keeps key -> (score, value)
- *  2. Second keeps key (value, score)
+ *  ZSET uses one set and one hash (see Sets):
+ *  1. One keeps key -> (score, member) combo in a Set
+ *  2. Second keeps key -> {member, score} pair in a Hash, where member is the field and score
+ *     is the value
  *  
- *  So we have two ordered maps: one - by score, another is by value (members)
+ *  Score is translated to 8 byte sequence suitable for lexicographical 
+ *  comparison
+ *  
  *  
  *  Key is built the following way:
  *  
- *  [TYPE = ZSET][BASE_KEY_LENGTH][KEY][MAP_ID][SCORE | VALUE]
+ *  [TYPE = ZSET][BASE_KEY_LENGTH][KEY][SET_ID][(SCORE,VALUE) | (VALUE)]
  *  
  *  TYPE = 1 byte
  *  BASE_KEY_LENGTH - 4 bytes
- *  MAP_ID = [0,1] 0 - map by score, 1 - map by member
+ *  SET_ID = [0,1] 0 - set by score, 1 - hash by member-score
+ *  
+ *  Optimization for short ordered sets: we can use only one ordered set by score and convert
+ *  to  set and hash representation when number of elements exceeds some threshold, similar how Redis
+ *  optimizes small LIST, HASH, ZSET into ziplist representation. 
  *  
  * @author Vladimir Rodionov
  *
  */
 public class ZSets {
   
-  static enum MapID {
+  static enum SetID {
     SCORE, MEMBER
   }
   
@@ -166,24 +173,24 @@ public class ZSets {
    * Build key for Set. It uses thread local key arena 
    * @param keyPtr original key address
    * @param keySize original key size
-   * @param elPtr element address
-   * @param elSize element size
+   * @param memberPtr element address
+   * @param memberSize element size
    * @return new key size 
    */
     
    
-  private static int buildKey( long keyPtr, int keySize, long elPtr, int elSize, MapID id) {
-    checkKeyArena(keySize + KEY_SIZE + elSize + 2*Utils.SIZEOF_BYTE);
+  private static int buildKey( long keyPtr, int keySize, long memberPtr, int memberSize, double score, SetID id) {
+    checkKeyArena(keySize + KEY_SIZE + memberSize + 2*Utils.SIZEOF_BYTE);
     long arena = keyArena.get();
     int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
     UnsafeAccess.putByte(arena, (byte)DataType.ZSET.ordinal());
     UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-    if (elPtr > 0) {
+    if (memberPtr > 0) {
       UnsafeAccess.putByte(arena + kSize, (byte)id.ordinal());
       kSize += Utils.SIZEOF_BYTE;
-      UnsafeAccess.copy(elPtr, arena + kSize, elSize);
-      kSize += elSize;
+      UnsafeAccess.copy(memberPtr, arena + kSize, memberSize);
+      kSize += memberSize;
     }
     return kSize;
   }

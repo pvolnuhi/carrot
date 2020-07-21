@@ -11,7 +11,6 @@ import java.util.Random;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Utils;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class BigSortedMapTest {
@@ -121,33 +120,6 @@ public class BigSortedMapTest {
     
   }
   
-  @Test  
-  public void testFullMapScanner() throws IOException {
-    System.out.println("testFullMap ");
-    BigSortedMapScanner scanner = map.getScanner(null, null);
-    long start = System.currentTimeMillis();
-    long count = 0;
-    byte[] value = new byte[("VALUE"+ totalLoaded).length()];
-    byte[] prev = null;
-    while(scanner.hasNext()) {
-      count++;
-      int keySize = scanner.keySize();
-      int valSize = scanner.valueSize();
-      byte[] cur = new byte[keySize];
-      scanner.key(cur, 0);
-      scanner.value(value, 0);
-      if (prev != null) {
-        assertTrue (Utils.compareTo(prev, 0, prev.length, cur, 0, cur.length) < 0);
-      }
-      prev = cur;
-      boolean res = scanner.next();
-    }   
-    long end = System.currentTimeMillis();
-    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
-    assertEquals(totalLoaded, count);
-    scanner.close();
-  }
- 
   
   private List<byte[]> delete(int num) {
     Random r = new Random();
@@ -180,120 +152,7 @@ public class BigSortedMapTest {
       assertTrue(res);
     }
   }
-  
-  @Test
-  public void testFullMapScannerWithDeletes() throws IOException {
-    System.out.println("testFullMapScannerWithDeletes ");
-    int toDelete = 100000;
-    List<byte[]> deletedKeys = delete(toDelete);
-    BigSortedMapScanner scanner = map.getScanner(null, null);
-    long start = System.currentTimeMillis();
-    long count = 0;
-    byte[] value = new byte[("VALUE"+ totalLoaded).length()];
-    byte[] prev = null;
-    while(scanner.hasNext()) {
-      count++;
-      int keySize = scanner.keySize();
-      int valSize = scanner.valueSize();
-      byte[] cur = new byte[keySize];
-      scanner.key(cur, 0);
-      scanner.value(value, 0);
-      if (prev != null) {
-        assertTrue (Utils.compareTo(prev, 0, prev.length, cur, 0, cur.length) < 0);
-      }
-      prev = cur;
-      scanner.next();
-    }   
-    long end = System.currentTimeMillis();
-    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
-    assertEquals(totalLoaded - toDelete, count);
-    undelete(deletedKeys);
-
-  }
-    
-  @Test
-  public void testScannerSameStartStopRow () throws IOException
-  {
-    System.out.println("testScannerSameStartStopRow");
-    Random r = new Random();
-    int startIndex = r.nextInt((int)totalLoaded);
-    byte[] startKey = ("KEY" + startIndex).getBytes();
-
-    BigSortedMapScanner scanner = map.getScanner(startKey, startKey);
-    long count = countRows(scanner); 
-    scanner.close();
-    assertEquals(0, (int) count);
-    startIndex = r.nextInt((int)totalLoaded);
-    startKey = ("KEY" + startIndex).getBytes();
-    scanner = map.getScanner(startKey, startKey);
-    count = countRows(scanner); 
-    scanner.close();
-    assertEquals(0, (int) count);
-  }
-  
-
-  @Ignore
-  @Test
-  public void loopNext() throws IOException {
-    for (int i=0; i < 100; i++) {
-      testAllScannerStartStopRow();
-    }
-  }
-  
-  @Test
-  public void testAllScannerStartStopRow() throws IOException {
-    System.out.println("testAllScannerStartStopRow ");
-    Random r = new Random();
-    int startIndex = r.nextInt((int)totalLoaded);
-    int stopIndex = r.nextInt((int)totalLoaded - startIndex) + startIndex;
-    byte[] key1 = ("KEY" + startIndex).getBytes();
-    byte[] key2 = ("KEY" + stopIndex).getBytes();
-    byte[] startKey, stopKey;
-    if (Utils.compareTo(key1, 0, key1.length, key2, 0, key2.length) > 0) {
-      startKey = key2;
-      stopKey = key1;
-    } else {
-      startKey = key1;
-      stopKey = key2;
-    }
-    System.out.println("Start="+ Bytes.toString(startKey) + " stop="+ Bytes.toString(stopKey));
-    BigSortedMapScanner scanner = map.getScanner(null, startKey);
-    long count1 = countRows(scanner); 
-    scanner.close();
-    scanner = map.getScanner(startKey, stopKey);
-    long count2 = countRows(scanner);
-    scanner.close();
-    scanner = map.getScanner(stopKey, null);
-    long count3 = countRows(scanner);
-    scanner.close();
-    System.out.println("Total scanned="+(count1 + count2+count3));
-    assertEquals(totalLoaded, count1 + count2 + count3);
-
-  }
-
-  private long countRows(BigSortedMapScanner scanner) throws IOException {
-    long start = System.currentTimeMillis();
-    long count = 0;
-    byte[] value = new byte[("VALUE"+ totalLoaded).length()];
-    byte[] prev = null;
-    while(scanner.hasNext()) {
-      count++;
-      int keySize = scanner.keySize();
-      byte[] cur = new byte[keySize];
-      scanner.key(cur, 0);
-      scanner.value(value, 0);
-      if (prev != null) {
-        assertTrue (Utils.compareTo(prev, 0, prev.length, cur, 0, cur.length) < 0);
-      }
-      prev = cur;
-      //System.out.println( new String(cur, 0, keySize));
-      scanner.next();
-    }   
-    long end = System.currentTimeMillis();
-    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
-    return count;
-  }
-  
+      
   @Test
   public void testSequentialInsert() {
     System.out.println("testSequentialInsert");
