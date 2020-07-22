@@ -269,6 +269,9 @@ public class BigSortedMapDirectMemoryScanner implements BidirectionalScanner{
         }
         this.currentIndexBlock = tmp;
         this.blockScanner = this.indexScanner.nextBlockScanner();
+        if (this.blockScanner == null) {
+          return false;
+        }
         updateNextFirstKey();
         return true;
       } catch (RetryOperationException e) {
@@ -286,13 +289,13 @@ public class BigSortedMapDirectMemoryScanner implements BidirectionalScanner{
    * @throws IOException 
    */
   private boolean previousBlockAndScanner() throws IOException {
-    
     this.blockScanner = indexScanner.previousBlockScanner();
     
     if (this.blockScanner != null) {
       return true;
     }
-    
+    //*DEBUG*/ System.out.println("PREVIOUS INDEX");
+
     ConcurrentSkipListMap<IndexBlock, IndexBlock> cmap = map.getMap();
     if (this.indexScanner != null) {
       this.indexScanner.close();

@@ -96,7 +96,7 @@ public final class DataBlockDirectMemoryScanner implements BidirectionalScanner{
 
     DataBlockDirectMemoryScanner bs = scanner.get();
     bs.reset();
-    if (!b.isValid() || b.isEmpty()) {
+    if (!b.isValid() /*|| b.isEmpty()*/) {
       // Return null for now
       return null;
     }
@@ -133,7 +133,7 @@ public final class DataBlockDirectMemoryScanner implements BidirectionalScanner{
     if (bs == null) { 
       bs = new DataBlockDirectMemoryScanner();
     }
-    if (!b.isValid() || b.isEmpty()) {
+    if (!b.isValid() /*|| b.isEmpty()*/) {
       // Return null for now
       return null;
     }
@@ -618,7 +618,9 @@ public final class DataBlockDirectMemoryScanner implements BidirectionalScanner{
    */
   @Override
   public boolean last() {
-    
+    if (isFirst && numRecords == 1) {
+      return false;
+    }
     long prev = 0;
     this.curPtr = isFirst? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2: this.ptr;
     while(this.curPtr < this.ptr + dataSize) {
@@ -628,7 +630,13 @@ public final class DataBlockDirectMemoryScanner implements BidirectionalScanner{
       this.curPtr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
     }
     this.curPtr = prev;
-    
+    if (startRowPtr > 0) {
+      int res = DataBlock.compareTo(this.curPtr, this.startRowPtr, this.startRowLength, 0, Op.PUT);
+      if (res > 0) {
+        // Start row is greater than the last record
+        return false;
+      }
+    }
     if (stopRowPtr > 0) {
       int res = DataBlock.compareTo(this.curPtr, this.stopRowPtr, this.stopRowLength, 0, Op.PUT);
       if (res > 0) {

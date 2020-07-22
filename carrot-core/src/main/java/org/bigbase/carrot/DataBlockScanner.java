@@ -82,7 +82,7 @@ public final class DataBlockScanner implements BidirectionalScanner{
 
     DataBlockScanner bs = scanner.get();
     bs.reset();
-    if (!b.isValid() || b.isEmpty()) {
+    if (!b.isValid() /*|| b.isEmpty()*/) {
       // Return null for now
       return null;
     }
@@ -115,7 +115,7 @@ public final class DataBlockScanner implements BidirectionalScanner{
     if (bs == null) {
       bs = new DataBlockScanner();
     }
-    if (!b.isValid() || b.isEmpty()) {
+    if (!b.isValid() /*|| b.isEmpty()*/) {
       // Return null for now
       return null;
     }
@@ -588,7 +588,9 @@ public final class DataBlockScanner implements BidirectionalScanner{
    */
   @Override
   public boolean last() {
-    
+    if (isFirst && numRecords == 1) {
+      return false;
+    }
     long prev = 0;
     this.curPtr = isFirst? this.ptr +DataBlock.RECORD_TOTAL_OVERHEAD + 2: this.ptr;
     while(this.curPtr < this.ptr + dataSize) {

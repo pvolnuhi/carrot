@@ -274,7 +274,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	
   private long allocateKeyExternally(byte[] key, int off, int len) {
     
-    checkKeyBufferThreadSafe(len);
+    checkKeyBufferThreadSafe(len + INT_SIZE);
     long extAddress = isThreadSafe()? keyBuffer.get(): UnsafeAccess.malloc(len + INT_SIZE);
     if (extAddress <= 0) {
       // TODO allocation failure
@@ -350,7 +350,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
   private long allocateKeyExternally(long keyPtr, int len) {
     
-    checkKeyBufferThreadSafe(len);
+    checkKeyBufferThreadSafe(len + INT_SIZE);
     long extAddress = isThreadSafe()? keyBuffer.get():UnsafeAccess.malloc(len + INT_SIZE);
     if (extAddress <= 0) {
       // TODO allocation failure
