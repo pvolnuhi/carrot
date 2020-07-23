@@ -167,7 +167,7 @@ public class Hashes {
    */
     
    
-  private static int buildKey( long keyPtr, int keySize, long fieldPtr, int fieldSize) {
+  public static int buildKey( long keyPtr, int keySize, long fieldPtr, int fieldSize) {
     checkKeyArena(keySize + KEY_SIZE + fieldSize + Utils.SIZEOF_BYTE);
     long arena = keyArena.get();
     int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;

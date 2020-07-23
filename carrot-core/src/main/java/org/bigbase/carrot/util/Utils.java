@@ -22,7 +22,11 @@ import sun.misc.Unsafe;
 public class Utils {
 
   public final static int SIZEOF_LONG = 8;
+  public final static int SIZEOF_DOUBLE = 8;
+  
   public final static int SIZEOF_INT = 4;
+  public final static int SIZEOF_FLOAT = 4;
+
   public final static int SIZEOF_SHORT = 2;
   public final static int SIZEOF_BYTE = 1;
   

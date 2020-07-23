@@ -8,6 +8,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 public class BigSortedMap {
@@ -877,6 +879,54 @@ public class BigSortedMap {
     }
   }
   
+  
+  /**
+   * Increment value (Long)  by key 
+   * @param keyPtr address to look for
+   * @param keyLength key length
+   * @return key-value record address if found, or NOT_FOUND. 
+   */
+  public long increment(long keyPtr, int keyLength, long version, long incr) {
+    IndexBlock kvBlock = getThreadLocalBlock();
+    kvBlock.putForSearch(keyPtr, keyLength, version);
+    IndexBlock b = null;
+    while (true) {
+      try {
+        b = map.floorKey(kvBlock);
+        lock(b);
+
+        long ptr = b.get(keyPtr, keyLength,  version);
+        if (ptr < 0 && b.hasRecentUnsafeModification()) {
+          // check one more time with lock
+          // - we caught split in flight
+          IndexBlock bb = null;
+          bb = map.floorKey(kvBlock);
+          if (bb != b) {
+            continue;
+          } else {
+            // insert new
+            long vPtr = UnsafeAccess.malloc(Utils.SIZEOF_LONG);
+            UnsafeAccess.putLong(vPtr, incr);
+            put(keyPtr, keyLength, vPtr, Utils.SIZEOF_LONG, 0);
+            return incr;
+          }
+        }
+        long vPtr = DataBlock.valueAddress(ptr);
+        int vSize = DataBlock.valueLength(ptr);
+        if (vSize != Utils.SIZEOF_LONG) {
+          //TODO
+          return Long.MIN_VALUE;
+        }
+        long value = UnsafeAccess.toLong(ptr);
+        UnsafeAccess.putLong(vPtr, value + incr);
+        return value + incr;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        unlock(b);
+      }
+    }
+  }
   
   /**
    * Checks if key exists in a map

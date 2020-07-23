@@ -286,7 +286,7 @@ public class Sets {
    * @param keySize key size
    * @param valuePtr value address
    * @param valueSize value size
-   * @return true or false
+   * @return number of elements removed
    */
   
   public static int SREM(BigSortedMap map, long keyPtr, int keySize, long[] elemPtrs,
@@ -332,7 +332,8 @@ public class Sets {
    * @param elemSize value size
    * @return 1 if exists, 0 - otherwise
    */
-  public static int SISMEMBER(BigSortedMap map, long keyPtr, int keySize, long elemPtr, int elemSize) {
+  public static int SISMEMBER(BigSortedMap map, long keyPtr, int keySize, long elemPtr, 
+      int elemSize) {
     int kSize = buildKey(keyPtr, keySize, elemPtr, elemSize);
     SetExists exists = setExists.get();
     exists.reset();
@@ -344,7 +345,6 @@ public class Sets {
     }
     return 0;
   }
-  
   
   /**
    * Move member from the set at source to the set at destination. This operation is atomic. 
@@ -507,8 +507,9 @@ public class Sets {
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
+   * @return number of deleted K-Vs
    */
-  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+  public static long DELETE(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(k);
@@ -519,11 +520,11 @@ public class Sets {
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
       long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
       
-      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
+      long deleted = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
       
       UnsafeAccess.free(kPtr);
       UnsafeAccess.free(endKeyPtr);
-      
+      return deleted;
     } finally {
       KeysLocker.writeUnlock(k);
     }
@@ -716,6 +717,37 @@ public class Sets {
     return sc;
   }
 
+  
+  /**
+   * Get set scanner (with a given range) for set operations, as since we can create multiple
+   * set scanners in the same thread we can not use thread local variables
+   * WARNING: we can not create multiple scanners in a single thread
+   * @param map sorted map to run on
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param memberStartPtr start member address
+   * @param memberStartSize size
+   * @param memberStopPtr member stop address
+   * @param memberStopSize member stop size
+   * @param safe get safe instance
+   * @return set scanner
+   */
+  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, 
+      long memberStartPtr, int memberStartSize, long memberStopPtr, int memberSTopSize, boolean safe) {
+    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+    UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
+    UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+    //TODO do not use thread local in scanners - check it
+    BigSortedMapDirectMemoryScanner scanner = safe? 
+        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE):
+          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+    if (scanner == null) {
+      return null;
+    }
+    SetScanner sc = new SetScanner(scanner, kPtr);
+    return sc;
+  }
   
   /**
    * Finds location of a given element in a Value object

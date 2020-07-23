@@ -1,11 +1,9 @@
 package org.bigbase.carrot.redis.sets;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.addNumElements;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
 import static org.bigbase.carrot.redis.Commons.firstKVinType;
-import static org.bigbase.carrot.redis.Commons.keySize;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 import static org.bigbase.carrot.redis.Commons.nextKVisInType;
 

@@ -16,6 +16,7 @@ import static org.bigbase.carrot.redis.Commons.setNumElements;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.redis.DataType;
+import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -30,7 +31,20 @@ import org.bigbase.carrot.util.Utils;
  */
 public class SetAdd extends Operation{
   
- 
+  /*
+   * Mutation options
+   */
+  private MutationOptions options = MutationOptions.NONE;
+  
+  /*
+   * Number of new inserted (0, 1)
+   */
+  private int inserted = 0;
+  
+  /*
+   * Number of updated (0, 1) 
+   */
+  private int updated = 0;
   /*
    * Thread local key arena storage
    */
@@ -62,8 +76,36 @@ public class SetAdd extends Operation{
   public void reset() {
     super.reset();
     setFloorKey(true);
+    this.options = MutationOptions.NONE;
+    this.inserted = 0;
+    this.updated = 0;
   }
-    
+  
+  /**
+   * Returns number of inserted elements
+   * @return number
+   */
+  public int getInserted() {
+    return this.inserted;
+  }
+  
+  /**
+   * Returns number of updated elements
+   * @return number
+   */
+  public int getUpdated() {
+    return this.updated;
+  }
+  
+  /**
+   * Set mutation options
+   * @param options
+   */
+  public void setMutationOptions(MutationOptions options) {
+    this.options = options;
+  }
+  
+  
   /**
    * Checks key arena size
    * @param required size
@@ -106,6 +148,9 @@ public class SetAdd extends Operation{
   
   @Override
   public boolean execute() {
+    
+    // TODO: mutation options
+    // TODO: inserted, updated
     if (foundRecordAddress <=0) {
       return false;
     }
