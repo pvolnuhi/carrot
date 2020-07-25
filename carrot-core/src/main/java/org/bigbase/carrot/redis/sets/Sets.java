@@ -192,6 +192,35 @@ public class Sets {
   }
   
   /**
+   * SADD for single member (zero memory allocation)
+   * @param map sorted map storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param elemPtr member value address
+   * @param elemSize member value size
+   * @return 1 or 0
+   */
+  public static int SADD(BigSortedMap map, long keyPtr, int keySize, long elemPtr, int elemSize) {
+    Key k = getKey(keyPtr, keySize);
+    try {
+      KeysLocker.writeLock(k);
+
+      int count = 0;
+      int kSize = buildKey(keyPtr, keySize, elemPtr, elemSize);
+      SetAdd add = setAdd.get();
+      add.reset();
+      add.setKeyAddress(keyArena.get());
+      add.setKeySize(kSize);
+      // version?
+      if (map.execute(add)) {
+        count++;
+      }
+      return count;
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+  }
+  /**
    * Returns the set cardinality (number of elements) of the set stored at key.
    * Return value
    * Integer reply: the cardinality (number of elements) of the set, or 0 if key does not exist.   
@@ -273,7 +302,27 @@ public class Sets {
     }
     return kSize;
   }
+  /**
+   * Build key into allocated memory arena
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param elPtr member address
+   * @param elSize member size
+   * @param arena memory buffer
+   * @return size of a key
+   */
+  private static int buildKey( long keyPtr, int keySize, long elPtr, int elSize, long arena) {
 
+    int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
+    UnsafeAccess.putByte(arena, (byte)DataType.SET.ordinal());
+    UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+    if (elPtr > 0) {
+      UnsafeAccess.copy(elPtr, arena + kSize, elSize);
+      kSize += elSize;
+    }
+    return kSize;
+  }
   /**
    * Remove the specified members from the set stored at key. Specified members that are not a 
    * member of this set are ignored. If key does not exist, it is treated as an empty set and 
@@ -312,6 +361,36 @@ public class Sets {
         if (map.execute(remove)) {
           removed++;
         }
+      }
+      return removed;
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+  }
+  
+  /**
+   * SREM for single member (zero object allocation)
+   * @param map sorted set storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param elemPtr member address
+   * @param elemSize member size
+   * @return 1 or 0
+   */
+  public static int SREM(BigSortedMap map, long keyPtr, int keySize, long elemPtr, int elemSize) {
+    Key k = getKey(keyPtr, keySize);
+    try {
+      KeysLocker.writeLock(k);
+      int removed = 0;
+      int kSize = buildKey(keyPtr, keySize, elemPtr, elemSize);
+      SetDelete remove = setDelete.get();
+      remove.reset();
+      remove.setMap(map);
+      remove.setKeyAddress(keyArena.get());
+      remove.setKeySize(kSize);
+      // version?
+      if (map.execute(remove)) {
+        removed++;
       }
       return removed;
     } finally {
@@ -619,12 +698,12 @@ public class Sets {
     for (int i=0; i < index.length; i++) {
       long pos = scanner.skipTo(index[i]);
       //TODO check pos 
-      int eSize = scanner.elementSize();
+      int eSize = scanner.memberSize();
       int eSizeSize = Utils.sizeUVInt(eSize);
       if (ptr + eSize + eSizeSize > bufferPtr + bufferSize) {
         return -1; // OOM
       }
-      long ePtr = scanner.elementAddress();
+      long ePtr = scanner.memberAddress();
       // Write size
       Utils.writeUVInt(ptr, eSize);
       // Copy member
@@ -660,12 +739,12 @@ public class Sets {
     
     while(ptr < bufferPtr + bufferSize) {
       
-      int elSize = scanner.elementSize();
+      int elSize = scanner.memberSize();
       int elSizeSize = Utils.sizeUVInt(elSize);
       if ( ptr + elSize + elSizeSize > bufferPtr + bufferSize) {
         break;
       }
-      long elPtr = scanner.elementAddress();
+      long elPtr = scanner.memberAddress();
       // Write size
       Utils.writeUVInt(ptr, elSize);
       // Copy member
@@ -713,7 +792,7 @@ public class Sets {
     if (scanner == null) {
       return null;
     }
-    SetScanner sc = new SetScanner(scanner, kPtr);
+    SetScanner sc = new SetScanner(scanner);
     return sc;
   }
 
@@ -733,19 +812,24 @@ public class Sets {
    * @return set scanner
    */
   public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, 
-      long memberStartPtr, int memberStartSize, long memberStopPtr, int memberSTopSize, boolean safe) {
-    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
-    UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
-    UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
-    UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+      long memberStartPtr, int memberStartSize, long memberStopPtr, int memberStopSize, boolean safe) {
+    //TODO Check start stop 0
+    long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStartSize);
+    int startPtrSize = buildKey(keyPtr, keySize, memberStartPtr, memberStartSize, startPtr);
+    long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStopSize);
+    int stopPtrSize = buildKey(keyPtr, keySize, memberStopPtr, memberStopSize, stopPtr);
+    long ptr = Utils.prefixKeyEndNoAlloc(memberStopPtr, memberStopSize);
+    if (ptr < 0) {
+      //TODO
+    }
     //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE):
-          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+        map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize):
+          map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize);
     if (scanner == null) {
       return null;
     }
-    SetScanner sc = new SetScanner(scanner, kPtr);
+    SetScanner sc = new SetScanner(scanner, startPtr, startPtrSize, stopPtr, stopPtrSize);
     return sc;
   }
   

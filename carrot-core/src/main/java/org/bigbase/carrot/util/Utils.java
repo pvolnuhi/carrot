@@ -479,6 +479,26 @@ public class Utils {
   }
   
   /**
+   * TODO: handle all 0xff key
+   * Calculates end key for prefix scanner
+   * @param start start key address
+   * @param startSize start key size
+   * @return end key address if success, or -1
+   */
+  public static long prefixKeyEndNoAlloc(long start, int startSize) {
+ 
+    for( int i = startSize - 1; i >=0; i--) {
+      int v = UnsafeAccess.toByte(start + i) & 0xff; 
+      if (v == 0xff) {
+        continue;
+      } else {
+        UnsafeAccess.putByte(start + i, (byte)(v+1));
+        return start;
+      }
+    }
+    return -1;
+  }
+  /**
    * Read unsigned VarInt
    * @param ptr address to read from
    * @return int value

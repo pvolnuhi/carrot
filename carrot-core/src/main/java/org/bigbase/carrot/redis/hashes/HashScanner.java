@@ -18,13 +18,30 @@ import org.bigbase.carrot.util.Utils;
 public class HashScanner implements Closeable{
   
   /**
-   * Start key address (must be deallocated on close)
-   */
-  private long keyPtr;
-  /**
    * Base scanner
    */
   private BigSortedMapDirectMemoryScanner mapScanner;
+  
+  /**
+   * Start row
+   */
+  long startFieldPtr; // Inclusive
+  
+  /**
+   * Start row size
+   */
+  int startFieldSize;
+  
+  /**
+   * Stop row
+   */
+  
+  long stopFieldPtr; // Exclusive
+  
+  /**
+   * Stop row size
+   */
+  int stopFieldSize;
   
   /**
    * Current BigSortedMap value address
@@ -56,15 +73,19 @@ public class HashScanner implements Closeable{
    */
   int fieldValueSize;
   
+  boolean disposeKeysOnClose = false;
   /**
    * Constructor
-   * @param scanner base BSN scanner
+   * @param scanner base BSM scanner
    * @param keyPtr address of a start key
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner, long keyPtr) {
-    this.keyPtr = keyPtr;
+  public HashScanner(BigSortedMapDirectMemoryScanner scanner) {
     this.mapScanner = scanner;
     init();
+  }
+  
+  public void setDisposeKeysOnClose(boolean b) {
+    this.disposeKeysOnClose = b;
   }
   
   private void init() {
@@ -74,6 +95,23 @@ public class HashScanner implements Closeable{
     if (this.valueSize > NUM_ELEM_SIZE) {
       updateFields();
     } 
+  }
+  
+  /**
+   * Sets start and stop field for the scanner
+   * @param startPtr start field address
+   * @param startSize start field size
+   * @param stopPtr stop field address
+   * @param stopSize stop field size
+   */
+  public void setStartStopFields(long startPtr, int startSize, long stopPtr, int stopSize) {
+    this.startFieldPtr = startPtr;
+    this.startFieldSize = startSize;
+    this.stopFieldPtr = stopPtr;
+    this.stopFieldSize = stopSize;
+    if (this.startFieldPtr > 0) {
+      seek(this.startFieldPtr, this.startFieldSize, false);
+    }
   }
   
   /**
@@ -101,7 +139,21 @@ public class HashScanner implements Closeable{
    */
   public boolean hasNext() throws IOException {
     if (offset < valueSize) {
-      return offset + fvSize() < valueSize;
+      int fvSize = fvSize();
+      if (offset + fvSize < valueSize) {
+        if (this.stopFieldPtr > 0) {
+          int fieldSize = Utils.readUVInt(valueAddress + offset + fvSize);
+          int fSizeSize = Utils.sizeUVInt(fieldSize);
+          long fieldAddress = valueAddress + offset + fvSize + fSizeSize;
+          if (Utils.compareTo(this.stopFieldPtr, this.stopFieldSize, fieldAddress, fieldSize) <=0) {
+            return false;
+          } else {
+            return true;
+          }
+        } else {
+          return true;
+        }
+      }
     }
     // TODO next K-V can not have 0 elements - it must be deleted
     // but first element can, so we has to check what next() call return
@@ -116,7 +168,15 @@ public class HashScanner implements Closeable{
         // empty set in K-V? Must be deleted
         continue;
       } else {
-        return true;
+        // Check stopField
+        int fieldSize = Utils.readUVInt(valueAddress + offset);
+        int fSizeSize = Utils.sizeUVInt(this.fieldSize);
+        long fieldAddress = valueAddress + offset + fSizeSize;
+        if (Utils.compareTo(this.stopFieldPtr, this.stopFieldSize, fieldAddress, fieldSize) <=0) {
+          return false;
+        } else {
+          return true;
+        }
       }
     }
     return false;
@@ -218,10 +278,7 @@ public class HashScanner implements Closeable{
   
   @Override
   public void close() throws IOException {
-    if (keyPtr != 0) {
-      UnsafeAccess.free(keyPtr);
-    }
-    mapScanner.close();
+    mapScanner.close(disposeKeysOnClose);
   }
   /**
    * Delete current field-value

@@ -456,7 +456,10 @@ public class BigSortedMapDirectMemoryScanner implements BidirectionalScanner{
  
   @Override
   public void close() throws IOException {
-    // do nothing yet
+    close(false);
+  }
+  
+  public void close(boolean full) throws IOException {
     if (this.indexScanner != null) {
       this.indexScanner.close();
     }
@@ -465,6 +468,14 @@ public class BigSortedMapDirectMemoryScanner implements BidirectionalScanner{
     }
     if (this.toFree > 0 && this.toFree != this.nextBlockFirstKey) {
       UnsafeAccess.free(this.toFree);
+    }
+    if (full) {
+      if (startRowPtr > 0) {
+        UnsafeAccess.free(startRowPtr);
+      }
+      if (stopRowPtr > 0) {
+        UnsafeAccess.free(stopRowPtr);
+      }
     }
   }
   

@@ -182,6 +182,29 @@ public class Hashes {
   }
   
   /**
+   * Build key for Hash. It uses thread local key arena 
+   * TODO: data type prefix
+   * @param keyPtr original key address
+   * @param keySize original key size
+   * @param fieldPtr field address
+   * @param fieldSize field size
+   * @return new key size 
+   */
+    
+   
+  public static int buildKey(long keyPtr, int keySize, long fieldPtr, int fieldSize, long arena) {
+    int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
+    UnsafeAccess.putByte(arena, (byte) DataType.HASH.ordinal());
+    UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+    if (fieldPtr > 0) {
+      UnsafeAccess.copy(fieldPtr, arena + kSize, fieldSize);
+      kSize += fieldSize;
+    }
+    return kSize;
+  }
+  
+  /**
    * Gets and initializes Key
    * @param ptr key address
    * @param size key size
@@ -258,6 +281,42 @@ public class Hashes {
         if(map.execute(set)) {
           count++;
         }
+      }
+      return count;
+    } finally {
+      writeUnlock(k);
+    }
+  }
+  
+  
+  /**
+   * HSET for a single field-value (zero object allocation)
+   * @param map sorted map storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param fieldPtr field name address
+   * @param fieldSize field name size
+   * @param valuePtr value name address
+   * @param valueSize value name size
+   * @return 1 or 0
+   */
+  public static int HSET(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
+      long valuePtr, int valueSize) {
+
+    Key k = getKey(keyPtr, keySize);
+    int count = 0;
+    try {
+      writeLock(k);
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashSet set = hashSet.get();
+      set.reset();
+      set.setKeyAddress(keyArena.get());
+      set.setKeySize(kSize);
+      set.setFieldValue(valuePtr, valueSize);
+      set.setOptions(MutationOptions.NONE);
+      // version?
+      if (map.execute(set)) {
+        count++;
       }
       return count;
     } finally {
@@ -426,6 +485,69 @@ public class Hashes {
         }
       }
       return deleted;
+    } finally {
+      writeUnlock(k);
+    }
+  }
+  
+  /**
+   * HDEL for single field ( zero object allocation)
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param fieldPtr field address
+   * @param fieldSize field size
+   * @return 1 or 0 (number of deleted fields)
+   */
+  public static int HDEL(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize) {
+
+    Key k = getKey(keyPtr, keySize);
+    int deleted = 0;
+    try {
+      writeLock(k);
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashDelete update = hashDelete.get();
+      update.reset();
+      update.setMap(map);
+      update.setKeyAddress(keyArena.get());
+      update.setKeySize(kSize);
+      // version?
+      if (map.execute(update)) {
+        deleted++;
+      }
+      return deleted;
+    } finally {
+      writeUnlock(k);
+    }
+  }
+  
+  /**
+   * HDEL for the single field ( zero object allocation) with a value
+   * returned to the buffer
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param fieldPtr field address
+   * @param fieldSize field size
+   * @return 0 - not found, otherwise length of the value serialized, if greater than
+   *         buffer size, the call must be repeated with the appropriately sized buffer
+   */
+  public static int HDEL(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, 
+      long buffer, int bufferSize) {
+
+    Key k = getKey(keyPtr, keySize);
+    try {
+      writeLock(k);
+      int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+      HashDelete update = hashDelete.get();
+      update.reset();
+      update.setMap(map);
+      update.setKeyAddress(keyArena.get());
+      update.setKeySize(kSize);
+      update.setBuffer(buffer, bufferSize);
+      // version?
+      map.execute(update);
+      return update.getValueSize();
     } finally {
       writeUnlock(k);
     }
@@ -718,7 +840,7 @@ public class Hashes {
    * @param lastFieldSeenSize last seen field size
    * @return hash scanner
    */
-  public static HashScanner getScanner(BigSortedMap map, long lastSeenKeyPtr, 
+  public static HashScanner getHashScanner(BigSortedMap map, long lastSeenKeyPtr, 
       int lastSeenKeySize, long lastFieldSeenPtr, int lastFieldSeenSize) {
     int startKeySize = keySizeWithPrefix(lastSeenKeyPtr);
     long stopKeyPtr = Utils.prefixKeyEnd(lastSeenKeyPtr, startKeySize);
@@ -728,7 +850,7 @@ public class Hashes {
     BigSortedMapDirectMemoryScanner scanner = map.getScanner(lastSeenKeyPtr, lastSeenKeySize, 
       stopKeyPtr, startKeySize);
     // TODO - test this call
-    HashScanner hs = new HashScanner(scanner, 0);
+    HashScanner hs = new HashScanner(scanner);
     hs.seek(lastFieldSeenPtr, lastFieldSeenSize, true);
     
     return hs;
@@ -755,7 +877,42 @@ public class Hashes {
     if (scanner == null) {
       return null;
     }
-    HashScanner hs = new HashScanner(scanner, kPtr);
+    HashScanner hs = new HashScanner(scanner);
+    hs.setDisposeKeysOnClose(true);
+    return hs;
+  }
+  
+  /**
+   * Get hash scanner for hash operations, as since we can create multiple
+   * hash scanners in the same thread we can not use thread local variables
+   * WARNING: we can not create multiple scanners in a single thread
+   * @param map sorted map to run on
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param safe get safe instance
+   * @return hash scanner
+   */
+  public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, long startFieldPtr, 
+      int startFieldSize, long endFieldPtr, int endFieldSize, boolean safe) {
+    long kStartPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + startFieldSize + Utils.SIZEOF_BYTE);
+    int kStartSize = buildKey(keyPtr, keySize, startFieldPtr, startFieldSize, kStartPtr);
+
+    //TODO check that endPtr is 0 - no limit
+    long kStopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + endFieldSize + Utils.SIZEOF_BYTE);
+    int kStopSize = buildKey(keyPtr, keySize, endFieldPtr, endFieldSize, kStopPtr);
+    
+    if (endFieldPtr == 0) {
+      kStopPtr = Utils.prefixKeyEndNoAlloc(kStopPtr, kStopSize);
+    }
+    
+    BigSortedMapDirectMemoryScanner scanner = safe? 
+        map.getSafeScanner(kStartPtr, kStartSize, kStopPtr, kStopSize): 
+          map.getScanner(kStartPtr, kStartSize, kStopPtr, kStopSize);
+    if (scanner == null) {
+      return null;
+    }
+    HashScanner hs = new HashScanner(scanner);
+    hs.setDisposeKeysOnClose(true);
     return hs;
   }
   

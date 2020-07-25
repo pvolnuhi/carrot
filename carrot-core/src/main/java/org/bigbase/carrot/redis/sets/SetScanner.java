@@ -6,7 +6,6 @@ import java.io.Closeable;
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
-import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 /**
@@ -16,22 +15,70 @@ import org.bigbase.carrot.util.Utils;
  */
 public class SetScanner implements Closeable{
   
-  private long keyPtr;
+  /*
+   * Base Map scanner
+   */
   private BigSortedMapDirectMemoryScanner mapScanner;
+  /*
+   * Minimum member (inclusive)
+   */
+  long startMemberPtr;
+  /*
+   * Minimum member size
+   */
+  int startMemberSize;
+  /*
+   * Maximum member (exclusive) 
+   */
+  long stopMemberPtr;
+  /*
+   * Maximum member size
+   */
+  int stopMemberSize;
+  
+  /*
+   * Current value address
+   */
   long valueAddress;
+  /*
+   * Current value size
+   */
   int valueSize;
+  /*
+   * Current offset in the value
+   */
   int offset;
-  int elementSize;
-  long elementAddress;
+  
+  /*
+   * Current member size
+   */
+  int memberSize;
+  /*
+   * Current member address
+   */
+  long memberAddress;
+  /*
+   * Current position (index)
+   */
   long pos = 1;
   /**
    * Constructor
    * @param scanner base scanner
    * @param keyPtr key address to free on close
    */
-  public SetScanner(BigSortedMapDirectMemoryScanner scanner, long keyPtr) {
-    this.keyPtr = keyPtr;
+  public SetScanner(BigSortedMapDirectMemoryScanner scanner) {
     this.mapScanner = scanner;
+    init();
+  }
+  
+  
+  public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
+      long stop, int stopSize) {
+    this.mapScanner = scanner;
+    this.startMemberPtr = start;
+    this.startMemberSize = startSize;
+    this.stopMemberPtr = stop;
+    this.stopMemberSize = stopSize;
     init();
   }
   
@@ -39,17 +86,28 @@ public class SetScanner implements Closeable{
     // TODO Auto-generated method stub
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
-    this.offset = NUM_ELEM_SIZE;
-    if (this.valueSize > NUM_ELEM_SIZE) {
-      this.elementSize = Utils.readUVInt(valueAddress + offset);
-      this.elementAddress = valueAddress + offset + Utils.sizeUVInt(this.elementSize);
-    } else {
-      this.elementAddress = this.valueAddress + this.offset;
-      this.elementSize = 0;
-    }
-    
+    searchFirstMember();
   }
-
+  
+  private void searchFirstMember() {
+    if (this.startMemberPtr == 0) {
+      this.offset = NUM_ELEM_SIZE;
+    } else {
+      try {
+        while(hasNext()) {
+          int size = Utils.readUVInt(valueAddress + offset);
+          long ptr = valueAddress + offset + Utils.sizeUVInt(size);
+          int res = Utils.compareTo(ptr, size, this.startMemberPtr, this.startMemberSize);
+          if (res >= 0) {
+            return;
+          }
+          next();
+        }
+      } catch (IOException e) {
+        // should never be thrown
+      }
+    }  
+  }
   /**
    * Checks if scanner has next element
    * @return true, false
@@ -57,8 +115,20 @@ public class SetScanner implements Closeable{
    */
   public boolean hasNext() throws IOException {
     if (offset < valueSize) {
-      return elementAddress + elementSize + Utils.sizeUVInt(elementSize) 
-        < valueAddress + valueSize;
+      long nextPtr =  memberAddress + memberSize + Utils.sizeUVInt(memberSize);
+      if (nextPtr < valueAddress + valueSize) {
+        if (stopMemberPtr == 0) {
+          return true;
+        } else {
+          int nextSize =  Utils.readUVInt(nextPtr);
+          nextPtr += Utils.sizeUVInt(nextSize);
+          if (Utils.compareTo(nextPtr, nextSize, this.stopMemberPtr, this.stopMemberSize) >=0) {
+            return false;
+          } else {
+            return true;
+          }
+        }
+      }
     }
     // TODO next K-V can not have 0 elements - it must be deleted
     // but first element can, so we has to check what next() call return
@@ -72,6 +142,14 @@ public class SetScanner implements Closeable{
       if (valueSize <= NUM_ELEM_SIZE) {
         // empty set in K-V? Must be deleted
         continue;
+      } else if (this.stopMemberPtr > 0) {
+        int nextSize = Utils.readUVInt(valueAddress + offset);
+        long nextPtr = valueAddress + offset + Utils.sizeUVInt(memberSize);
+        if (Utils.compareTo(nextPtr, nextSize, this.stopMemberPtr, this.stopMemberSize) >=0) {
+          return false;
+        } else {
+          return true;
+        }
       } else {
         return true;
       }
@@ -80,7 +158,8 @@ public class SetScanner implements Closeable{
   }
   
   /**
-   * Advance scanner by one element
+   * Advance scanner by one element 
+   * MUST BE USED IN COMBINATION with hasNext()
    * @return true if operation succeeded , false - end of scanner
    * @throws IOException
    */
@@ -90,27 +169,8 @@ public class SetScanner implements Closeable{
       int elSizeSize =Utils.sizeUVInt(elSize);
       offset += elSize + elSizeSize;
       if (offset < valueSize) {
-        this.elementSize = Utils.readUVInt(valueAddress + offset);
-        this.elementAddress = valueAddress + offset + Utils.sizeUVInt(this.elementSize);
-        pos++;
-        return true;
-      }
-    }
-    // TODO next K-V can not have 0 elements - it must be deleted
-    // but first element can, so we has to check what next() call return
-    // the best way is to use do
-    while(mapScanner.hasNext()) {
-      mapScanner.next();
-      this.valueAddress = mapScanner.valueAddress();
-      this.valueSize = mapScanner.valueSize();
-      // check if it it is not empty
-      this.offset = NUM_ELEM_SIZE;
-      if (valueSize <= NUM_ELEM_SIZE) {
-        // empty set in K-V? Must be deleted
-        continue;
-      } else {
-        this.elementSize = Utils.readUVInt(valueAddress + offset);
-        this.elementAddress = valueAddress + offset + Utils.sizeUVInt(this.elementSize);
+        this.memberSize = Utils.readUVInt(valueAddress + offset);
+        this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
         pos++;
         return true;
       }
@@ -122,16 +182,16 @@ public class SetScanner implements Closeable{
    * Get current element address
    * @return element address
    */
-  public long elementAddress() {
-    return this.elementAddress;
+  public long memberAddress() {
+    return this.memberAddress;
   }
   
   /**
    * Gets current element size
    * @return element size
    */
-  public int elementSize() {
-    return this.elementSize;
+  public int memberSize() {
+    return this.memberSize;
   }
   
   public long getPosition() {
@@ -158,8 +218,7 @@ public class SetScanner implements Closeable{
   
   @Override
   public void close() throws IOException {
-    UnsafeAccess.free(keyPtr);
-    mapScanner.close();
+    mapScanner.close(true);
   }
   /**
    * Delete current Element

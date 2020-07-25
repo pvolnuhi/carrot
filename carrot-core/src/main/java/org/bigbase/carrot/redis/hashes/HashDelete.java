@@ -1,11 +1,9 @@
 package org.bigbase.carrot.redis.hashes;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.addNumElements;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
 import static org.bigbase.carrot.redis.Commons.firstKVinType;
-import static org.bigbase.carrot.redis.Commons.keySize;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 import static org.bigbase.carrot.redis.Commons.nextKVisInType;
 
@@ -30,10 +28,25 @@ public class HashDelete extends Operation{
    * Parent big sorted map
    */
   BigSortedMap map;
-    
+  
+  /**
+   * Buffer to return deleted value to
+   */
+  long buffer;
+  
+  /**
+   * Buffer size
+   */
+  int bufferSize;
+  /**
+   * Value size (deleted) full
+   */
+  int valueSize = 0;
+
   /**
    * Constructor
    */
+  
   public HashDelete() {
     setFloorKey(true);
   }
@@ -42,7 +55,29 @@ public class HashDelete extends Operation{
   public void reset() {
     super.reset();
     setFloorKey(true);
-    map = null;
+    this.map = null;
+    this.buffer = 0;
+    this.bufferSize = 0;
+    this.valueSize = 0;
+  }
+  
+  /**
+   * Gets value size
+   * @return serialized value size
+   */
+  public int getValueSize() {
+    return this.valueSize;
+  }
+  
+  /**
+   * Sets the buffer for return value
+   * @param ptr buffer address
+   * @param size buffer size
+   */
+  
+  public void setBuffer(long ptr, int size) {
+    this.buffer = ptr;
+    this.bufferSize = size;
   }
   
   /**
@@ -85,6 +120,17 @@ public class HashDelete extends Operation{
     int fieldSizeSize = Utils.sizeUVInt(fieldSize);
     int fieldValueSize = Utils.readUVInt(addr + fieldSizeSize);
     int fieldValueSizeSize = Utils.sizeUVInt(fieldValueSize);
+    
+    this.valueSize = fieldValueSize + fieldValueSizeSize;
+    if (buffer > 0 && bufferSize >= fieldValueSize + fieldValueSizeSize) {
+      // Copy value into the buffer
+      Utils.writeUVInt(buffer, fieldValueSize);
+      UnsafeAccess.copy(addr + fieldSize + fieldSizeSize + fieldValueSizeSize, 
+        buffer + fieldValueSizeSize, fieldValueSize);
+    } else if (buffer > 0 && bufferSize < fieldValueSize + fieldValueSizeSize) {
+      return false;
+    }
+    
     int toCut = fieldSizeSize + fieldSize + fieldValueSizeSize + fieldValueSize;
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
     // decrement number of elements in this value
