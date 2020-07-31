@@ -850,7 +850,12 @@ public class Hashes {
     BigSortedMapDirectMemoryScanner scanner = map.getScanner(lastSeenKeyPtr, lastSeenKeySize, 
       stopKeyPtr, startKeySize);
     // TODO - test this call
-    HashScanner hs = new HashScanner(scanner);
+    HashScanner hs = null;
+    try {
+      hs = new HashScanner(scanner);
+    } catch(OperationFailedException e) {
+      return null;
+    }
     hs.seek(lastFieldSeenPtr, lastFieldSeenSize, true);
     
     return hs;
@@ -867,17 +872,38 @@ public class Hashes {
    * @return hash scanner
    */
   public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
+    return getHashScanner(map, keyPtr, keySize, safe, false);
+  }
+  
+  /**
+   * Get hash scanner for hash operations, as since we can create multiple
+   * hash scanners in the same thread we can not use thread local variables
+   * WARNING: we can not create multiple scanners in a single thread
+   * @param map sorted map to run on
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param safe get safe instance
+   * @param reverse reverse scanner
+   * @return hash scanner
+   */
+  public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, 
+      boolean safe, boolean reverse) {
     long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
     UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
     UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE): 
-          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse): 
+          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse);
     if (scanner == null) {
       return null;
     }
-    HashScanner hs = new HashScanner(scanner);
+    HashScanner hs = null;
+    try {
+      hs = new HashScanner(scanner, reverse);
+    } catch(OperationFailedException e) {
+      return null;
+    }
     hs.setDisposeKeysOnClose(true);
     return hs;
   }
@@ -894,6 +920,23 @@ public class Hashes {
    */
   public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, long startFieldPtr, 
       int startFieldSize, long endFieldPtr, int endFieldSize, boolean safe) {
+    return getHashScanner(map, keyPtr, keySize, startFieldPtr, startFieldSize, endFieldPtr, 
+      endFieldSize, safe, false);
+  }
+  
+  /**
+   * Get hash scanner for hash operations, as since we can create multiple
+   * hash scanners in the same thread we can not use thread local variables
+   * WARNING: we can not create multiple scanners in a single thread
+   * @param map sorted map to run on
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param safe get safe instance
+   * @param reverse reverse scanner
+   * @return hash scanner
+   */
+  public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, long startFieldPtr, 
+      int startFieldSize, long endFieldPtr, int endFieldSize, boolean safe, boolean reverse) {
     long kStartPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + startFieldSize + Utils.SIZEOF_BYTE);
     int kStartSize = buildKey(keyPtr, keySize, startFieldPtr, startFieldSize, kStartPtr);
 
@@ -906,12 +949,17 @@ public class Hashes {
     }
     
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafeScanner(kStartPtr, kStartSize, kStopPtr, kStopSize): 
-          map.getScanner(kStartPtr, kStartSize, kStopPtr, kStopSize);
+        map.getSafeScanner(kStartPtr, kStartSize, kStopPtr, kStopSize, reverse): 
+          map.getScanner(kStartPtr, kStartSize, kStopPtr, kStopSize, reverse);
     if (scanner == null) {
       return null;
     }
-    HashScanner hs = new HashScanner(scanner);
+    HashScanner hs = null;
+    try {
+      hs = new HashScanner(scanner,startFieldPtr, startFieldSize, endFieldPtr, endFieldSize, reverse);
+    } catch (OperationFailedException e) {
+      return null;
+    }
     hs.setDisposeKeysOnClose(true);
     return hs;
   }

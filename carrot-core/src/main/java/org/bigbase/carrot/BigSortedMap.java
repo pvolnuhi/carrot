@@ -884,7 +884,7 @@ public class BigSortedMap {
    * Increment value (Long)  by key 
    * @param keyPtr address to look for
    * @param keyLength key length
-   * @return key-value record address if found, or NOT_FOUND. 
+   * @return value after increment. 
    */
   public long increment(long keyPtr, int keyLength, long version, long incr) {
     IndexBlock kvBlock = getThreadLocalBlock();

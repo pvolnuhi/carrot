@@ -220,6 +220,120 @@ public class Sets {
       KeysLocker.writeUnlock(k);
     }
   }
+  
+  /**
+   * Available since 1.0.0.
+   * Time complexity: O(N) where N is the total number of elements in all given sets.
+   * Returns the members of the set resulting from the difference between the first set and all the successive sets.
+   * For example:
+   * key1 = {a,b,c,d}
+   * key2 = {c}
+   * key3 = {a,c,e}
+   * SDIFF key1 key2 key3 = {b,d}
+   * Keys that do not exist are considered to be empty sets.
+   * Return value
+   * Array reply: list with members of the resulting set.
+   * @param map sorted map storage
+   * @param keyPtrs array of key addresses
+   * @param keySizes array of key sizes
+   * @param buffer buffer for result
+   * @param bufferSize size of the buffer
+   * @return total serialized size of an sets intersection
+   */
+  public static long SDIFF(BigSortedMap map, long[] keyPtrs, int[] keySizes, long buffer, int bufferSize) {
+    return 0;
+  }
+  
+  /**
+   * This command is equal to SDIFF, but instead of returning the resulting set, it is stored in destination.
+   * If destination already exists, it is overwritten.
+   * Return value
+   * Integer reply: the number of elements in the resulting set.
+   * 
+   * @param map sorted map storage 
+   * @param keyPtrs array of key addresses
+   * @param keySizes array of key sizes
+   * @return the number of elements in the resulting set.
+   */
+  public static long SDIFFSTORE(BigSortedMap map, long[] keyPtrs, int[] keySizes) {
+    return 0;
+  }
+  
+  /**
+   * Available since 1.0.0.
+   * Time complexity: O(N*M) worst case where N is the cardinality of the smallest set and M is the number of sets.
+   * Returns the members of the set resulting from the intersection of all the given sets.
+   * For example:
+   * key1 = {a,b,c,d}
+   * key2 = {c}
+   * key3 = {a,c,e}
+   * SINTER key1 key2 key3 = {c}
+   * Keys that do not exist are considered to be empty sets. With one of the keys being an empty set, 
+   * the resulting set is also empty (since set intersection with an empty set always results in an empty set).
+   * Return value
+   * Array reply: list with members of the resulting set.
+   * 
+   * @param map sorted map storage 
+   * @param keyPtrs array of key addresses
+   * @param keySizes array of key sizes
+   * @param buffer buffer for result
+   * @param bufferSize size of the buffer
+   * @return total serialized size of the result
+   */
+  public static long SINTER(BigSortedMap map, long[] keyPtrs, int[] keySizes, long buffer, int bufferSize) {
+    return 0;
+  }
+  
+  /**
+   * This command is equal to SINTER, but instead of returning the resulting set, it is stored in destination.
+   * If destination already exists, it is overwritten.
+   * Return value
+   * Integer reply: the number of elements in the resulting set.
+   * @param map sorted map storage 
+   * @param keyPtrs array of key addresses (first key is the destination)
+   * @param keySizes array of key sizes
+   * @return the number of elements in the resulting set.
+   */
+  
+  public static long SINTERSTORE(BigSortedMap map, long[] keyPtrs, int[] keySizes) {
+    return 0;
+  }
+  
+  /**
+   * Returns the members of the set resulting from the union of all the given sets.
+   * For example:
+   * key1 = {a,b,c,d}
+   * key2 = {c}
+   * key3 = {a,c,e}
+   * SUNION key1 key2 key3 = {a,b,c,d,e}
+   * Keys that do not exist are considered to be empty sets.
+   * Return value
+   * Array reply: list with members of the resulting set.
+   * @param map sorted map storage 
+   * @param keyPtrs array of key addresses
+   * @param keySizes array of key sizes
+   * @param buffer buffer for result
+   * @param bufferSize size of the buffer
+   * @return total serialized size of the result
+   */
+  public static long SUNION(BigSortedMap map, long[] keyPtrs, int[] keySizes, long buffer, int bufferSize) {
+    return 0;
+  }
+  
+  /**
+   * This command is equal to SUNION, but instead of returning the resulting set, it is stored 
+   * in destination. If destination already exists, it is overwritten.
+   * Return value
+   * Integer reply: the number of elements in the resulting set.
+   * @param map sorted map storage 
+   * @param keyPtrs array of key addresses (first key is the destination)
+   * @param keySizes array of key sizes
+   * @return the number of elements in the resulting set.
+   */
+  public static long SUNIONSTORE(BigSortedMap map, long[] keyPtrs, int[] keySizes) {
+    return 0;
+  }
+  
   /**
    * Returns the set cardinality (number of elements) of the set stored at key.
    * Return value
@@ -778,25 +892,39 @@ public class Sets {
    * @param keyPtr key address
    * @param keySize key size
    * @param safe get safe instance
+   * @param reverse reverse scanner
    * @return set scanner
    */
   public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
+    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+    return getSetScanner(map, keyPtr, keySize, safe, false);
+  }
+
+  /**
+   * Get set scanner for set operations, as since we can create multiple
+   * set scanners in the same thread we can not use thread local variables
+   * WARNING: we can not create multiple scanners in a single thread
+   * @param map sorted map to run on
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param safe get safe instance
+   * @return set scanner
+   */
+  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe, boolean reverse) {
     long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
     UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
     UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE):
-          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse):
+          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse);
     if (scanner == null) {
       return null;
     }
-    SetScanner sc = new SetScanner(scanner);
+    SetScanner sc = new SetScanner(scanner, reverse);
     return sc;
   }
-
-  
   /**
    * Get set scanner (with a given range) for set operations, as since we can create multiple
    * set scanners in the same thread we can not use thread local variables
@@ -813,6 +941,27 @@ public class Sets {
    */
   public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, 
       long memberStartPtr, int memberStartSize, long memberStopPtr, int memberStopSize, boolean safe) {
+    return getSetScanner(map, keyPtr, keySize, memberStartPtr, memberStartSize, memberStopPtr, 
+      memberStopSize, safe, false);
+  }
+  
+  /**
+   * Get set scanner (with a given range) for set operations, as since we can create multiple
+   * set scanners in the same thread we can not use thread local variables
+   * WARNING: we can not create multiple scanners in a single thread
+   * @param map sorted map to run on
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param memberStartPtr start member address
+   * @param memberStartSize size
+   * @param memberStopPtr member stop address
+   * @param memberStopSize member stop size
+   * @param safe get safe instance
+   * @param reverse get reverse scanner (true), normal (false)
+   * @return set scanner
+   */
+  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, 
+      long memberStartPtr, int memberStartSize, long memberStopPtr, int memberStopSize, boolean safe, boolean reverse) {
     //TODO Check start stop 0
     long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStartSize);
     int startPtrSize = buildKey(keyPtr, keySize, memberStartPtr, memberStartSize, startPtr);
@@ -824,12 +973,12 @@ public class Sets {
     }
     //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize):
-          map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize);
+        map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse):
+          map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     if (scanner == null) {
       return null;
     }
-    SetScanner sc = new SetScanner(scanner, startPtr, startPtrSize, stopPtr, stopPtrSize);
+    SetScanner sc = new SetScanner(scanner, startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     return sc;
   }
   
