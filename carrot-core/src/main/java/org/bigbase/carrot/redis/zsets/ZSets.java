@@ -2621,7 +2621,7 @@ public class ZSets {
   * @param count count to return in a single call
   * @param buffer for response
   * @param bufferSize buffer size
-  * @return total serialized size of a response.  
+  * @return total serialized size of the response.  
   *     
   *     TODO: MATCH
   */
@@ -2648,17 +2648,17 @@ public class ZSets {
      int c =0;
      long ptr = buffer + Utils.SIZEOF_INT;
      while(scanner.hasNext() && c++ < count) {
-       long mPtr = scanner.memberAddress();
+       long mPtr = scanner.memberAddress(); // Contains both: score and value
        int mSize = scanner.memberSize();
        int mSizeSize = Utils.sizeUVInt(mSize);
-       if ( ptr + mSize + mSizeSize > buffer + bufferSize) {
-         break;
+       if ( ptr + mSize + mSizeSize <= buffer + bufferSize) {
+         Utils.writeUVInt(ptr, mSize);
+         UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
+         UnsafeAccess.putInt(buffer,  c);
        }
-       Utils.writeUVInt(ptr, mSize);
-       UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
+       ptr += mSize + mSizeSize;
        scanner.next();
      }
-     UnsafeAccess.putInt(bufferSize,  c);
      return ptr - buffer - Utils.SIZEOF_INT;
    } catch (IOException e) {
 

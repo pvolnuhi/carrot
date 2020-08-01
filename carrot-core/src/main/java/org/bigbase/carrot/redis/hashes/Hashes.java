@@ -20,6 +20,8 @@ import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.redis.sets.SetScanner;
+import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -828,6 +830,246 @@ public class Hashes {
     } finally {
       readUnlock(k);
     }
+  }
+  
+  /**
+   * Available since 2.8.0.
+   * Time complexity: O(1) for every call. O(N) for a complete iteration, 
+   * including enough command calls for the cursor to return back to 0. N is the number of elements 
+   * inside the collection.
+   * The SCAN command and the closely related commands SSCAN, HSCAN and ZSCAN are used in order 
+   * to incrementally iterate over a collection of elements.
+   * SCAN iterates the set of keys in the currently selected Redis database.
+   * SSCAN iterates elements of Sets types.
+   * HSCAN iterates fields of Hash types and their associated values.
+   * ZSCAN iterates elements of Sorted Set types and their associated scores.
+   * Since these commands allow for incremental iteration, returning only a small number of elements 
+   * per call, they can be used in production without the downside of commands like KEYS or SMEMBERS 
+   * that may block the server for a long time (even several seconds) when called against big collections 
+   * of keys or elements.
+   * 
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param lastSeenFieldPtr  last seen field address
+   * @param lastSeenFieldSize last seen field size
+   * @param count number of elements to return
+   * @param buffer memory buffer for return items
+   * @param bufferSize buffer size
+   * @return total serialized size of the response, if greater than bufferSize, the call 
+   *         must be retried with the appropriately sized buffer
+   */
+  public static long HSCAN(BigSortedMap map, long keyPtr, int keySize, long lastSeenFieldPtr, 
+      int lastSeenFieldSize,  int count, long buffer, int bufferSize) 
+  {
+    Key key = getKey(keyPtr, keySize);
+    HashScanner scanner = null;
+    try {
+      KeysLocker.readLock(key);
+      scanner = Hashes.getHashScanner(map, keyPtr, keySize, lastSeenFieldPtr, lastSeenFieldSize, 0, 0, false);
+      if (scanner == null) {
+        return 0;
+      }
+      // Check first member
+      if (lastSeenFieldPtr > 0) {
+        long ptr = scanner.fieldAddress();
+        int size = scanner.fieldSize();
+        if(Utils.compareTo(ptr, size, lastSeenFieldPtr, lastSeenFieldSize) == 0) {
+          scanner.hasNext();
+          scanner.next();
+        }
+      }
+      int c =0;
+      long ptr = buffer + Utils.SIZEOF_INT;
+      while(scanner.hasNext() && c++ < count) {
+        long fPtr = scanner.fieldAddress();
+        int fSize = scanner.fieldSize();
+        int fSizeSize = Utils.sizeUVInt(fSize);
+        long vPtr = scanner.valueAddress();
+        int vSize = scanner.valueSize();
+        int vSizeSize = Utils.sizeUVInt(vSize);
+        if ( ptr + fSize + fSizeSize + vSize + vSizeSize <= buffer + bufferSize) {
+          Utils.writeUVInt(ptr, fSize);
+          Utils.writeUVInt(ptr + fSizeSize, vSize);
+          UnsafeAccess.copy(fPtr, ptr + fSizeSize + vSizeSize, fSize);
+          UnsafeAccess.copy(vPtr, ptr + fSizeSize + vSizeSize + fSize, vSize);
+          UnsafeAccess.putInt(buffer,  c);
+        }
+        ptr += fSize + fSizeSize + vSize + vSizeSize;
+        scanner.next();
+      }
+      return ptr - buffer - Utils.SIZEOF_INT;
+    } catch (IOException e) {
+
+   } finally {
+      KeysLocker.readUnlock(key);
+    }
+    return 0; 
+  }
+  
+  /**
+   * Available since 2.0.0.
+   * Time complexity: O(N) where N is the size of the hash.
+   * Returns all fields and values of the hash stored at key. In the returned value, every field name 
+   * is followed by its value, so the length of the reply is twice the size of the hash.
+   * 
+   * Return value
+   * Array reply: list of fields and their values stored in the hash, or an empty list when key does not exist.
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param buffer buffer address
+   * @param bufferSize buffer size
+   * @return total serialized size of the response, if greater then bufferSize 
+   *         the call must be retried with the appropriately sized buffer
+   */
+  public static long HGETALL(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) 
+  {
+    Key key = getKey(keyPtr, keySize);
+    HashScanner scanner = null;
+    try {
+      KeysLocker.readLock(key);
+      scanner = Hashes.getHashScanner(map, keyPtr, keySize, false);
+      if (scanner == null) {
+        return 0;
+      }
+ 
+      long ptr = buffer + Utils.SIZEOF_INT;
+      int c = 0;
+      while(scanner.hasNext()) {
+        long fPtr = scanner.fieldAddress();
+        int fSize = scanner.fieldSize();
+        int fSizeSize = Utils.sizeUVInt(fSize);
+        long vPtr = scanner.valueAddress();
+        int vSize = scanner.valueSize();
+        int vSizeSize = Utils.sizeUVInt(vSize);
+        if ( ptr + fSize + fSizeSize + vSize + vSizeSize <= buffer + bufferSize) {
+          c++;
+          Utils.writeUVInt(ptr, fSize);
+          Utils.writeUVInt(ptr + fSizeSize, vSize);
+          UnsafeAccess.copy(fPtr, ptr + fSizeSize + vSizeSize, fSize);
+          UnsafeAccess.copy(vPtr, ptr + fSizeSize + vSizeSize + fSize, vSize);
+          UnsafeAccess.putInt(buffer,  c);
+
+        }
+        ptr += fSize + fSizeSize + vSize + vSizeSize;
+        scanner.next();
+      }
+      UnsafeAccess.putInt(bufferSize,  c);
+      return ptr - buffer - Utils.SIZEOF_INT;
+    } catch (IOException e) {
+
+   } finally {
+      KeysLocker.readUnlock(key);
+    }
+    return 0; 
+  }
+  
+  
+  /**
+   * Available since 2.0.0.
+   * Time complexity: O(N) where N is the size of the hash.
+   * Returns all field names in the hash stored at key.
+   * Return value
+   * Array reply: list of fields in the hash, or an empty list when key does not exist.
+   * 
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param buffer buffer address
+   * @param bufferSize buffer size
+   * @return total serialized size of the response, if greater then bufferSize 
+   *         the call must be retried with the appropriately sized buffer
+   */
+  public static long HKEYS(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) 
+  {
+    Key key = getKey(keyPtr, keySize);
+    HashScanner scanner = null;
+    try {
+      KeysLocker.readLock(key);
+      scanner = Hashes.getHashScanner(map, keyPtr, keySize, false);
+      if (scanner == null) {
+        return 0;
+      }
+ 
+      long ptr = buffer + Utils.SIZEOF_INT;
+      int c = 0;
+      while(scanner.hasNext()) {
+        long fPtr = scanner.fieldAddress();
+        int fSize = scanner.fieldSize();
+        int fSizeSize = Utils.sizeUVInt(fSize);
+        
+        if (ptr + fSize + fSizeSize <= buffer + bufferSize) {
+          c++;
+          Utils.writeUVInt(ptr, fSize);
+          UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
+          UnsafeAccess.putInt(buffer,  c);
+
+        }
+        ptr += fSize + fSizeSize;
+        scanner.next();
+      }
+      UnsafeAccess.putInt(bufferSize,  c);
+      return ptr - buffer - Utils.SIZEOF_INT;
+    } catch (IOException e) {
+
+   } finally {
+      KeysLocker.readUnlock(key);
+    }
+    return 0; 
+  }
+  
+  /**
+   * Available since 2.0.0.
+   * Time complexity: O(N) where N is the size of the hash.
+   * Returns all field values in the hash stored at key.
+   * Return value
+   * Array reply: list of values in the hash, or an empty list when key does not exist.
+   * 
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param buffer buffer address
+   * @param bufferSize buffer size
+   * @return total serialized size of the response, if greater then bufferSize 
+   *         the call must be retried with the appropriately sized buffer
+   */
+  public static long HVALUES(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) 
+  {
+    Key key = getKey(keyPtr, keySize);
+    HashScanner scanner = null;
+    try {
+      KeysLocker.readLock(key);
+      scanner = Hashes.getHashScanner(map, keyPtr, keySize, false);
+      if (scanner == null) {
+        return 0;
+      }
+ 
+      long ptr = buffer + Utils.SIZEOF_INT;
+      int c = 0;
+      while(scanner.hasNext()) {
+        long vPtr = scanner.valueAddress();
+        int vSize = scanner.valueSize();
+        int vSizeSize = Utils.sizeUVInt(vSize);
+        
+        if (ptr + vSize + vSizeSize <= buffer + bufferSize) {
+          c++;
+          Utils.writeUVInt(ptr, vSize);
+          UnsafeAccess.copy(vPtr, ptr + vSizeSize, vSize);
+          UnsafeAccess.putInt(buffer,  c);
+
+        }
+        ptr += vSize + vSizeSize;
+        scanner.next();
+      }
+      UnsafeAccess.putInt(bufferSize,  c);
+      return ptr - buffer - Utils.SIZEOF_INT;
+    } catch (IOException e) {
+
+   } finally {
+      KeysLocker.readUnlock(key);
+    }
+    return 0; 
   }
   /**
    * TODO: pattern matching
