@@ -82,7 +82,7 @@ public class LZ4HCCodec implements Codec {
   
   @Override
   public int compress(long src, int srcSize, long dst, int dstCapacity) {
-    return LZ4.compressDirectAddressHC(src, srcSize, dst, dstCapacity, dstCapacity);
+    return LZ4.compressDirectAddressHC(src, srcSize, dst, dstCapacity, level);
   }
 
   @Override

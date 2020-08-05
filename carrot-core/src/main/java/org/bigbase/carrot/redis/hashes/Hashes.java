@@ -2,9 +2,9 @@ package org.bigbase.carrot.redis.hashes;
 
 import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
+import static org.bigbase.carrot.redis.Commons.ZERO;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 import static org.bigbase.carrot.redis.Commons.numElementsInValue;
-import static org.bigbase.carrot.redis.Commons.ZERO;
 import static org.bigbase.carrot.redis.KeysLocker.readLock;
 import static org.bigbase.carrot.redis.KeysLocker.readUnlock;
 import static org.bigbase.carrot.redis.KeysLocker.writeLock;
@@ -20,8 +20,6 @@ import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.OperationFailedException;
-import org.bigbase.carrot.redis.sets.SetScanner;
-import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -184,8 +182,7 @@ public class Hashes {
   }
   
   /**
-   * Build key for Hash. It uses thread local key arena 
-   * TODO: data type prefix
+   * Build key for Hash. It uses provided arena 
    * @param keyPtr original key address
    * @param keySize original key size
    * @param fieldPtr field address

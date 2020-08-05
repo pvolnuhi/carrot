@@ -3,14 +3,15 @@ package org.bigbase.carrot.compression;
 import java.util.Random;
 
 import org.bigbase.carrot.util.UnsafeAccess;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class SparseBitmapTest {
   int size = 4096;
 
   
+  @Ignore
   @Test
-  
   public void runTest() {
     CodecFactory factory = CodecFactory.getInstance();
     Codec codec = factory.getCodec(CodecType.LZ4);
@@ -28,6 +29,78 @@ public class SparseBitmapTest {
     }
   }
 
+  @Test  
+  public void runOneByteCompressionLZ4() {
+    CodecFactory factory = CodecFactory.getInstance();
+    Codec codec = factory.getCodec(CodecType.LZ4);
+    long src = UnsafeAccess.mallocZeroed(size);
+    long dst = UnsafeAccess.mallocZeroed(2* size);
+    Random r = new Random();
+    
+    for (int i =0; i < size/4; i++) {
+      int v = r.nextInt(256);
+      UnsafeAccess.putInt(src + i * 4, v);
+    }
+    
+    int compressedSize = codec.compress(src, size, dst, 2 * size);
+    System.out.println("LZ4 1-byte compression ratio=" + (((float)size)/compressedSize));
+  }
+  
+  @Test
+  public void runTwoBytesCompressionLZ4() {
+    CodecFactory factory = CodecFactory.getInstance();
+    Codec codec = factory.getCodec(CodecType.LZ4);
+    long src = UnsafeAccess.mallocZeroed(size);
+    long dst = UnsafeAccess.mallocZeroed(2* size);
+    Random r = new Random();
+    
+    for (int i =0; i < size/4; i++) {
+      int v = r.nextInt(1000);
+      UnsafeAccess.putInt(src + i * 4, v);
+    }
+    
+    int compressedSize = codec.compress(src, size, dst, 2 * size);
+    System.out.println("LZ4 2-byte compression ratio=" + (((float)size)/compressedSize));
+  }
+  
+  @Test  
+  public void runOneByteCompressionLZ4HC() {
+    CodecFactory factory = CodecFactory.getInstance();
+    Codec codec = factory.getCodec(CodecType.LZ4HC);
+    codec.setLevel(3);
+    long src = UnsafeAccess.mallocZeroed(size);
+    long dst = UnsafeAccess.mallocZeroed(2* size);
+    Random r = new Random();
+    
+    for (int i =0; i < size/4; i++) {
+      int v = r.nextInt(256);
+      UnsafeAccess.putInt(src + i * 4, v);
+    }
+    
+    int compressedSize = codec.compress(src, size, dst, 2 * size);
+    System.out.println("LZ4HC 1-byte compression ratio=" + (((float)size)/compressedSize));
+  }
+  
+  @Test
+  public void runTwoBytesCompressionLZ4HC() {
+    CodecFactory factory = CodecFactory.getInstance();
+    Codec codec = factory.getCodec(CodecType.LZ4HC);
+    codec.setLevel(3);
+
+    long src = UnsafeAccess.mallocZeroed(size);
+    long dst = UnsafeAccess.mallocZeroed(2* size);
+    Random r = new Random();
+    
+    for (int i =0; i < size/4; i++) {
+      int v = r.nextInt(1000);
+      UnsafeAccess.putInt(src + i * 4, v);
+    }
+    
+    int compressedSize = codec.compress(src, size, dst, 2 * size);
+    System.out.println("LZ4HC 2-byte compression ratio=" + (((float)size)/compressedSize));
+  }
+  
+  
   private void fill(long src, double pct, Random r) {
     // TODO Auto-generated method stub
     int max = size * 8;
