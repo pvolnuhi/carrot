@@ -13,7 +13,7 @@ public class Key implements Comparable<Key>{
   
   @Override
   public int hashCode() {
-    return Utils.murmurHash(address, length, 0);
+    return Math.abs(Utils.murmurHash(address, length, 0));
   }
 
   @Override

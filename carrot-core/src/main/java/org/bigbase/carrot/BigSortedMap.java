@@ -8,7 +8,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.ops.Operation;
-import org.bigbase.carrot.redis.OperationFailedException;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -27,7 +26,7 @@ public class BigSortedMap {
   
   static int maxBlockSize = DataBlock.MAX_BLOCK_SIZE;
   static int maxIndexBlockSize = IndexBlock.MAX_BLOCK_SIZE;
-  static AtomicLong totalAllocatedMemory = new AtomicLong(0);
+  public static AtomicLong totalAllocatedMemory = new AtomicLong(0);
   /*
    * This tracks total data blocks size (memory allocated for data blocks)
    */

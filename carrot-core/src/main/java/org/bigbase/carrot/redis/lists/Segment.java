@@ -112,6 +112,7 @@ public final class Segment {
   public static Segment allocateNew(Segment s, int sizeRequired) {
     int size = getMinSizeGreaterOrEqualsThan(sizeRequired);
     if (size < 0) return null;
+    Lists.allocMemory(size);
     long ptr = UnsafeAccess.mallocZeroed(size);
     s.setDataPointer(ptr);
     s.setSize(size);
@@ -252,7 +253,6 @@ public final class Segment {
   }
   
   
-  
   /**
    * Sets segment size
    * @param size size
@@ -285,8 +285,7 @@ public final class Segment {
   public int getDataSize() {
     return getSegmentDataSize(this.dataPtr);
   }
-  
-  
+    
   /**
    * Increment data size
    * @param incr value
@@ -378,11 +377,15 @@ public final class Segment {
    */
   public void shrink() {
     int dataSize = getDataSize();
+    int segmentSize = getSize();
     int newSize = getMinSizeGreaterThan(dataSize + SEGMENT_OVERHEAD);
     if (newSize == getSize()) return;
     long ptr = UnsafeAccess.mallocZeroed(newSize);
     UnsafeAccess.copy(this.dataPtr, ptr, SEGMENT_OVERHEAD + dataSize);
     UnsafeAccess.free(this.dataPtr);
+
+    Lists.allocMemory(newSize - segmentSize);
+
     setDataPointer(ptr);
     setSegmentSize(ptr, newSize);
     updateNextPrevious();
@@ -395,12 +398,15 @@ public final class Segment {
    */
   public boolean expand(int requiredSize) {
     int dataSize = getDataSize();
+    int segmentSize = getSize();
     int newSize = getMinSizeGreaterThan(requiredSize + SEGMENT_OVERHEAD);
     if (newSize < 0) return false;
     
     long ptr = UnsafeAccess.mallocZeroed(newSize);
     UnsafeAccess.copy(this.dataPtr, ptr, SEGMENT_OVERHEAD + dataSize);
     UnsafeAccess.free(this.dataPtr);
+    Lists.allocMemory(newSize - segmentSize);
+
     setDataPointer(ptr);
     setSegmentSize(ptr, newSize);
     updateNextPrevious();
@@ -493,6 +499,9 @@ public final class Segment {
         dataSize + SEGMENT_OVERHEAD - offset);
       if (extAlloc) {
         long ptr = UnsafeAccess.allocAndCopy(elemPtr, elemSize);
+   
+        Lists.allocMemory(elemSize);
+        
         int zeroSize = Utils.sizeUVInt(0);
         Utils.writeUVInt(this.dataPtr + offset, 0);
         UnsafeAccess.putInt(this.dataPtr + zeroSize, elemSize);
@@ -534,6 +543,7 @@ public final class Segment {
    * @return pointer to this segment after this operation
    */
   public long prepend(long ptr, int size) {
+    //TODO do not split - add new segment
     return insert(SEGMENT_OVERHEAD, ptr, size);
   }
   /**
@@ -543,9 +553,86 @@ public final class Segment {
    * @return pointer to this segment after this operation
    */
   public long append(long ptr, int size) {
+    //TODO do not split - add new segment
     return insert(SEGMENT_OVERHEAD + getDataSize(), ptr, size);
   }
   
+  /** 
+   * Is the segment empty?
+   * @return true, if - yes, false - otherwise
+   * 
+   */
+  
+  public boolean isEmpty() {
+    return getNumberOfElements() == 0;
+  }
+  
+  /**
+   * Pops element from the left
+   * @param buffer buffer 
+   * @param bufferSize buffer size
+   * @return serialized size of the element or -1, 
+   *         if size is greater then bufferSize, the call must be
+   *         repeated with the appropriately sized buffer 
+   */
+  
+  public long popLeft(long buffer, int bufferSize) {
+    if (isEmpty()) return -1;
+    int size = elementSize(this.dataPtr + SEGMENT_OVERHEAD);
+    if (size > bufferSize) {
+      return size;
+    }
+    long addr = elementAddress(this.dataPtr + SEGMENT_OVERHEAD);
+    UnsafeAccess.copy( addr, buffer, size);
+    int bSize = elementBlockFullSize(this.dataPtr + SEGMENT_OVERHEAD);
+    int dataSize = getDataSize();
+    UnsafeAccess.copy(this.dataPtr + + SEGMENT_OVERHEAD + bSize, 
+      this.dataPtr + SEGMENT_OVERHEAD, dataSize - bSize);
+    incrementDataSize(-bSize);
+    incrementNumberOfElements(-1);
+    return size;
+  }
+  
+  /**
+   * Address of the last element
+   * @return address of the last element
+   */
+  public long lastElementBlockAddress() {
+    int num = getNumberOfElements();
+    if (num == 0) return -1;
+    int count = 1;
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    while(count++ < num) {
+      int bSize = elementBlockSize(ptr);
+      ptr += bSize + Utils.sizeUVInt(bSize);
+    }
+    return ptr;
+  }
+  
+  /**
+   * Pops element from the right
+   * @param buffer buffer 
+   * @param bufferSize buffer size
+   * @return serialized size of the element or -1, 
+   *         if size is greater then bufferSize, the call must be
+   *         repeated with the appropriately sized buffer 
+   */
+  
+  public long popRight(long buffer, int bufferSize) {
+    if (isEmpty()) return -1;
+    long ptr = lastElementBlockAddress();
+    
+    int size = elementSize(ptr);
+    if (size > bufferSize) {
+      return size;
+    }
+    long addr = elementAddress(ptr);
+    UnsafeAccess.copy( addr, buffer, size);
+    int bSize = elementBlockFullSize(ptr);
+    incrementDataSize(-bSize);
+    incrementNumberOfElements(-1);
+    return size;
+  }
   /**
    * Insert element before or after a given element
    * @param elemPtr given element pointer
@@ -618,19 +705,26 @@ public final class Segment {
     int newSize = getMinSizeGreaterOrEqualsThan(rightDataSize);
     
     long ptr = UnsafeAccess.mallocZeroed(newSize);
+    Lists.allocMemory(newSize);
+    
     UnsafeAccess.copy(this.dataPtr + off + SEGMENT_OVERHEAD, ptr + SEGMENT_OVERHEAD, rightDataSize);
-    // Update new segment
-    setNextSegmentAddress(ptr, getNextAddress());
+    // Update new segment next address
+    long nextPtr = getNextAddress();
+    setNextSegmentAddress(ptr, nextPtr);
+    // Update next segment previous address (it is now new segment)
+    if (nextPtr > 0) {
+      setPreviousSegmentAddress(nextPtr,  ptr);
+    }
     setSegmentSize(ptr, newSize);
     setSegmentDataSize(ptr, rightDataSize);
     setNumberOfElements(ptr, rightElementNumber);
     setSegmentCompressionType(ptr, getCompressionType());
-    // Update current segment
+    // Update current segment next address (new segment)
     setNextAddress(ptr);
     setDataSize(newDataSize);
     setNumberOfElements(newElementNumber);
     shrink();
-    // Do this after shrink
+    // Update new segment previous address,  do this after shrink
     setPreviousSegmentAddress(ptr, this.dataPtr);
     
   }
@@ -665,12 +759,59 @@ public final class Segment {
     }
   }
   
+  
+  /**
+   * Size in block
+   * @param ptr current element pointer in this segment
+   * @return size of an element in the segment block
+   */
   public static int elementBlockSize(long ptr) {
     int size = Utils.readUVInt(ptr);
     if (size == 0) {
       return Utils.SIZEOF_INT + Utils.SIZEOF_LONG;
     }
     return size;
+  }
+  
+  /**
+   * Full size in block for searching/skipping
+   * @param ptr element address
+   * @return size
+   */
+  public static int elementBlockFullSize(long ptr) {
+    int size = Utils.readUVInt(ptr);
+    if (size == 0) {
+      size = Utils.SIZEOF_INT + Utils.SIZEOF_LONG;
+    }
+    return size + Utils.sizeUVInt(size);
+  }
+  /**
+   * Is current element externally allocated
+   * @param ptr element address
+   * @return true, if - yes, false -otherwise
+   */
+  public static boolean isExternalAllocation(long ptr) {
+    return Utils.readUVInt(ptr) == 0;
+  }
+  
+  /**
+   * Free all memory resources
+   */
+  public void free() {
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    long max = ptr + getDataSize();
+    while(ptr < max) {
+      int bSize = elementBlockSize(ptr);
+      if (isExternalAllocation(ptr)) {
+        long addr = elementAddress(ptr);
+        int size = elementSize(ptr);
+        UnsafeAccess.free(addr);
+        Lists.freeMemory(size);
+      }
+      ptr += bSize + Utils.sizeUVInt(bSize);
+    }
+    Lists.freeMemory(getSize());
+    UnsafeAccess.free(this.dataPtr);
   }
   
   /**
@@ -721,6 +862,161 @@ public final class Segment {
   public Segment last(Segment s) {
     while (s.next(s) != null) {}
     return s;
+  }
+  
+  /**
+   * Removes element if present
+   * @param elPtr element address
+   * @param elSize element size
+   * @return number of elements removed (0 or 1)
+   */
+  public int remove(long elPtr, int elSize) {
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    int dataSize = getDataSize();
+    long max = ptr + dataSize;
+    while(ptr < max) {
+      long ePtr = elementAddress(ptr);
+      int eSize = elementSize(ptr);
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+
+      if (eSize == elSize && Utils.compareTo(elPtr, elSize, ePtr, eSize) == 0) {
+        if (isExternalAllocation(ptr)) {
+          UnsafeAccess.free(ePtr);
+        }
+        UnsafeAccess.copy(ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
+        incrementDataSize(-bSize - bSizeSize);
+        incrementNumberOfElements(-1);
+        return 1;
+      }
+      ptr += bSize + bSizeSize;
+    }
+    return 0;
+  }
+  
+  /**
+   * Remove all occurrences of a given element 
+   * @param ptr element pointer
+   * @param size element size
+   * @return number of elements removed
+   */
+  public int removeAll(long elPtr, int elSize) {
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    int dataSize = getDataSize();
+    long max = ptr + dataSize;
+    int count = 0;
+    while(ptr < max) {
+      long ePtr = elementAddress(ptr);
+      int eSize = elementSize(ptr);
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+
+      if (eSize == elSize && Utils.compareTo(elPtr, elSize, ePtr, eSize) == 0) {
+        if (isExternalAllocation(ptr)) {
+          UnsafeAccess.free(ePtr);
+        }
+        UnsafeAccess.copy(ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
+        incrementDataSize(-bSize - bSizeSize);
+        incrementNumberOfElements(-1);
+        max -= bSize + bSizeSize;
+        count++;
+      }
+      ptr += bSize + bSizeSize;
+    }
+    return count;
+  }
+  
+  /**
+   * Removes element from the tail
+   * @param elPtr element pointer
+   * @param elSize element size
+   * @return number of element removed
+   */
+  public int removeReverse(long elPtr, int elSize) {
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    int dataSize = getDataSize();
+    long max = ptr + dataSize;
+    long lastPtr = 0;
+
+    while(ptr < max) {
+      long ePtr = elementAddress(ptr);
+      int eSize = elementSize(ptr);
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+
+      if (eSize == elSize && Utils.compareTo(elPtr, elSize, ePtr, eSize) == 0) {
+        lastPtr = ptr;
+      }
+      ptr += bSize + bSizeSize;
+    }
+    if (lastPtr != 0) {
+      long ePtr = elementAddress(lastPtr);
+      int bSize = elementBlockSize(lastPtr);
+      int bSizeSize = Utils.sizeUVInt(bSize);  
+      if (isExternalAllocation(lastPtr)) {
+        UnsafeAccess.free(ePtr);
+      }
+      UnsafeAccess.copy(lastPtr + bSize + bSizeSize, lastPtr, max - lastPtr - bSize - bSizeSize);
+      incrementDataSize(-bSize - bSizeSize);
+      incrementNumberOfElements(-1);
+      return 1;
+    }
+    return 0;  
+  }
+  
+  /**
+   * Removes element by index
+   * @param index index to remove
+   * @return number of removed (0 or 1)
+   */
+  public int removeByIndex(int index) {
+    int num = getNumberOfElements();
+    if (index < 0 || index >= num) {
+      return 0;
+    }
+    int count = 0;
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    int dataSize = getDataSize();
+    long max = ptr + dataSize;
+    while (count++ < index) {
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+      ptr += bSize + bSizeSize;
+    }
+    
+    int bSize = elementBlockSize(ptr);
+    int bSizeSize = Utils.sizeUVInt(bSize);
+    UnsafeAccess.copy( ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
+    incrementDataSize(-bSize - bSizeSize);
+    incrementNumberOfElements(-1);
+    return 1;
+  }
+  
+  /**
+   * Gets element by index
+   * @param index index to remove
+   * @return total serialized size of the element
+   */
+  public int getByIndex(int index, long buffer, int bufferSize) {
+    int num = getNumberOfElements();
+    if (index < 0 || index >= num) {
+      return 0;
+    }
+    int count = 0;
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    while (count++ < index) {
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+      ptr += bSize + bSizeSize;
+    }
+    
+    int bSize = elementBlockSize(ptr);
+    int bSizeSize = Utils.sizeUVInt(bSize);
+    if (bSize + bSizeSize > bufferSize) {
+      return bSize + bSizeSize;
+    }
+    UnsafeAccess.copy( ptr, buffer, bSize + bSizeSize);
+    return bSize + bSizeSize;
   }
   
 }
