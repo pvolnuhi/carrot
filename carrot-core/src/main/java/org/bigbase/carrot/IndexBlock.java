@@ -929,7 +929,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     while(count++ < numDataBlocks) {
       DataBlock b = block.get();
       b.set(this,  ptr - dataPtr);
-      System.out.println(count +" dataSize=" + b.getDataInBlockSize() + " num="+ b.getNumberOfRecords());;
+      b.dumpData();
       ptr += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(ptr);
       
     }
@@ -1131,6 +1131,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
           break;
         }
         deleted += del;
+        if (b.isFirstBlock()) {
+          continue;
+        }
         if (b.isEmpty()) {
           long indexPtr = b.getIndexPtr();
           long keyPtr = keyAddress(indexPtr);
@@ -1163,12 +1166,14 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	}
 	
 	private void processDeletes(List<Key> toDelete) {
+	  if (toDelete == null) return;
 	  for(int i = 0; i < toDelete.size(); i++) {
 	    deleteBlockStartWith(toDelete.get(i));
 	  }
   }
 
   private void processUpdates(List<Long> toUpdate) {
+    if (toUpdate == null) return;
     // During bulk first key updates we can not split index block
     // index block size will be increased
     // We iterate from the end to preserve yet not processed offsets
@@ -2269,7 +2274,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
    * @return record offset or NOT_FOUND if not found
    * @throws RetryOperationException
    */
-  public long get(long keyPtr, int keyLength, long version, boolean floor) throws RetryOperationException {
+  public long get(long keyPtr, int keyLength, long version, boolean floor) 
+      throws RetryOperationException {
     if (!floor) {
       return get(keyPtr, keyLength, version);
     }

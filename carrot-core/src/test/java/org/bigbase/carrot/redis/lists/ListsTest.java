@@ -20,7 +20,7 @@ public class ListsTest {
   int keySize = 16;
   long n = 100000;
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   private Key getKey() {
     long ptr = UnsafeAccess.malloc(keySize);

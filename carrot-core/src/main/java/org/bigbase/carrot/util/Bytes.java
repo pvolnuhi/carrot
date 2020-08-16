@@ -1967,6 +1967,12 @@ public class Bytes  {
     return toHex(b, 0, b.length);
   }
 
+  public static String toHex(long ptr, int size) {
+    byte[] bytes = new byte[size];
+    UnsafeAccess.copy(ptr, bytes, 0, size);
+    return toHex(bytes);
+  }
+  
   private static int hexCharToNibble(char ch) {
     if (ch <= '9' && ch >= '0') {
       return ch - '0';

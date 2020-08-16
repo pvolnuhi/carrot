@@ -29,7 +29,11 @@ public final class UnsafeAccess {
       if (!UnsafeAccess.debug) return;
       allocEvents.incrementAndGet();
       allocated.addAndGet(alloced);
-      allocMap.add(new Range(address, (int)alloced));
+      allocMap.delete(address);
+      Range r = allocMap.add(new Range(address, (int)alloced));
+      if (r != null) {
+        System.out.println("Released ["+ r.start +"," + r.size);
+      }
     }
     
     public void freeEvent(long address) {
@@ -800,7 +804,13 @@ public final class UnsafeAccess {
    */
   
   public static long realloc(long ptr, long newSize) {
-    return theUnsafe.reallocateMemory(ptr, newSize);
+    long pptr = theUnsafe.reallocateMemory(ptr, newSize);
+    mallocStats.allocEvent(pptr, newSize);
+    if(pptr != ptr) {
+      mallocStats.freeEvent(ptr);
+    }
+    return pptr;
+
   }
 
   /**
@@ -810,6 +820,11 @@ public final class UnsafeAccess {
   public static long reallocZeroed(long ptr, long oldSize, long newSize) {
     long addr = theUnsafe.reallocateMemory(ptr, newSize);
     theUnsafe.setMemory(addr + oldSize, newSize - oldSize, (byte) 0);
+    mallocStats.allocEvent(addr, newSize);
+    if (addr != ptr) {
+      mallocStats.freeEvent(ptr);
+    }
+
     return addr;
   }
 

@@ -239,6 +239,13 @@ public final class DataBlock  {
     LOG.info("Number del/upd =" + getNumberOfDeletedAndUpdatedRecords());
     LOG.info("First key      =" + Bytes.toHex(getFirstKey()));
   }
+  
+  public void dumpData() {
+    LOG.info("====================================");
+    LOG.info("Block size     =" + getBlockSize());
+    LOG.info("Data size      =" + getDataInBlockSize());
+    LOG.info("Number k/v's   =" + getNumberOfRecords());
+  }
   /**
    * Create new block with a given size (memory allocation)
    * @param size of a block
@@ -681,7 +688,7 @@ public final class DataBlock  {
     int dataSize = getDataInBlockSize();
     int blockSize = getBlockSize();
     int nextSize = getMinSizeGreaterThan(BigSortedMap.maxBlockSize, dataSize);
-    if (nextSize < 0 || nextSize < dataSize) {
+    if (nextSize < 0 || nextSize < dataSize || nextSize == blockSize) {
       return false;
     }
     long newPtr = UnsafeAccess.malloc(nextSize);
@@ -1588,7 +1595,9 @@ public final class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
         incrDataSize((short) toMove);
-
+        // TODO: this optimization is for use cases
+        // when existing key is overwritten with a smaller value
+        shrink();
       }
       return true;
     } finally {
@@ -1949,9 +1958,9 @@ public final class DataBlock  {
       } else if (res == 0) {
         // check versions
         long ver = getRecordSeqId(ptr);
-        if (ver > version) {
+        if (ver >= version) {
           return ptr;
-        } else if (ver <= version) {
+        } else if (ver < version) {
           return prevPtr;
         } else if (version > txId) {
           return NOT_FOUND;
@@ -1962,7 +1971,7 @@ public final class DataBlock  {
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
     // after the last record
-    return NOT_FOUND;
+    return prevPtr;
   }
 
   
@@ -3095,7 +3104,6 @@ public final class DataBlock  {
    * @throws RetryOperationException
    */
   final DataBlock split(boolean forceCompact) throws RetryOperationException {
-
     try {
       writeLock();
       boolean firstBlock = isFirstBlock();
@@ -3142,7 +3150,10 @@ public final class DataBlock  {
       right.threadSafe = false;
       UnsafeAccess.copy(dataPtr + off, right.dataPtr, right.dataInBlockSize);
       // shrink current
+      int blockSize = getBlockSize();
       shrink();
+      //*DEBUG*/ System.out.println("b: "+ blockSize+" a: "+ getBlockSize()+
+      //  " "+getDataInBlockSize()+" r: "+ rightBlockSize+" "+ right.getDataInBlockSize());
       return right;
     } finally {
       writeUnlock();

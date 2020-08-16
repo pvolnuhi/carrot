@@ -8,6 +8,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -67,6 +68,52 @@ public class BigSortedMap {
    * Keeps ordered list of active snapshots (future Tx)
    */
   static private ConcurrentSkipListMap<Long, Long> activeSnapshots = new ConcurrentSkipListMap<>();
+  
+  /*
+   * We need this buffer to keep keys during execute update
+   */
+  static ThreadLocal<Long> keyBuffer1 = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(256);
+    }
+  };
+  
+  static ThreadLocal<Integer> keyBufferSize1 = new ThreadLocal<Integer>() {
+    @Override
+    protected Integer initialValue() {
+      return 256;
+    }    
+  };
+  
+  static ThreadLocal<Long> keyBuffer2 = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(256);
+    }
+  };
+  
+  static ThreadLocal<Integer> keyBufferSize2 = new ThreadLocal<Integer>() {
+    @Override
+    protected Integer initialValue() {
+      return 256;
+    }    
+  };
+  
+  public static void memoryStats() {
+    System.out.println("            Total : " + getTotalAllocatedMemory());
+    System.out.println(" Data Blocks Size : " + getTotalBlockDataSize());
+    System.out.println("Index Blocks Size : " + getTotalIndexSize());
+    System.out.println("        Data Size : " + getTotalDataSize());
+
+  }
+  
+  static void checkKeyBuffer(ThreadLocal<Long> key, ThreadLocal<Integer> size, int required) {
+    if (required <= size.get()) return;
+    long ptr = UnsafeAccess.realloc(key.get(), required);
+    key.set(ptr);
+    size.set(required);
+  }
   
   /**
    * To support Tx and snapshots
@@ -213,6 +260,7 @@ public class BigSortedMap {
     long totalRows = 0;
     for(IndexBlock b: map.keySet()) {
       totalRows += b.getNumberOfDataBlock();
+      b.dumpIndexBlockExt();
     }
     System.out.println("Total blocks="+ (totalRows) + " index blocks=" + map.size());
   }
@@ -407,6 +455,8 @@ public class BigSortedMap {
           // TODO
           return false;
         }
+        boolean firstBlock = b.isFirstIndexBlock();
+
         lock(b); // to prevent locking from another thread
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
@@ -414,18 +464,17 @@ public class BigSortedMap {
           if (b != bbb) {
             continue;
           }
-        }        
+        } 
+        
+        // When map is empty, recordAddress is always 0
         long recordAddress = lowerKey == false? 
             b.get(op.getKeyAddress(), op.getKeySize(), version, op.isFloorKey()):
               b.lastRecordAddress();
-        if (recordAddress < 0 && op.isFloorKey()) {
-          if (lowerKey) {
-            return false;
-          } else {
-            lowerKey = true;
-            continue;
-          }
+        if (recordAddress < 0 && op.isFloorKey() && lowerKey == false && !firstBlock) {
+          lowerKey = true;
+          continue;
         }
+        
         op.setFoundRecordAddress(recordAddress);
         // Execute operation
         boolean result = op.execute();
@@ -445,6 +494,16 @@ public class BigSortedMap {
         int valueLength = op.valueSizes()[0];
         boolean updateType = op.updateTypes()[0];
         boolean reuseValue = op.reuseValues()[0];
+        
+        checkKeyBuffer(keyBuffer1, keyBufferSize1, keyLength);
+        UnsafeAccess.copy(keyPtr, keyBuffer1.get(), keyLength);
+        keyPtr = keyBuffer1.get();
+        
+        if (updatesCount > 1) {
+          checkKeyBuffer(keyBuffer2, keyBufferSize2, op.keySizes()[1]);
+          UnsafeAccess.copy(op.keys()[1], keyBuffer2.get(), op.keySizes()[1]);
+        }
+ 
         IndexBlock bb = null;
         boolean isBB = false;
 
@@ -461,6 +520,7 @@ public class BigSortedMap {
           }
           
         } else { // PUT
+          //*DEBUG*/ System.out.println("PUT KEY="+ Bytes.toHex(keyPtr, keyLength));
           result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
           if (!result && getTotalAllocatedMemory() < maxMemory) {
             bb = b.split();
@@ -497,13 +557,15 @@ public class BigSortedMap {
         // second key is larger than first one and if first was inserted into new split block
         // so the second one goes into it as well.
         IndexBlock block = isBB? bb: b;
-        keyPtr = op.keys()[1];
+        
+        keyPtr = keyBuffer2.get();//op.keys()[1];
         keyLength     = op.keySizes()[1];
         valuePtr = op.values()[1];
         valueLength = op.valueSizes()[1];
         updateType = op.updateTypes()[1];
         reuseValue = op.reuseValues()[1];
         result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
+        //*DEBUG*/ System.out.println("2nd PUT KEY="+ Bytes.toHex(keyPtr, keyLength));
         if (!result) {
           // We do not check allocated memory limit b/c it can break
           // the transaction
@@ -680,10 +742,11 @@ public class BigSortedMap {
     while (true) {
       try {
         b = firstBlock? map.floorKey(kvBlock): map.higherKey(b);
-        lock(b); // to prevent
         if (b == null) {
           return deleted;
         }
+        lock(b); // to prevent
+
         if (b.hasRecentUnsafeModification()) {
           IndexBlock bbb = firstBlock? map.floorKey(kvBlock): map.higherKey(b);
           if (b != bbb) {

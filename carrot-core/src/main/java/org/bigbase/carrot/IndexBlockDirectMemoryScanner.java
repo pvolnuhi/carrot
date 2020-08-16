@@ -145,6 +145,9 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     } catch (RetryOperationException e) {
       b.readUnlock();
       throw e;
+    } catch (RuntimeException ee) {
+      b.readUnlock();
+      return null;
     }
   }
   /**

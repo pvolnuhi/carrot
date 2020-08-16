@@ -8,6 +8,7 @@ import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 
 /**
  * Lists: collections of string elements sorted according to the order of insertion. 
@@ -114,11 +115,12 @@ public class Lists {
     
    
   public static int buildKey( long keyPtr, int keySize) {
-    checkKeyArena(keySize  + Utils.SIZEOF_BYTE);
+    checkKeyArena(keySize  + Utils.SIZEOF_BYTE + KEY_SIZE);
     long arena = keyArena.get();
     int kSize = + keySize + Utils.SIZEOF_BYTE;
     UnsafeAccess.putByte(arena, (byte) DataType.LIST.ordinal());
-    UnsafeAccess.copy(keyPtr, arena + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE , keySize);
+    UnsafeAccess.copy(keyPtr, arena + Utils.SIZEOF_BYTE + KEY_SIZE, keySize);
     return kSize;
   }
   

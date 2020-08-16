@@ -356,6 +356,7 @@ public class Sets {
       while (scanner.hasNext()) {
         long valuePtr = scanner.valueAddress();
         total += numElementsInValue(valuePtr);
+        scanner.next();
       }
       scanner.close();
     } catch (IOException e) {
@@ -996,7 +997,7 @@ public class Sets {
     while(off < valueSize) {
       int eSize = Utils.readUVInt(valuePtr + off);
       int skip = Utils.sizeUVInt(eSize);
-      if (Utils.compareTo(elementPtr, elementSize, valuePtr + off, eSize) == 0) {
+      if (Utils.compareTo(elementPtr, elementSize, valuePtr + off + skip, eSize) == 0) {
         return valuePtr + off;
       }
       off+= skip + eSize;
@@ -1058,9 +1059,9 @@ public class Sets {
       off+= eSizeSize + eSize;
     }
     if (prevOff - NUM_ELEM_SIZE > valueSize - off) {
-      return prevOff;
+      return valuePtr + prevOff;
     } else {
-      return off;
+      return valuePtr + off;
     }
   }
   

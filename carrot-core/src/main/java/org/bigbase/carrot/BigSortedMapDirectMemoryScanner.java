@@ -133,9 +133,10 @@ public class BigSortedMapDirectMemoryScanner implements BidirectionalScanner{
           indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
             this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId, indexScanner, reverse);
         }
-        
-        blockScanner = reverse? indexScanner.previousBlockScanner(): indexScanner.nextBlockScanner(); 
-        updateNextFirstKey();
+        if (indexScanner != null) {
+          blockScanner = reverse? indexScanner.previousBlockScanner(): indexScanner.nextBlockScanner(); 
+          updateNextFirstKey();
+        }
         break;
         //TODO null
       } catch(RetryOperationException e) {

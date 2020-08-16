@@ -17,6 +17,7 @@ import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.MutationOptions;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -145,44 +146,55 @@ public class SetAdd extends Operation{
     }
     return kSize;
   }
-  
+  public static int SPLITS = 0;
   @Override
   public boolean execute() {
     
     // TODO: mutation options
     // TODO: inserted, updated
+    long elementPtr = elementAddressFromKey(keyAddress);
+    int elementSize = elementSizeFromKey(keyAddress, keySize);
     if (foundRecordAddress <=0) {
-      return false;
+      // This looks like an empty map, so insert first key
+      // and return
+      // Set does not exist yet
+      // Insert new set KV
+      insertFirstKVandElement(elementPtr, elementSize);
+      return true;
     }
     // check prefix
     int setKeySize = keySizeWithPrefix(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
+    
     // Prefix keys must be equals if set exists, otherwise insert new set KV
     if ((foundKeySize <= setKeySize) || 
         Utils.compareTo(keyAddress, setKeySize , foundKeyAddress, 
       setKeySize) != 0) {
       // Set does not exist yet
       // Insert new set KV
-      insertNewKVandElement(ZERO, 1);
+      insertFirstKVandElement(elementPtr, elementSize);
       return true;
     }
     // Set exists
-    long elementPtr = elementAddressFromKey(keyAddress);
-    int elementSize = elementSizeFromKey(keyAddress, keySize);
+
     // First two bytes are number of elements in a value
     long addr = Sets.insertSearch(foundRecordAddress, elementPtr, elementSize);
     // check if the same element
-    if (Sets.compareElements(addr, elementPtr, elementSize) == 0) {
+    int valueSize = DataBlock.valueLength(foundRecordAddress);
+    long valueAddress = DataBlock.valueAddress(foundRecordAddress);
+    boolean append = addr == (valueAddress + valueSize);
+    ///*DEBUG*/System.out.println("Found KEY "+ foundKeyAddress+" value size="+ valueSize+ " key="+
+    //Bytes.toHex(foundKeyAddress, foundKeySize) + " append=" + append);
+    
+    if (!append && Sets.compareElements(addr, elementPtr, elementSize) == 0) {
       // Can not insert, because it is already there
       return false;
     }
     // found
     int elemSizeSize = Utils.sizeUVInt(elementSize);
     int toAdd = elemSizeSize + elementSize;
-    long valueAddress = DataBlock.valueAddress(foundRecordAddress);
 
-    int valueSize = DataBlock.valueLength(foundRecordAddress);
     int newValueSize = valueSize + toAdd;
     
     boolean needSplit = DataBlock.mustStoreExternally(foundKeySize, newValueSize);
@@ -205,7 +217,10 @@ public class SetAdd extends Operation{
       return true;
     } else {
       // Do split
+      //*DEBUG*/ System.out.println("\nSPLIT\n");
+      SPLITS++;
       Sets.checkValueArena(newValueSize + NUM_ELEM_SIZE);
+      // Sets.valueArena is used
       insertElement(valueAddress, valueSize, addr, elementPtr, elementSize);
       // calculate new key size
       // This is value address for update #1
@@ -234,8 +249,8 @@ public class SetAdd extends Operation{
       
       // Prepare updates
       this.updatesCount = 2;
-      this.keys[0] = keyAddress;
-      this.keySizes[0] = keySize;
+      this.keys[0] = foundKeyAddress;//keyAddress;
+      this.keySizes[0] = foundKeySize;//keySize;
       this.values[0] = vPtr;
       this.valueSizes[0] = leftValueSize;
       
@@ -243,6 +258,8 @@ public class SetAdd extends Operation{
       this.keySizes[1] = totalKeySize;
       this.values[1] = splitPos;
       this.valueSizes[1] = rightValueSize;
+     //*DEBUG*/ System.out.println("\nSPLIT created "+ Bytes.toHex(foundKeyAddress, foundKeySize) +
+     //   " "+ Bytes.toHex(kPtr, totalKeySize)+"\n");
       return true;
     }
   }
@@ -267,11 +284,42 @@ public class SetAdd extends Operation{
     Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, eSize);
     // Copy element
     UnsafeAccess.copy(ePtr, vPtr + NUM_ELEM_SIZE + eSizeSize, eSize);
+    /*DEBUG*/ System.out.println("New KV =" + Bytes.toHex(kPtr, totalKeySize));
+
+    // set number of updates to 1
+    this.updatesCount = 1;
+    keys[0] = kPtr;
+    keySizes[0] = totalKeySize;
+    values[0] = vPtr;
+    valueSizes[0] = eSize + eSizeSize + NUM_ELEM_SIZE;
+  }
+  
+  /**
+   * Insert first Key-Value with a given element
+   * @param elKeyPtr element address
+   * @param elKeySize element size
+   */
+  private void insertFirstKVandElement(long ePtr, int eSize) {
+    // Get real keySize
+    int kSize = keySize(keyAddress);
+    checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE + 1); 
+    // Build first key for the new set
+    int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, ZERO, 1);
+    long kPtr = keyArena.get();
+    int eSizeSize = Utils.sizeUVInt(eSize);
+    Sets.checkValueArena(eSize + eSizeSize + NUM_ELEM_SIZE);
+    long vPtr = Sets.valueArena.get();
+    setNumElements(vPtr, 1);
+    // Write element length
+    Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, eSize);
+    // Copy element
+    UnsafeAccess.copy(ePtr, vPtr + NUM_ELEM_SIZE + eSizeSize, eSize);
     
     // set number of updates to 1
     this.updatesCount = 1;
     keys[0] = kPtr;
     keySizes[0] = totalKeySize;
+    /*DEBUG*/ System.out.println("First key: "+ Bytes.toHex(kPtr, totalKeySize));
     values[0] = vPtr;
     valueSizes[0] = eSize + eSizeSize + NUM_ELEM_SIZE;
   }
@@ -298,9 +346,9 @@ public class SetAdd extends Operation{
     UnsafeAccess.copy(elementPtr, ptr, elementSize);
     ptr += elementSize;
     // copy rest elements
-    int toAdd = elemSizeSize + elementSize;
+    //int toAdd = elemSizeSize + elementSize;
 
-    UnsafeAccess.copy(addr + toAdd, ptr, valueSize - (addr - valueAddress));
+    UnsafeAccess.copy(addr , ptr, valueSize - (addr - valueAddress));
   }
 
 }
