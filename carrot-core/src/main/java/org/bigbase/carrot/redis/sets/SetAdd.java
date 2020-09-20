@@ -319,7 +319,6 @@ public class SetAdd extends Operation{
     this.updatesCount = 1;
     keys[0] = kPtr;
     keySizes[0] = totalKeySize;
-    /*DEBUG*/ System.out.println("First key: "+ Bytes.toHex(kPtr, totalKeySize));
     values[0] = vPtr;
     valueSizes[0] = eSize + eSizeSize + NUM_ELEM_SIZE;
   }

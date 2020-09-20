@@ -392,6 +392,7 @@ public class Hashes {
         while (scanner.hasNext()) {
           long valuePtr = scanner.valueAddress();
           total += numElementsInValue(valuePtr);
+          scanner.next();
         }
         scanner.close();
       } catch (IOException e) {
@@ -1318,9 +1319,9 @@ public class Hashes {
       off+= fSizeSize + fSize + vSize + vSizeSize;
     }
     if (prevOff - NUM_ELEM_SIZE > valueSize - off) {
-      return prevOff;
+      return valuePtr + prevOff;
     } else {
-      return off;
+      return valuePtr + off;
     }
   }
   

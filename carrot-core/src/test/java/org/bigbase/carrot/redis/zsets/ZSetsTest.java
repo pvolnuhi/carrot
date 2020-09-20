@@ -1,4 +1,4 @@
-package org.bigbase.carrot.redis.sets;
+package org.bigbase.carrot.redis.zsets;
 
 import static org.junit.Assert.assertEquals;
 
@@ -8,12 +8,14 @@ import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
+import org.bigbase.carrot.redis.sets.SetAdd;
+import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-public class SetsTest {
+public class ZSetsTest {
   BigSortedMap map;
   Key key;
   long buffer;

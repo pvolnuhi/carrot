@@ -5,7 +5,7 @@ import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
-import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.BiScanner;
 import org.bigbase.carrot.util.Utils;
 
 /**
@@ -13,7 +13,7 @@ import org.bigbase.carrot.util.Utils;
  * @author Vladimir Rodionov
  *
  */
-public class SetScanner implements BidirectionalScanner{
+public class SetScanner extends BiScanner{
   
   /*
    * Base Map scanner

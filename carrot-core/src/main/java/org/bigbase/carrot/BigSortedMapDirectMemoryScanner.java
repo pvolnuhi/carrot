@@ -3,7 +3,7 @@ package org.bigbase.carrot;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.BiScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -14,7 +14,7 @@ import org.bigbase.carrot.util.Utils;
  * @author jenium65
  *
  */
-public class BigSortedMapDirectMemoryScanner implements BidirectionalScanner{
+public class BigSortedMapDirectMemoryScanner extends BiScanner{
 
   private BigSortedMap map;
   private long startRowPtr;

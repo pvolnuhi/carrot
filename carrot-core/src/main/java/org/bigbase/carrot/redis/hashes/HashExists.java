@@ -52,7 +52,7 @@ public class HashExists extends Operation {
     // Set no updates
     updatesCount = 0;
     // First two bytes are number of elements in a value
-    return Sets.exactSearch(foundRecordAddress, fieldPtr, fieldSize) > 0;
+    return Hashes.exactSearch(foundRecordAddress, fieldPtr, fieldSize) > 0;
   }
 
 }

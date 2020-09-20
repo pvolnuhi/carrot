@@ -26,7 +26,7 @@ import org.bigbase.carrot.util.Utils;
  */
 public class HashSet extends Operation{
   
-  static long ZERO = UnsafeAccess.malloc(0);  
+  static long ZERO = UnsafeAccess.malloc(1);  
   static {
     UnsafeAccess.putByte(ZERO,  (byte)0);
   }
@@ -118,31 +118,32 @@ public class HashSet extends Operation{
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress <=0) {
+    if (foundRecordAddress <=0 && opts == MutationOptions.XX) {
       return false;
     }
     // check prefix
     int setKeySize = keySizeWithPrefix(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
+    long fieldPtr = elementAddressFromKey(keyAddress);
+    int fieldSize = elementSizeFromKey(keyAddress, keySize);
     // Prefix keys must be equals if set exists, otherwise insert new set KV
     if ((foundKeySize <= setKeySize) || 
         Utils.compareTo(keyAddress, setKeySize, foundKeyAddress, 
       setKeySize) != 0) {
       // Set does not exist yet
       // Insert new set KV
-      insertNewKVandFieldValue(ZERO, 1);
+      insertFirstKVandFieldValue(fieldPtr, fieldSize);
       return true;
     }
     // Set exists
-    long fieldPtr = elementAddressFromKey(keyAddress);
-    int fieldSize = elementSizeFromKey(keyAddress, keySize);
+ 
     // First two bytes are number of elements in a value
     long addr = Hashes.insertSearch(foundRecordAddress, fieldPtr, fieldSize);
     // check if the same element
     boolean exists = Hashes.compareFields(addr, fieldPtr, fieldSize) == 0;
     if ( exists && opts == MutationOptions.NX || !exists && opts == MutationOptions.XX) {
-      // Can not insert, because of mutaion options
+      // Can not insert, because of mutation options
       return false;
     }
     // found
@@ -203,8 +204,8 @@ public class HashSet extends Operation{
       
       // Prepare updates
       this.updatesCount = 2;
-      this.keys[0] = keyAddress;
-      this.keySizes[0] = keySize;
+      this.keys[0] = foundKeyAddress;
+      this.keySizes[0] = foundKeySize;
       this.values[0] = vPtr;
       this.valueSizes[0] = leftValueSize;
       
@@ -227,6 +228,42 @@ public class HashSet extends Operation{
     checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldSize); 
     // Build first key for the new set
     int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, fieldPtr, fieldSize);
+    long kPtr = keyArena.get();
+    int fSizeSize = Utils.sizeUVInt(fieldSize);
+    int vSizeSize = Utils.sizeUVInt(fieldValueSize);
+    Hashes.checkValueArena(fieldSize + fSizeSize + fieldValueSize + vSizeSize + NUM_ELEM_SIZE);
+    long vPtr = Hashes.valueArena.get();
+    setNumElements(vPtr, 1);
+    // Write field length
+    Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, fieldSize);
+    // Write value length
+    Utils.writeUVInt(vPtr + NUM_ELEM_SIZE + fSizeSize, fieldValueSize);
+    // Copy field
+    UnsafeAccess.copy(fieldPtr, vPtr + NUM_ELEM_SIZE + fSizeSize + vSizeSize, fieldSize);
+    //Copy value
+    UnsafeAccess.copy(fieldValueAddress, vPtr + NUM_ELEM_SIZE + fSizeSize + 
+      vSizeSize + fieldSize, fieldValueSize);
+    
+    
+    // set number of updates to 1
+    this.updatesCount = 1;
+    keys[0] = kPtr;
+    keySizes[0] = totalKeySize;
+    values[0] = vPtr;
+    valueSizes[0] = fieldSize + fSizeSize + fieldValueSize + vSizeSize + NUM_ELEM_SIZE;
+  }
+  
+  /**
+   * Insert new K-V with a given field-value pair
+   * @param fieldPtr field address
+   * @param fieldSize field size
+   */
+  private void insertFirstKVandFieldValue(long fieldPtr, int fieldSize) {
+    // Get real keySize
+    int kSize = keySize(keyAddress);
+    checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE + 1 /*ZERO*/); 
+    // Build first key for the new set
+    int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, ZERO, 1);
     long kPtr = keyArena.get();
     int fSizeSize = Utils.sizeUVInt(fieldSize);
     int vSizeSize = Utils.sizeUVInt(fieldValueSize);
@@ -279,9 +316,8 @@ public class HashSet extends Operation{
     UnsafeAccess.copy(fieldValueAddress, ptr, fieldValueSize);
     ptr += fieldValueSize;
     // copy rest elements
-    int toAdd = fSizeSize + fieldSize + vSizeSize + fieldValueSize;
 
-    UnsafeAccess.copy(addr + toAdd, ptr, valueSize - (addr - valueAddress));
+    UnsafeAccess.copy(addr, ptr, valueSize - (addr - valueAddress));
   }
   
 
