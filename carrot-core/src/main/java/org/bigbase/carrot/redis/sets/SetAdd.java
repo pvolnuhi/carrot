@@ -147,6 +147,7 @@ public class SetAdd extends Operation{
     return kSize;
   }
   public static int SPLITS = 0;
+  
   @Override
   public boolean execute() {
     
@@ -189,8 +190,10 @@ public class SetAdd extends Operation{
     
     if (!append && Sets.compareElements(addr, elementPtr, elementSize) == 0) {
       // Can not insert, because it is already there
+      updated++;
       return false;
     }
+    inserted++;
     // found
     int elemSizeSize = Utils.sizeUVInt(elementSize);
     int toAdd = elemSizeSize + elementSize;
@@ -314,7 +317,7 @@ public class SetAdd extends Operation{
     Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, eSize);
     // Copy element
     UnsafeAccess.copy(ePtr, vPtr + NUM_ELEM_SIZE + eSizeSize, eSize);
-    
+    inserted++;
     // set number of updates to 1
     this.updatesCount = 1;
     keys[0] = kPtr;

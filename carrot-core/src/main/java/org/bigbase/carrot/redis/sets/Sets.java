@@ -897,7 +897,6 @@ public class Sets {
    * @return set scanner
    */
   public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
-    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
     return getSetScanner(map, keyPtr, keySize, safe, false);
   }
 
@@ -917,6 +916,7 @@ public class Sets {
     UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     //TODO do not use thread local in scanners - check it
+    //TODO: FIXME when no data it should return null
     BigSortedMapDirectMemoryScanner scanner = safe? 
         map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse):
           map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse);

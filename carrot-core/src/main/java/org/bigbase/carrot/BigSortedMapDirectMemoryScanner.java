@@ -295,8 +295,6 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
     if (this.blockScanner != null) {
       return true;
     }
-    //*DEBUG*/ System.out.println("PREVIOUS INDEX");
-
     ConcurrentSkipListMap<IndexBlock, IndexBlock> cmap = map.getMap();
     if (this.indexScanner != null) {
       this.indexScanner.close();

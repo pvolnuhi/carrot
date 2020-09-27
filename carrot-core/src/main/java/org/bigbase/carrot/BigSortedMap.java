@@ -958,20 +958,23 @@ public class BigSortedMap {
         lock(b);
 
         long ptr = b.get(keyPtr, keyLength,  version);
-        if (ptr < 0 && b.hasRecentUnsafeModification()) {
+        if (b.hasRecentUnsafeModification()) {
           // check one more time with lock
           // - we caught split in flight
           IndexBlock bb = null;
           bb = map.floorKey(kvBlock);
           if (bb != b) {
             continue;
-          } else {
-            // insert new
-            long vPtr = UnsafeAccess.malloc(Utils.SIZEOF_LONG);
-            UnsafeAccess.putLong(vPtr, incr);
-            put(keyPtr, keyLength, vPtr, Utils.SIZEOF_LONG, 0);
-            return incr;
-          }
+          } 
+        }
+        
+        if (ptr < 0) {
+          // insert new
+          long vPtr = UnsafeAccess.mallocZeroed(Utils.SIZEOF_LONG);
+          UnsafeAccess.putLong(vPtr, incr);
+          put(keyPtr, keyLength, vPtr, Utils.SIZEOF_LONG, 0);
+          UnsafeAccess.free(vPtr);
+          return incr;
         }
         long vPtr = DataBlock.valueAddress(ptr);
         int vSize = DataBlock.valueLength(ptr);
@@ -979,7 +982,7 @@ public class BigSortedMap {
           //TODO
           return Long.MIN_VALUE;
         }
-        long value = UnsafeAccess.toLong(ptr);
+        long value = UnsafeAccess.toLong(vPtr);
         UnsafeAccess.putLong(vPtr, value + incr);
         return value + incr;
       } catch (RetryOperationException e) {

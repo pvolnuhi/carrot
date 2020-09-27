@@ -133,27 +133,32 @@ public class SetScanner extends BiScanner{
     }
   }
   
-  private void searchFirstMember() {
-    if (this.startMemberPtr == 0) {
-      this.offset = NUM_ELEM_SIZE;
-    } else {
+  private boolean searchFirstMember() {
+    if (this.valueAddress <= 0) return false;
+
+    this.offset = NUM_ELEM_SIZE;
+    this.memberSize = Utils.readUVInt(valueAddress + offset);
+    this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
+    if (this.startMemberPtr != 0) {
       try {
-        while(hasNext()) {
+        while (hasNext()) {
           int size = Utils.readUVInt(valueAddress + offset);
           long ptr = valueAddress + offset + Utils.sizeUVInt(size);
           int res = Utils.compareTo(ptr, size, this.startMemberPtr, this.startMemberSize);
           if (res >= 0) {
-            return;
+            return true;
           }
           next();
         }
       } catch (IOException e) {
         // should never be thrown
       }
-    }  
+    }
+    return false;
   }
   
   private boolean searchLastMember() {
+    if (this.valueAddress <= 0) return false;
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     // check if it it is not empty
@@ -195,6 +200,7 @@ public class SetScanner extends BiScanner{
    * @throws IOException
    */
   public boolean hasNext() throws IOException {
+    if (this.valueAddress <=0) return false;
     if (reverse) {
       throw new UnsupportedOperationException("hasNext");
     }
@@ -210,7 +216,17 @@ public class SetScanner extends BiScanner{
         }
       }
     } else {
-      return false;
+      if (mapScanner.hasNext()) {
+        mapScanner.next();
+        this.valueAddress = mapScanner.valueAddress();
+        this.valueSize = mapScanner.valueSize();
+        this.offset = NUM_ELEM_SIZE;
+        this.memberSize = Utils.readUVInt(valueAddress + offset);
+        this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
+        return true;
+      } else {
+        return false;
+      }
     }
   }
   
@@ -238,14 +254,19 @@ public class SetScanner extends BiScanner{
     // TODO next K-V can not have 0 elements - it must be deleted
     // but first element can, so we has to check what next() call return
     // the best way is to use do
+    
+    // TODO: fix previous, hashScanner.next previous
+    
+    mapScanner.next();
+
     while(mapScanner.hasNext()) {
-      mapScanner.next();
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
       // check if it it is not empty
       this.offset = NUM_ELEM_SIZE;
       if (valueSize <= NUM_ELEM_SIZE) {
         // empty set in K-V? Must be deleted
+        mapScanner.next();
         continue;
       } 
       
@@ -266,6 +287,7 @@ public class SetScanner extends BiScanner{
         pos++;
         return true;
       }
+      
     }
     this.offset = 0;
     return false;
@@ -380,6 +402,7 @@ public class SetScanner extends BiScanner{
 
   @Override
   public boolean hasPrevious() throws IOException {
+    if (this.valueAddress <=0) return false;
     if (!reverse) {
       throw new UnsupportedOperationException("hasPrevious");
     } 

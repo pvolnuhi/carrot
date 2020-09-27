@@ -249,7 +249,8 @@ public class ZSets {
      
   static int buildKeyForHash( long keyPtr, int keySize, long memberPtr, 
       int memberSize) {
-    return Hashes.buildKey(keyPtr, keySize, memberPtr, memberSize);
+    checkKeyArena(keySize + KEY_SIZE + memberSize + Utils.SIZEOF_BYTE);
+    return Hashes.buildKey(keyPtr, keySize, memberPtr, memberSize, keyArena.get());
   }
   
   /**
@@ -344,11 +345,9 @@ public class ZSets {
       long count = ZCARD(map, keyPtr, keySize);
       RedisConf conf = RedisConf.getInstance();
       int maxCompactSize = conf.getMaximumZSetCompactSize();
-      boolean compactMode = count < maxCompactSize;
-      
+      boolean compactMode = count < maxCompactSize;      
       // Step one, find and remove existing members
       removeFromSet(map, keyPtr, keySize, memberPtrs, memberSizes, compactMode);
-      
       for (int i = 0; i < toAdd; i++) {
         int kSize = buildKeyForSet(keyPtr, keySize, memberPtrs[i], memberSizes[i], scores[i]);  
         
@@ -373,8 +372,8 @@ public class ZSets {
 
       if (compactMode && (count + inserted) >= maxCompactSize ) {
         // convert to normal representation
-        convertToNormalMode(map, keyPtr, keySize);
-      } else if (count > maxCompactSize) {
+        convertToNormalMode(map, keyPtr, keySize, count + inserted);
+      } else if (count + inserted > maxCompactSize) {
         // Add to Hash
         addToHash(map, keyPtr, keySize, scores, memberPtrs, memberSizes, options);
       } 
@@ -485,7 +484,7 @@ public class ZSets {
    * @param keyPtr sorted set key address
    * @param keySize sorted set key size
    */
-  private static void convertToNormalMode(BigSortedMap map, long keyPtr, int keySize) {
+  private static void convertToNormalMode(BigSortedMap map, long keyPtr, int keySize, long cardinality) {
     // TODO Auto-generated method stub
     Key k = getKey(keyPtr, keySize);
     SetScanner scanner = null;
@@ -495,34 +494,44 @@ public class ZSets {
       if (scanner == null) {
         // TODO - report
         return;
-      }
-      // TODO - object allocations
-      long[] ptrs = new long[1];
-      int[] sizes = new int[1];
-      double[] scores = new double[1];
+      }      
+      
+      long[] ptrs = new long[(int)cardinality];
+      int[] sizes = new int[(int)cardinality];
+      double[] scores = new double[(int)cardinality];
+      int count = 0;
+      
       try {
         while(scanner.hasNext()) {
           long ePtr = scanner.memberAddress();
-          int eSize = scanner.memberSize();
-          
+          int eSize = scanner.memberSize();    
           double score = Utils.lexToDouble(ePtr);
           ePtr += Utils.SIZEOF_DOUBLE;
           eSize -= Utils.SIZEOF_DOUBLE;
-          ptrs[0] = ePtr;
-          sizes[0] = eSize;
-          scores[0] = score;
-          addToHash(map, keyPtr, keySize, scores, ptrs, sizes, MutationOptions.NONE);
+          long ptr = UnsafeAccess.allocAndCopy(ePtr, eSize);
+          ptrs[count] = ptr;
+          sizes[count] = eSize;
+          scores[count] = score;
+          count++;
+          scanner.next();
         }
       } catch (IOException e) {
         // TODO Auto-generated catch block
-      }
-    } finally {
-      if (scanner != null) {
-        try {
-          scanner.close();
-        } catch (IOException e) {
+      } finally {
+        if (scanner != null) {
+          try {
+            scanner.close();
+          } catch (IOException e) {
+          }
         }
       }
+      long total = addToHash(map, keyPtr, keySize, scores, ptrs, sizes, MutationOptions.NONE);
+      /*DEBUG*/ System.out.println("added ="+ total);
+      // Free memory
+      for (long ptr: ptrs) {
+        UnsafeAccess.free(ptr);
+      }
+    } finally {
       KeysLocker.writeUnlock(k);
     }
   }
@@ -1672,7 +1681,8 @@ public class ZSets {
       KeysLocker.writeLock(key);
       long cardinality = ZCARD(map, keyPtr, keySize);
       if (cardinality == 0) return 0;
-      boolean normalMode = RedisConf.getInstance().getMaximumZSetCompactSize() < cardinality;
+      int maxCompactModeSize = RedisConf.getInstance().getMaximumZSetCompactSize();
+      boolean normalMode =  maxCompactModeSize <= cardinality;
       if (normalMode) {
         for (int i = 0; i < memberPtrs.length; i++) {
           long memberPtr = memberPtrs[i];
@@ -1695,7 +1705,11 @@ public class ZSets {
           UnsafeAccess.copy(memberPtr, buffer + Utils.SIZEOF_DOUBLE, memberSize);
           Sets.SREM(map, keyPtr, keySize, buffer, memberSize + Utils.SIZEOF_DOUBLE);
           deleted++;
-
+        }
+        
+        // Convert to compact if necessary
+        if (cardinality - deleted > 0 && (cardinality - deleted) < maxCompactModeSize) {
+          convertToCompactMode(map, keyPtr, keySize);
         }
       } else {
         // Compact mode
@@ -1711,14 +1725,14 @@ public class ZSets {
             if(Utils.compareTo(mPtr + Utils.SIZEOF_DOUBLE, mSize - Utils.SIZEOF_DOUBLE, 
               memberPtrs[i], memberSizes[i]) == 0)
             {
+              scanner.close();
+              scanner = null;
               checkValueArena(mSize);
               long buffer = valueArena.get();
               UnsafeAccess.copy(mPtr, buffer, mSize);
               int res = Sets.SREM(map, keyPtr, keySize, buffer, mSize);
               assert(res == 1);
               deleted++;
-              scanner.close();
-              scanner = null;
               break;
             }
             scanner.next();
@@ -2859,14 +2873,19 @@ public class ZSets {
        // TODO: Reverse search?
        SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
        try {
-        while(scanner.hasNext()) {
+         //int i=0;
+         while(scanner.hasNext()) {
            long ptr = scanner.memberAddress();
            int size = scanner.memberSize();
            // First 8 bytes of a member is double score
-           if (Utils.compareTo(ptr + Utils.SIZEOF_DOUBLE, size - Utils.SIZEOF_DOUBLE, 
-             memberPtr, memberSize) == 0) {
+           int res = Utils.compareTo(ptr + Utils.SIZEOF_DOUBLE, size - Utils.SIZEOF_DOUBLE, 
+             memberPtr, memberSize);
+           if (res == 0) {
              return Utils.lexToDouble(ptr);
            }
+           //*DEBUG*/ System.out.println(i+ "  ptr ="+ ptr+" size="+ size +" res ="+ res);
+           //i++;
+           scanner.next();
         }
       } catch (IOException e) {
       } finally {
@@ -2998,6 +3017,27 @@ public class ZSets {
       }
     }
     return 0;
+  }
+  
+  /**
+   * Delete sorted set 
+   * @param map sorted map storage
+   * @param keyPtr sorted set key address
+   * @param keySize sorted set key size
+   * @return true if success, false (if does not exists)
+   */
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize) {
+    Key key = getKey(keyPtr, keySize);
+    try {
+      KeysLocker.writeLock(key);
+      Sets.DELETE(map, keyPtr, keySize);
+      Hashes.DELETE(map, keyPtr, keySize);
+      int kSize = buildKey(keyPtr, keySize);
+      boolean b = map.delete(keyArena.get(), kSize);
+      return b;
+    } finally {
+      KeysLocker.writeUnlock(key);
+    }
   }
   
   
