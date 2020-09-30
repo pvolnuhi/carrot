@@ -21,21 +21,25 @@ public class StringSet extends Operation {
   private boolean keepTTL = false;
   private MutationOptions opts;
   
+  public StringSet() {
+    setFloorKey(true);
+  }
+  
   @Override
   public boolean execute() {
-    if (foundRecordAddress < 0) {
-      return false;
-    }
-    long kPtr = DataBlock.keyAddress(foundRecordAddress);
-    int kSize = DataBlock.keyLength(foundRecordAddress);
-    // compare keys
-    boolean keyExists = Utils.compareTo(keyAddress, keySize, kPtr, kSize) ==0;
-    if ((keyExists && opts == MutationOptions.NX) || 
+
+    if (foundRecordAddress > 0) {
+      long kPtr = DataBlock.keyAddress(foundRecordAddress);
+      int kSize = DataBlock.keyLength(foundRecordAddress);
+      // compare keys
+      boolean keyExists = Utils.compareTo(keyAddress, keySize, kPtr, kSize) ==0;
+      if ((keyExists && opts == MutationOptions.NX) || 
         (!keyExists &&  opts == MutationOptions.XX)) {
-      return false;
-    }
-    if (keepTTL) {
-      this.expire = DataBlock.getRecordExpire(foundRecordAddress);
+        return false;
+      }
+      if (keyExists && keepTTL) {
+        this.expire = DataBlock.getRecordExpire(foundRecordAddress);
+      }
     }
     // now update
     this.updatesCount = 1;

@@ -861,6 +861,26 @@ public class Strings {
   }
 
   /**
+   * DELETE key
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @return true- success, false - otherwise
+   */
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize) {
+    Key kk = key.get();
+    kk.address = keyPtr;
+    kk.length = keySize;
+    try {
+      KeysLocker.writeLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      return map.delete(keyArena.get(), kSize);
+    } finally {
+      KeysLocker.writeUnlock(kk);
+    }
+  }
+  
+  /**
    * Set key to hold string value if key does not exist. In that case, it is equal 
    * to SET. When key already holds a value, no operation is performed. 
    * SETNX is short for "SET if Not eXists".
