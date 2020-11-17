@@ -8,10 +8,13 @@ public class DataBlockScannerLargeKVsTest extends DataBlockScannerTest{
   protected ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    /*DEBUG*/ System.out.println("fill seed =" + seed);
     int maxSize = 4096;
     boolean result = true;
     while(result == true) {
-      int len = r.nextInt(maxSize) +1;
+      int len = r.nextInt(maxSize) + 2;
       byte[] key = new byte[len];
       r.nextBytes(key);
       result = b.put(key, 0, key.length, key, 0, key.length, 0, 0);

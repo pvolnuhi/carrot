@@ -62,6 +62,9 @@ public class DataBlockScannerTest {
     List<byte[]> keys = fillDataBlock(ib);
     Utils.sort(keys);
     System.out.println("Loaded "+ keys.size()+" kvs");
+    //for (byte[] key: keys) {
+    //  System.out.println(key.length);
+    //}
     DataBlockScanner scanner = DataBlockScanner.getScanner(ib, null, null, Long.MAX_VALUE);
     // Skip first system key
     scanner.last();
@@ -77,6 +80,9 @@ public class DataBlockScannerTest {
     List<byte[]> keys = fillDataBlock(ib);
     Utils.sort(keys);
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    /*DEBUG*/ System.out.println("seed =" + seed);
     int stopRowIndex = r.nextInt(keys.size());
     byte[] stopRow = keys.get(stopRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
@@ -241,11 +247,14 @@ public class DataBlockScannerTest {
   private void verifyScannerReverse(DataBlockScanner scanner, List<byte[]> keys) {
     int count = 0;
     
+    //*DEBUG*/ System.out.println("Verify reverse");
+    
     Collections.reverse(keys);
       do {
         count++;
         byte[] key = keys.get(count-1);
         int keySize = scanner.keySize();
+        //*DEBUG*/ System.out.println(keySize);
         int valSize = scanner.valueSize();
         assertEquals(key.length, keySize);
         assertEquals(key.length, valSize);
@@ -264,7 +273,9 @@ public class DataBlockScannerTest {
   protected ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
-
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    /*DEBUG*/ System.out.println("fill seed =" + seed);
     boolean result = true;
     while(result == true) {
       byte[] key = new byte[32];

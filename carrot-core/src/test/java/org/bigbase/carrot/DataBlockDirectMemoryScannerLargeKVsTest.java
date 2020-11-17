@@ -13,7 +13,7 @@ public class DataBlockDirectMemoryScannerLargeKVsTest extends DataBlockDirectMem
     int maxSize = 2048;
     boolean result = true;
     while(result == true) {
-      int len = r.nextInt(maxSize) +1;
+      int len = r.nextInt(maxSize) +2;
       byte[] key = new byte[len];
       r.nextBytes(key);
       long ptr = UnsafeAccess.malloc(len);

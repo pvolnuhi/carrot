@@ -29,6 +29,7 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
    * 3. K  is in data block , V  is external, reducing V size to 12 bytes and less will guarantee
    *    that there will be no overflow in a data block and new V will be kept in a data block 
    */
+  @Ignore
   @Test
   public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSmallerValueSize - LargeKVs");
@@ -71,6 +72,7 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
    * 2. K & V both external, increasing value size should keep them both external
    * 3. K  is in data block , V  is external, increasing V size is safe 
    */
+  @Ignore
   @Test
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteLargerValueSize- LargeKVs");
@@ -116,7 +118,7 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
     int maxSize = 4096;
     boolean result = true;
     while(result == true) {
-      byte[] key = new byte[r.nextInt(maxSize) +1];
+      byte[] key = new byte[r.nextInt(maxSize) + 2];
       r.nextBytes(key);
       long ptr = UnsafeAccess.malloc(key.length);
       UnsafeAccess.copy(key, 0, ptr, key.length);

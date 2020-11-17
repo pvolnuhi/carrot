@@ -20,8 +20,26 @@ public class IndexBlockTest {
   Logger LOG = LoggerFactory.getLogger(IndexBlockTest.class);
   
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }  
+  
+  
+  @Test
+  public void testAll() throws RetryOperationException, IOException {
+    
+    for (int i=0; i < 1000; i++) {
+      testPutGet();
+      testPutGetDeleteFull();
+      testPutGetDeletePartial();
+      testAutomaticDataBlockMerge();
+      testOverwriteSameValueSize();
+      testOverwriteSmallerValueSize();
+      testOverwriteLargerValueSize();
+    }
+    
+  }
+  
+  @Ignore
   @Test
   public void testPutGet() {
     System.out.println("testPutGet");  
@@ -38,6 +56,7 @@ public class IndexBlockTest {
     }
   }
 
+  @Ignore
   @Test 
   public void testAutomaticDataBlockMerge() {
     System.out.println("testAutomaticDataBlockMerge");  
@@ -58,6 +77,7 @@ public class IndexBlockTest {
     assertTrue(before > after);
   }
   
+  @Ignore
   @Test
   public void testPutGetDeleteFull() {
     System.out.println("testPutGetDeleteFull");  
@@ -109,6 +129,7 @@ public class IndexBlockTest {
     System.out.println("testPutGetDeleteFull OK");
   } 
   
+  @Ignore
   @Test
   public void testPutGetDeletePartial() {
     System.out.println("testPutGetDeletePartial");  
@@ -189,6 +210,7 @@ public class IndexBlockTest {
 
   }
   
+  @Ignore
   @Test
   public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSmallerValueSize");
@@ -209,6 +231,7 @@ public class IndexBlockTest {
 
   }
   
+  @Ignore
   @Test
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteLargerValueSize");
@@ -246,7 +269,7 @@ public class IndexBlockTest {
   protected ArrayList<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
     Random r = new Random();
-    long seed = r.nextLong();
+    long seed = r.nextLong();//-4707203984424782685l;//;
     r.setSeed(seed);
     System.out.println("SEED="+seed);
     int kvSize = 32;
@@ -274,6 +297,7 @@ public class IndexBlockTest {
     DataBlockScanner bs = null;
     int count = 0;
     while ((bs = is.nextBlockScanner()) != null) {
+      //*DEBUG*/ System.out.println("new scanner");
       while (bs.hasNext()) {
         int len = bs.keySize();
         buffer = new byte[len];
@@ -286,6 +310,7 @@ public class IndexBlockTest {
         if (count > 1) {
           // compare
           int res = Utils.compareTo(tmp, 0, tmp.length, buffer, 0, buffer.length);
+          //*DEBUG*/ System.out.println("count="+count + " res=" + res + " len=" + len);
           assertTrue(res < 0);
         }
         tmp = new byte[len];

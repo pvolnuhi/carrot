@@ -56,14 +56,14 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	public static int MAX_BLOCK_SIZE = 4096;
 
 	public final static int DATA_BLOCK_STATIC_PREFIX = 19;
-	public final static int VERSION_SIZE = 8;
+	//public final static int VERSION_SIZE = 8;
 	public final static int TYPE_SIZE = 1;
-	public final static int DATA_BLOCK_STATIC_OVERHEAD = DATA_BLOCK_STATIC_PREFIX + VERSION_SIZE + TYPE_SIZE; // 28
+	public final static int DATA_BLOCK_STATIC_OVERHEAD = DATA_BLOCK_STATIC_PREFIX /*+ VERSION_SIZE*/ + TYPE_SIZE; // 28
 	public final static int INT_SIZE = 4;
 	public final static int ADDRESS_SIZE = 8;
 	
 	/*
-	 * This is heuristic value. Must be configurable. THis threshold defines the maximum posible
+	 * This is heuristic value. Must be configurable. THis threshold defines the maximum possible
 	 * schedule timeout for any working thread in the application. When threads are attached
 	 * to a particular CPU cores - this value can be very low. The lower value is the better
 	 * performance is for put/delete operations.
@@ -212,7 +212,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * type (DELETE = 0, PUT=1)
 	 */
 	byte[] firstKey;
-	long version;
+	//long version;
 	byte type;
   boolean isFirst = false;
   /*
@@ -327,8 +327,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       UnsafeAccess.copy(key, off, address, len);
       address += len;
     }
-    UnsafeAccess.putLong(address, version);
-    address += VERSION_SIZE;
+    //UnsafeAccess.putLong(address, version);
+    //address += VERSION_SIZE;
     UnsafeAccess.putByte(address, (byte) op.ordinal());
 
     return true;
@@ -386,8 +386,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       UnsafeAccess.copy(keyPtr, address, len);
       address += len;
     }
-    UnsafeAccess.putLong(address, version);
-    address += VERSION_SIZE;
+    //UnsafeAccess.putLong(address, version);
+    //address += VERSION_SIZE;
     UnsafeAccess.putByte(address, (byte) op.ordinal());
 
     return true;
@@ -415,14 +415,15 @@ public final class IndexBlock implements Comparable<IndexBlock> {
   }
 	
 	private final long version(long blockAddress) {
-		return UnsafeAccess.toLong(blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH 
-		  + blockKeyLength(blockAddress));
+	  return 0;
+		//return UnsafeAccess.toLong(blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH 
+		//  + blockKeyLength(blockAddress));
 	}
 
 	private final byte type(long blockAddress) {
 		return UnsafeAccess.toByte(
 				blockAddress + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + blockKeyLength(blockAddress) 
-				+ VERSION_SIZE);
+				/*+ VERSION_SIZE*/);
 	}
 
 	private final long keyAddress(long blockAddress) {
@@ -472,7 +473,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		this.blockDataSize = 0;
 		this.compressed = false;
 		this.firstKey = null;
-		this.version = 0;
+		//this.version = 0;
 		this.type = 0;
 		this.isFirst = false;
 		this.threadSafe = false;
@@ -742,16 +743,16 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
       keyLength = ADDRESS_SIZE;
       UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
         (byte) Op.PUT.ordinal());
 		} else {
 		  UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
 		  UnsafeAccess.copy(key, keyOffset, dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
 		  UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-		  UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+		  UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
 				(byte) Op.PUT.ordinal());
 		}
-		this.version = version;
+		//this.version = version;
 		this.type = (byte) Op.PUT.ordinal();
 		this.numDataBlocks++;
 		int required =  DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
@@ -891,8 +892,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
       UnsafeAccess.copy(key, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
     }
-    UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-    UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+    //UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+    UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
         (byte) type.ordinal());
     this.firstKey = null;
     this.blockDataSize += toMove;
@@ -963,8 +964,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		  UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
 		  UnsafeAccess.copy(key, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
 		}
-		UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+		//UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
 				(byte) type.ordinal());
 		return true;
 	}
@@ -986,8 +987,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	    UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
 	    UnsafeAccess.copy(key, keyOffset, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
 	  }
-		UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+		//UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+		UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
 				(byte) type.ordinal());
 		return true;
 	}
@@ -1007,8 +1008,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       UnsafeAccess.putShort(indexPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
       UnsafeAccess.copy(keyPtr, indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
     }
-    UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-    UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+    //UnsafeAccess.putLong(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+    UnsafeAccess.putByte(indexPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
         (byte) type.ordinal());
     return true;
 	}
@@ -1285,17 +1286,17 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       }
       UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, addr);
       keyLength = ADDRESS_SIZE;
-      UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+      //UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
         (byte) Op.PUT.ordinal());
     } else {
       UnsafeAccess.putShort(dataPtr + DATA_BLOCK_STATIC_PREFIX, (short) keyLength);
       UnsafeAccess.copy(keyPtr, dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH, keyLength);
-      UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
-      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength + VERSION_SIZE,
+      //UnsafeAccess.putLong(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength, version);
+      UnsafeAccess.putByte(dataPtr + DATA_BLOCK_STATIC_PREFIX + KEY_SIZE_LENGTH + keyLength /*+ VERSION_SIZE*/,
         (byte) Op.PUT.ordinal());
     }
-    this.version = version;
+//    this.version = version;
     this.type = (byte) Op.PUT.ordinal();
     this.numDataBlocks++;
     int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
@@ -2657,14 +2658,14 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		byte[] firstKey1 = o.getFirstKey();
 		int res = Utils.compareTo(firstKey, 0, firstKey.length, firstKey1, 0, firstKey1.length);
 		if (res == 0) {
-			long ver = o.version;
-			if (version == ver) {
+			//long ver = o.version;
+			//if (version == ver) {
 				return type - o.type;
-			} else if (ver < version) {
-				return -1;
-			} else {
-				return 1;
-			}
+			//} else if (ver < version) {
+			//	return -1;
+			//} else {
+			//	return 1;
+			//}
 		} else {
 			return res;
 		}

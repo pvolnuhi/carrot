@@ -26,7 +26,6 @@ public class IndexBlockScannerLargeKVsTest extends IndexBlockScannerTest{
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 
         b.getDataInBlockSize()+" num records=" + keys.size());
-    b.dumpIndexBlockExt();
     return keys;
   }
 }

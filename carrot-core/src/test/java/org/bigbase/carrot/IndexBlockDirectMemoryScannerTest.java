@@ -22,7 +22,7 @@ public class IndexBlockDirectMemoryScannerTest {
   
   @Test
   public void testAll() throws IOException{
-    for (int i=0; i < 10000; i++) {
+    for (int i=0; i < 1000; i++) {
       System.out.println("\nRUN "+ i+"\n");
       testFullScan();
       testFullScanReverse();
@@ -48,7 +48,7 @@ public class IndexBlockDirectMemoryScannerTest {
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
-    
+    ib.free();
   }
   
   @Ignore
@@ -67,7 +67,7 @@ public class IndexBlockDirectMemoryScannerTest {
       scanner.close();
     }
     dispose(keys);
-    
+    ib.free(); 
   }
   
 
@@ -95,7 +95,7 @@ public class IndexBlockDirectMemoryScannerTest {
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
-
+    ib.free();
   }
   
   @Ignore
@@ -122,7 +122,7 @@ public class IndexBlockDirectMemoryScannerTest {
       scanner.close();
     }
     dispose(keys);
-
+    ib.free();
   }
   
   @Ignore
@@ -144,7 +144,7 @@ public class IndexBlockDirectMemoryScannerTest {
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
-
+    ib.free();
   }
   
   @Ignore
@@ -172,8 +172,9 @@ public class IndexBlockDirectMemoryScannerTest {
       scanner.close();
     }
     dispose(keys);
-
+    ib.free();
   }
+  
   @Ignore
   @Test
   public void testSubScan() throws IOException {
@@ -200,6 +201,7 @@ public class IndexBlockDirectMemoryScannerTest {
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
+    ib.free();
   }
   
   @Ignore
@@ -236,6 +238,7 @@ public class IndexBlockDirectMemoryScannerTest {
       scanner.close();
     }
     dispose(keys);
+    ib.free();
   }
   
   private void verifyScanner(IndexBlockDirectMemoryScanner scanner, List<Key> keys) {

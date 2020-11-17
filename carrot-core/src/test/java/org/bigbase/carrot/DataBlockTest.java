@@ -14,6 +14,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.RetryOperationException;
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -22,6 +23,9 @@ import org.junit.Test;
 public class DataBlockTest extends DataBlockTestBase{
   Log LOG = LogFactory.getLog(DataBlockTest.class);
   
+  static {
+    UnsafeAccess.debug = true;
+  }
   @Test
   public void testDataBlockPutGet() throws RetryOperationException {
     System.out.println("testDataBlockPutGet");
@@ -33,6 +37,7 @@ public class DataBlockTest extends DataBlockTestBase{
     int found = 0;
     long start = System.currentTimeMillis();
     for(int i = 0 ; i < 100000; i++) {
+      //*DEBUG*/ System.out.println(i);
       int index = r.nextInt(keys.size());
       byte[] key = keys.get(index);
       byte[] value = new byte[key.length];
@@ -46,7 +51,6 @@ public class DataBlockTest extends DataBlockTestBase{
     System.out.println("Rate = "+(1000d * found)/(System.currentTimeMillis() - start) +" RPS");
 
   }
-  
   
   @Test
   public void testScanAfterDelete() throws RetryOperationException, IOException
@@ -62,7 +66,6 @@ public class DataBlockTest extends DataBlockTestBase{
     List<byte[]> newKeys = remove(keys, fk);
     scanAndVerify(b, newKeys);
   }
-  
   
   private List<byte[]> remove(ArrayList<byte[]> keys, byte[] fk) {
     List<byte[]> nkeys = new ArrayList<byte[]>(keys);
@@ -123,8 +126,7 @@ public class DataBlockTest extends DataBlockTestBase{
 
   }
   
-   
-  
+     
   @Test
   public void testDataBlockSplit() throws RetryOperationException, IOException {
     System.out.println("testDataBlockSplit");
@@ -188,7 +190,6 @@ public class DataBlockTest extends DataBlockTestBase{
     
   }
   
-   
   @Test
   public void testCompactionFull() throws RetryOperationException {
     System.out.println("testCompactionFull");
@@ -211,8 +212,7 @@ public class DataBlockTest extends DataBlockTestBase{
     assertTrue (Bytes.compareTo(new byte[] {0}, b.getFirstKey()) == 0);    
 
   }
-  
-   
+     
   @Test
   public void testCompactionPartial() throws RetryOperationException {
     System.out.println("testCompactionPartial");
@@ -333,7 +333,7 @@ public class DataBlockTest extends DataBlockTestBase{
     // Try to insert
     int reqSize = DataBlock.mustStoreExternally(key.length, key.length)? DataBlock.RECORD_TOTAL_OVERHEAD + 12:
       2*key.length + DataBlock.RECORD_TOTAL_OVERHEAD;
-    boolean expResult = reqSize < avail ? true: false;
+    boolean expResult = reqSize <= avail ? true: false;
     result = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
     assertEquals(expResult, result);            
 
@@ -351,7 +351,7 @@ public class DataBlockTest extends DataBlockTestBase{
       assertTrue(res);
     }
     
-    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
+    assertEquals(keys.size() + 1, (int)b.getNumberOfRecords());
     assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
 
     // Delete some

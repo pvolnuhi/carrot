@@ -11,9 +11,28 @@ import java.util.Random;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
+import org.junit.Ignore;
+
 
 public class IndexBlockDirectMemoryTest {
   
+  
+  @Test
+  public void testAll() throws RetryOperationException, IOException {
+    
+    for (int i=0; i < 1000; i++) {
+      testPutGet();
+      testPutGetDeleteFull();
+      testPutGetDeletePartial();
+      testAutomaticDataBlockMerge();
+      testOverwriteSameValueSize();
+      testOverwriteSmallerValueSize();
+      testOverwriteLargerValueSize();
+    }   
+  }
+  
+  
+  @Ignore
   @Test
   public void testPutGet() {
     System.out.println("testPutGet");  
@@ -31,6 +50,8 @@ public class IndexBlockDirectMemoryTest {
     }
     
   }
+  
+  @Ignore
   @Test 
   public void testAutomaticDataBlockMerge() {
     System.out.println("testAutomaticDataBlockMerge");  
@@ -51,6 +72,7 @@ public class IndexBlockDirectMemoryTest {
     assertTrue(before > after);
   }
   
+  @Ignore
   @Test
   public void testPutGetDeleteFull() {
     System.out.println("testPutGetDeleteFull");  
@@ -96,6 +118,7 @@ public class IndexBlockDirectMemoryTest {
     }
   } 
   
+  @Ignore
   @Test
   public void testPutGetDeletePartial() {
     System.out.println("testPutGetDeletePartial");  
@@ -150,6 +173,7 @@ public class IndexBlockDirectMemoryTest {
     }
   } 
   
+  @Ignore
   @Test
   public void testOverwriteSameValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSameValueSize");
@@ -172,6 +196,7 @@ public class IndexBlockDirectMemoryTest {
     scanAndVerify(b, keys);    
   }
   
+  @Ignore
   @Test
   public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSmallerValueSize");
@@ -195,6 +220,7 @@ public class IndexBlockDirectMemoryTest {
 
   }
   
+  @Ignore
   @Test
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteLargerValueSize");
@@ -204,12 +230,10 @@ public class IndexBlockDirectMemoryTest {
     // Delete half keys
     int toDelete = keys.size()/2;
     for(int i=0; i < toDelete; i++) {
-      ///*DEBUG*/ System.out.println(i);
       Key key = keys.remove(0);
       OpResult res = b.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, res);
     }
-
     for( Key key: keys) {
       byte[] value = new byte[key.length + 2];
       r.nextBytes(value);      
@@ -279,6 +303,9 @@ public class IndexBlockDirectMemoryTest {
   protected ArrayList<Key> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<Key> keys = new ArrayList<Key>();
     Random r = new Random();
+    long seed = r.nextLong();//-5970531640484485069L;//;
+    r.setSeed(seed);
+    System.out.println("Fill seed=" + seed);
     int kvSize = 32;
     boolean result = true;
     while(result == true) {

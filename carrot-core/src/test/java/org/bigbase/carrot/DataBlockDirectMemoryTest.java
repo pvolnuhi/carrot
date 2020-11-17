@@ -352,7 +352,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     // Try to insert
     int reqSize = DataBlock.mustStoreExternally(size, size)? DataBlock.RECORD_TOTAL_OVERHEAD + 12:
       2 * size + DataBlock.RECORD_TOTAL_OVERHEAD;
-    boolean expResult = reqSize < avail ? true: false;
+    boolean expResult = reqSize <= avail ? true: false;
     result = b.put(key, size, key, size, 0, 0);
     assertEquals(expResult, result); 
     //b.free();
