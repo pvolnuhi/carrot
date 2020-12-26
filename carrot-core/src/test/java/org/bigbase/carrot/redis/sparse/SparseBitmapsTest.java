@@ -8,6 +8,7 @@ import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -28,7 +29,7 @@ public class SparseBitmapsTest {
     long ptr = UnsafeAccess.malloc(keySize);
     byte[] buf = new byte[keySize];
     Random r = new Random();
-    long seed = 4605411952577710298L;//r.nextLong();
+    long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println("SEED=" + seed);
     r.nextBytes(buf);
@@ -40,7 +41,6 @@ public class SparseBitmapsTest {
   public void setUp() {
     map = new BigSortedMap(10000000);
     buffer = UnsafeAccess.mallocZeroed(bufferSize); 
-    //values = getKeys(n);
     key = getKey();
   }
   
@@ -55,39 +55,7 @@ public class SparseBitmapsTest {
     map.dispose();
   }
   
-  
-  @Ignore
-  @Test
-  public void testSetBitGetBit() {
-    
-    long offset= 0;
-    int bit = SparseBitmaps.SSETBIT(map, key.address, key.length, offset, 1);
-    assertEquals(0, bit);
-    bit = SparseBitmaps.SGETBIT(map, key.address, key.length, offset);
-    assertEquals(1, bit);
-    long count = SparseBitmaps.SBITCOUNT(map, key.address, key.length, Commons.NULL_LONG, Commons.NULL_LONG);
-    assertEquals(1, (int)count);
-
-    offset = 10;
-    bit = SparseBitmaps.SSETBIT(map, key.address, key.length, offset, 1);
-    assertEquals(0, bit);
-    bit = SparseBitmaps.SGETBIT(map, key.address, key.length, offset);
-    assertEquals(1, bit);
-    count = SparseBitmaps.SBITCOUNT(map, key.address, key.length, Commons.NULL_LONG, Commons.NULL_LONG);
-    assertEquals(2, (int)count);
-
-    offset =  100;
-//Long.MAX_VALUE - 1 - SparseBitmaps.BITS_PER_CHUNK ;
-    bit = SparseBitmaps.SSETBIT(map, key.address, key.length, offset, 1);
-    assertEquals(0, bit);
-    bit = SparseBitmaps.SGETBIT(map, key.address, key.length, offset);
-    assertEquals(1, bit);
-    
-    count = SparseBitmaps.SBITCOUNT(map, key.address, key.length, Commons.NULL_LONG, Commons.NULL_LONG);
-    assertEquals(3, (int)count);
-    
-  }
-  
+  //@Ignore
   @Test
   public void testSetBitGetBitLoop() {
     
@@ -129,4 +97,29 @@ public class SparseBitmapsTest {
     System.out.println("Time for " + N + " SetBit/GetBit/CountBits =" + (end - start) + "ms");
   }
   
+  @Test
+  public void testSparselength() {
+    
+    long offset= 0;
+    int N = 100000;
+    int delta = 1000;
+    long start = System.currentTimeMillis();
+    for (int i = 0; i < N ; i++) {
+      offset += delta ;
+      SparseBitmaps.SSETBIT(map, key.address, key.length, offset, 1);
+      long count = SparseBitmaps.SBITCOUNT(map, key.address, key.length, Commons.NULL_LONG, Commons.NULL_LONG);
+      assertEquals( i + 1, (int)count);
+      long len = SparseBitmaps.SSTRLEN(map, key.address, key.length);
+      long expectedlength = (offset / SparseBitmaps.BITS_PER_CHUNK) * SparseBitmaps.BYTES_PER_CHUNK
+          + SparseBitmaps.BYTES_PER_CHUNK;
+      assertEquals(expectedlength, len);
+    }
+    long count = SparseBitmaps.SBITCOUNT(map, key.address, key.length, Commons.NULL_LONG, Commons.NULL_LONG);
+    assertEquals(N, (int)count);
+
+    long end  = System.currentTimeMillis();
+    
+    System.out.println("Time for " + N + " SetBit/StrLength =" + (end - start) + "ms");
+    
+  }
 }

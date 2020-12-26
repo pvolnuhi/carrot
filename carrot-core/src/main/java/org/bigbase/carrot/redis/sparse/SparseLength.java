@@ -6,7 +6,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * String value length operation.
- * Returns the length of the string value stored at key. 
+ * Returns the length of the string value stored at key (in bytes). 
  * An error is returned when key holds a non-string value.
  * @author Vladimir Rodionov
  *
@@ -36,7 +36,7 @@ public class SparseLength extends Operation {
     }
     long offset = SparseBitmaps.getChunkOffsetFromKey(foundKeyPtr, foundKeySize);
     // TODO: calculate precisely to the last bit set
-    this.strlen = offset/Utils.SIZEOF_BYTE + SparseBitmaps.BYTES_PER_CHUNK ;  
+    this.strlen = offset/Utils.BITS_PER_BYTE + SparseBitmaps.BYTES_PER_CHUNK ;  
     return true;
   }
   
@@ -45,6 +45,7 @@ public class SparseLength extends Operation {
   public void reset() {
     super.reset();
     this.strlen = 0;
+    setFloorKey(true);
   }
   
   /**

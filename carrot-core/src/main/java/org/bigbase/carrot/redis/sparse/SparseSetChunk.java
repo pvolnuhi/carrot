@@ -65,6 +65,12 @@ public class SparseSetChunk extends Operation {
     
   }
 
+  @Override
+  public void reset() {
+    super.reset();
+    setFloorKey(true);
+  }
+  
   public void setChunkAddress(long ptr) {
     this.ptr = ptr;
   }

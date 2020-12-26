@@ -80,17 +80,8 @@ public class SparseBitmaps {
     }    
   };
   
-  private static ThreadLocal<Long> bufferInt = new ThreadLocal<Long>() {
-
-    @Override
-    protected Long initialValue() {
-      return UnsafeAccess.malloc(BUFFER_CAPACITY);
-    }    
-  };
-  
   static Codec codec = CodecFactory.getInstance().getCodec(CodecType.LZ4HC);
-  
-  
+   
   /**
    * Thread local updates Sparse Getbit
    */
@@ -314,7 +305,7 @@ public class SparseBitmaps {
     UnsafeAccess.putByte(arena, (byte)DataType.SBITMAP.ordinal());
     UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-    long chunkOffset = offset / BITS_PER_CHUNK;
+    long chunkOffset = (offset / BITS_PER_CHUNK) * BITS_PER_CHUNK;
     UnsafeAccess.putLong(arena + KEY_SIZE + Utils.SIZEOF_BYTE + keySize, chunkOffset);
     return kSize;
   }
@@ -333,7 +324,7 @@ public class SparseBitmaps {
     UnsafeAccess.putByte(arena, (byte)DataType.SBITMAP.ordinal());
     UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, arena + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-    long chunkOffset = offset / BITS_PER_CHUNK;
+    long chunkOffset = (offset / BITS_PER_CHUNK) * BITS_PER_CHUNK;
     UnsafeAccess.putLong(arena + KEY_SIZE + Utils.SIZEOF_BYTE + keySize, chunkOffset);
     return kSize;
   }

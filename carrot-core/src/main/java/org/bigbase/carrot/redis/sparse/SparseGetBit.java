@@ -50,7 +50,6 @@ public class SparseGetBit extends Operation {
     return true;
   }
   
-  //TODO: Test
   private int getbit(long valuePtr) {
     long chunkOffset = this.offset / SparseBitmaps.BITS_PER_CHUNK;
     int off = (int)(this.offset - chunkOffset * SparseBitmaps.BITS_PER_CHUNK);
@@ -65,6 +64,7 @@ public class SparseGetBit extends Operation {
     super.reset();
     this.bit = 0;
     this.offset = 0;
+    setFloorKey(true);
   }
   
   /**
@@ -76,7 +76,7 @@ public class SparseGetBit extends Operation {
   }
   /**
    * Returns bit value at offset
-   * @return bit alue: 0 or 1
+   * @return bit value: 0 or 1
    */
   public int getBit() {
     return bit;

@@ -119,6 +119,7 @@ public class SparseSetBit extends Operation {
     this.bit = 0;
     this.oldBit = 0;
     this.offset = 0;
+    setFloorKey(true);
   }
   
   /**
