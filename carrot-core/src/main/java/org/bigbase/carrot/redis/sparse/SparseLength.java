@@ -16,6 +16,10 @@ public class SparseLength extends Operation {
 
   long strlen;
   
+  public SparseLength() {
+    setFloorKey(true);
+  }
+  
   @Override
   public boolean execute() {
     this.updatesCount = 0;
@@ -27,11 +31,12 @@ public class SparseLength extends Operation {
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
     if (Utils.compareTo(foundKeyPtr, foundKeySize - Utils.SIZEOF_LONG, 
       keyAddress, keySize - Utils.SIZEOF_LONG) != 0) {
-      // Key not found
+      // Key not found - this is not a sparse bitmap key
       return true;
     }
     long offset = SparseBitmaps.getChunkOffsetFromKey(foundKeyPtr, foundKeySize);
-    this.strlen = offset/Utils.SIZEOF_BYTE + SparseBitmaps.CHUNK_SIZE - SparseBitmaps.BITS_SIZE;  
+    // TODO: calculate precisely to the last bit set
+    this.strlen = offset/Utils.SIZEOF_BYTE + SparseBitmaps.BYTES_PER_CHUNK ;  
     return true;
   }
   

@@ -30,6 +30,8 @@ public class Utils {
   public final static int SIZEOF_SHORT = 2;
   public final static int SIZEOF_BYTE = 1;
   
+  public final static int BITS_PER_BYTE = 8;
+  
   private static Random rnd = new Random();
   /**
    * Returns true if x1 is less than x2, when both values are treated as unsigned long. Both values

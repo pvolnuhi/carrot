@@ -18,7 +18,6 @@ import org.bigbase.carrot.util.Utils;
 public class SparseSetBit extends Operation {
 
   static ThreadLocal<Long> buffer = new ThreadLocal<Long>() {
-
     @Override
     protected Long initialValue() {
       return UnsafeAccess.malloc(SparseBitmaps.BUFFER_CAPACITY);
@@ -36,16 +35,22 @@ public class SparseSetBit extends Operation {
   @Override
   public boolean execute() {
     this.updatesCount = 0;
-    if (foundRecordAddress < 0) {
-      // Yes we return true
-      return true;
-    }
-    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
     boolean existKey = true;
-    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-      // Key not found
+
+    if (foundRecordAddress < 0) {
       existKey = false;
+    } else {
+      long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
+      int foundKeySize = DataBlock.keyLength(foundRecordAddress);
+      if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
+        // Key not found - not a sparse bitmap key
+        existKey = false;
+      }
+    }
+    if (!existKey && this.bit == 0) {
+      this.oldBit = 0;
+      // do nothing
+      return true;
     }
     long valuePtr = 0;
     int valueSize = 0;
@@ -53,8 +58,11 @@ public class SparseSetBit extends Operation {
       valuePtr = DataBlock.valueAddress(foundRecordAddress);
       valueSize = DataBlock.valueLength(foundRecordAddress);
       if (SparseBitmaps.isCompressed(valuePtr)) {
-        valuePtr = SparseBitmaps.decompress(valuePtr, valueSize - SparseBitmaps.BITS_SIZE);
+        valuePtr = SparseBitmaps.decompress(valuePtr, 
+          valueSize - SparseBitmaps.HEADER_SIZE);
         this.updatesCount = 1; 
+      } else {
+        // we do update in place
       }
     } else {
       // new K-V
@@ -62,15 +70,14 @@ public class SparseSetBit extends Operation {
       valuePtr = UnsafeAccess.mallocZeroed(valueSize);
       this.updatesCount = 1; 
     }
-    this.bit = getsetbit(valuePtr, valueSize);
-    int popCount = SparseBitmaps.getBitCount(valuePtr);
-    if (SparseBitmaps.shouldCompress(popCount)) {
-      int bitCount = SparseBitmaps.getBitCount(valuePtr);
-      int compSize = SparseBitmaps.compress(valuePtr + + SparseBitmaps.BITS_SIZE, bitCount, buffer.get());
-      valueSize = compSize + SparseBitmaps.BITS_SIZE;
+    this.oldBit = getsetbit(valuePtr, valueSize);
+    int bitCount = existKey? SparseBitmaps.getBitCount(valuePtr): 1;
+    if (bitCount > 0 && SparseBitmaps.shouldCompress(bitCount)) {
+      int compSize = SparseBitmaps.compress(valuePtr, bitCount, buffer.get());
+      valueSize = compSize + SparseBitmaps.HEADER_SIZE;
       valuePtr = buffer.get();
       this.updatesCount = 1; 
-    } else {
+    } else if (bitCount > 0){
       valueSize = SparseBitmaps.CHUNK_SIZE;
     }
     this.keys[0] = keyAddress;
@@ -78,18 +85,31 @@ public class SparseSetBit extends Operation {
 
     this.values[0] = valuePtr;
     this.valueSizes[0] = valueSize;
+    if (bitCount == 0) {
+      this.updateTypes[0] = true; // DELETE
+    }
     return true;
   }
   
+  //TODO: TEST
   private int getsetbit(long valuePtr, int valueSize) {
     long chunkOffset = this.offset / SparseBitmaps.BITS_PER_CHUNK;
     int off = (int)(this.offset - chunkOffset * SparseBitmaps.BITS_PER_CHUNK);
-    int n = (int)(off >>>3);
-    int rem = (int)(off - ((long)n) * Utils.SIZEOF_BYTE);
-    byte b = UnsafeAccess.toByte(valuePtr + n);
-    oldBit = b >>> (7 - rem);
-    b |= bit << (7 - rem);
-    UnsafeAccess.putByte(valuePtr + n, b);
+    int n = (int)(off / Utils.BITS_PER_BYTE);
+    int rem = (int)(off - ((long)n) * Utils.BITS_PER_BYTE);
+    byte b = UnsafeAccess.toByte(valuePtr + n + SparseBitmaps.HEADER_SIZE);
+    oldBit = (b >>> (7 - rem)) & 1;
+    if (this.bit == 1) {
+      b |= 1 << (7 - rem);
+    } else {
+      b &= ~(1 << (7 - rem));
+    }
+    UnsafeAccess.putByte(valuePtr + n + SparseBitmaps.HEADER_SIZE, b);
+    if (oldBit == 0 && bit == 1) {
+      SparseBitmaps.incrementBitCount(valuePtr, 1);
+    } else if (oldBit == 1 && bit == 0) {
+      SparseBitmaps.incrementBitCount(valuePtr, -1);
+    }
     return oldBit;
   }
 

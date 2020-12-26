@@ -1,6 +1,6 @@
 package org.bigbase.carrot.redis.sparse;
 
-import static  org.bigbase.carrot.redis.sparse.SparseBitmaps.BITS_SIZE;
+import static  org.bigbase.carrot.redis.sparse.SparseBitmaps.HEADER_SIZE;
 import static  org.bigbase.carrot.redis.sparse.SparseBitmaps.BUFFER_CAPACITY;
 import static  org.bigbase.carrot.redis.sparse.SparseBitmaps.CHUNK_SIZE;
 
@@ -40,21 +40,19 @@ public class SparseSetChunk extends Operation {
 
   @Override
   public boolean execute() {
-    if (foundRecordAddress <=0) {
-      return false;
-    }
+    
     long valuePtr;
     int valueSize;
     this.updatesCount = 1; 
 
-    int popCount = (int) Utils.bitcount(ptr, CHUNK_SIZE - BITS_SIZE);
+    int popCount = (int) Utils.bitcount(ptr, SparseBitmaps.BYTES_PER_CHUNK);
     if (SparseBitmaps.shouldCompress(popCount)) {
       int compSize = compress(ptr, popCount, buffer.get());
-      valueSize = compSize + BITS_SIZE;
+      valueSize = compSize + HEADER_SIZE;
       valuePtr = buffer.get();
     } else {
       valuePtr = buffer.get();
-      UnsafeAccess.copy(ptr, valuePtr + BITS_SIZE, CHUNK_SIZE - BITS_SIZE);
+      UnsafeAccess.copy(ptr, valuePtr + HEADER_SIZE, SparseBitmaps.BYTES_PER_CHUNK);
       setBitCount(valuePtr, popCount, false);
       valueSize = CHUNK_SIZE;
     }

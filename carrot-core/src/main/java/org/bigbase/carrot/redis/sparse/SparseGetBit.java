@@ -33,8 +33,9 @@ public class SparseGetBit extends Operation {
     }
     long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-      // Key not found
+    if (Utils.compareTo(foundKeyPtr, foundKeySize - Utils.SIZEOF_LONG, 
+      keyAddress, keySize - Utils.SIZEOF_LONG) != 0) {
+      // sparse bitmap Key not found
       return true;
     }
     
@@ -42,20 +43,21 @@ public class SparseGetBit extends Operation {
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     boolean isCompressed = SparseBitmaps.isCompressed(valuePtr);
     if (isCompressed) {
-      valuePtr = SparseBitmaps.decompress(valuePtr, valueSize - Utils.SIZEOF_INT);
+      valuePtr = SparseBitmaps.decompress(valuePtr, valueSize - SparseBitmaps.HEADER_SIZE);
     }
 
     this.bit = getbit(valuePtr);
     return true;
   }
   
+  //TODO: Test
   private int getbit(long valuePtr) {
     long chunkOffset = this.offset / SparseBitmaps.BITS_PER_CHUNK;
     int off = (int)(this.offset - chunkOffset * SparseBitmaps.BITS_PER_CHUNK);
-    int n = (int)(off >>>3);
-    int rem = (int)(off - ((long)n) * 8);
-    byte b = UnsafeAccess.toByte(valuePtr + n);
-    return b >>> (7 - rem);
+    int n = (int)(off / Utils.BITS_PER_BYTE);
+    int rem = (int)(off - ((long)n) * Utils.BITS_PER_BYTE);
+    byte b = UnsafeAccess.toByte(valuePtr + n + SparseBitmaps.HEADER_SIZE);
+    return (b >>> (7 - rem)) & 1;
   }
 
   @Override
