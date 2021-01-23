@@ -15,8 +15,6 @@ import org.junit.Test;
 
 public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTest{
 
-  
- 
   @Ignore
   @Test 
   public void testAutomaticDataBlockMerge() {
@@ -33,10 +31,10 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
   @Test
   public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSmallerValueSize - LargeKVs");
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 1; i++) {
       Random r = new Random();
       IndexBlock b = getIndexBlock(4096);
-      List<Key> keys = fillIndexBlock(b);
+      ArrayList<Key> keys = fillIndexBlock(b);
       System.out.println("KEYS ="+ keys.size());
       for (Key key : keys) {
         int keySize = key.length;
@@ -63,6 +61,7 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
       }
       scanAndVerify(b, keys);
       b.free();
+      freeKeys(keys);
     }
 
   }
@@ -76,10 +75,11 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
   @Test
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteLargerValueSize- LargeKVs");
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 1; i++) {
       Random r = new Random();
+      
       IndexBlock b = getIndexBlock(4096);
-      List<Key> keys = fillIndexBlock(b);
+      ArrayList<Key> keys = fillIndexBlock(b);
       for (Key key : keys) {
         int keySize = key.length;
         int valueSize = 0;
@@ -108,6 +108,7 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
       }
       scanAndVerify(b, keys);
       b.free();
+      freeKeys(keys);
     }
   }
   
@@ -115,6 +116,9 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
   protected ArrayList<Key> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<Key> keys = new ArrayList<Key>();
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    /*DEBUG*/ System.out.println("FILL SEED="  + seed);
     int maxSize = 4096;
     boolean result = true;
     while(result == true) {
@@ -125,6 +129,8 @@ public class IndexBlockDirectMemoryLargeKVsTest extends IndexBlockDirectMemoryTe
       result = b.put(key, 0, key.length, key, 0, key.length, Long.MAX_VALUE, 0);
       if(result) {
         keys.add(new Key(ptr, key.length));
+      } else {
+        UnsafeAccess.free(ptr);
       }
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 

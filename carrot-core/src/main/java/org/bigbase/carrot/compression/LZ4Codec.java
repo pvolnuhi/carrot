@@ -27,7 +27,7 @@ import org.bigbase.compression.lz4.LZ4;
 
 // TODO: Auto-generated Javadoc
 /**
- * The Class QuickLZCodec.
+ * The Class LZ4Codec.
  */
 public class LZ4Codec implements Codec {
 
@@ -48,7 +48,7 @@ public class LZ4Codec implements Codec {
 	private int level = 1;
 	
 	/**
-	 * Instantiates a new quick lz codec.
+	 * Instantiates a new lz4 codec.
 	 */
 	public LZ4Codec() {
 		minCompSize = Integer.parseInt(System.getProperty(COMPRESSION_THRESHOLD, "100"));

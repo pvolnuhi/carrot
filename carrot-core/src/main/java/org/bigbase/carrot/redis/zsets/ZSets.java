@@ -308,7 +308,7 @@ public class ZSets {
    */
   private static long ZINCRCARD(BigSortedMap map, long keyPtr, int keySize, long incr) {
       int kSize = buildKey(keyPtr, keySize);
-      return map.increment(keyArena.get(), kSize, 0, incr);
+      return map.incrementLong(keyArena.get(), kSize, 0, incr);
   }
   
   /**

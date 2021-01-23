@@ -28,6 +28,7 @@ public class IndexBlockDirectMemoryScannerLargeKVsTest extends IndexBlockDirectM
       if(result) {
         keys.add( new Key(ptr, len));        
       } else {
+        UnsafeAccess.free(ptr);
         break;
       }
     }

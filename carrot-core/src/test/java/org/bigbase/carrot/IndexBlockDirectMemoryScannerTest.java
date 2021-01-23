@@ -9,6 +9,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
@@ -19,20 +21,43 @@ import org.slf4j.LoggerFactory;
 public class IndexBlockDirectMemoryScannerTest {
   Logger LOG = LoggerFactory.getLogger(IndexBlockDirectMemoryScannerTest.class);
   
+  static {
+    UnsafeAccess.debug = true;
+  }
   
   @Test
   public void testAll() throws IOException{
-    for (int i=0; i < 1000; i++) {
+    for (int i=0; i < 100; i++) {
       System.out.println("\nRUN "+ i+"\n");
       testFullScan();
+      testFullScanWithCompressionLZ4();
+      testFullScanWithCompressionLZ4HC();
       testFullScanReverse();
+      testFullScanReverseWithCompressionLZ4();
+      testFullScanReverseWithCompressionLZ4HC();
       testOpenEndScan();
+      testOpenEndScanWithCompressionLZ4();
+      testOpenEndScanWithCompressionLZ4HC();
       testOpenEndScanReverse();
+      testOpenEndScanReverseWithCompressionLZ4();
+      testOpenEndScanReverseWithCompressionLZ4HC();
       testOpenStartScan();
+      testOpenStartScanWithCompressionLZ4();
+      testOpenStartScanWithCompressionLZ4HC();
       testOpenStartScanReverse();
+      testOpenStartScanReverseWithCompressionLZ4();
+      testOpenStartScanReverseWithCompressionLZ4HC();
       testSubScan();
+      testSubScanWithCompressionLZ4();
+      testSubScanWithCompressionLZ4HC();
       testSubScanReverse();
+      testSubScanReverseWithCompressionLZ4();
+      testSubScanReverseWithCompressionLZ4HC();
     }
+    
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats();
+    
   }
   
   @Ignore
@@ -49,6 +74,24 @@ public class IndexBlockDirectMemoryScannerTest {
     scanner.close();
     dispose(keys);
     ib.free();
+  }
+  
+  @Ignore
+  @Test
+  public void testFullScanWithCompressionLZ4() throws IOException {
+    System.out.println("testFullScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testFullScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testFullScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testFullScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testFullScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -70,7 +113,24 @@ public class IndexBlockDirectMemoryScannerTest {
     ib.free(); 
   }
   
-
+  @Ignore
+  @Test
+  public void testFullScanReverseWithCompressionLZ4() throws IOException {
+    System.out.println("testFullScanReverseWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testFullScanReverse();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testFullScanReverseWithCompressionLZ4HC() throws IOException {
+    System.out.println("testFullScanReverseWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testFullScanReverse();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
   private void dispose(List<Key> keys) {
     for(Key key: keys) {
       UnsafeAccess.free(key.address);
@@ -85,18 +145,40 @@ public class IndexBlockDirectMemoryScannerTest {
     List<Key> keys = fillIndexBlock(ib);
     Utils.sortKeys(keys);
     Random r = new Random();
-    int stopRowIndex = 1;//r.nextInt(keys.size());
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("seed="+seed);
+    int stopRowIndex = r.nextInt(keys.size());
     Key stopRow = keys.get(stopRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
-    keys = keys.subList(0, stopRowIndex);
-    System.out.println("Selected "+ keys.size()+" kvs");
+    List<Key> newkeys = keys.subList(0, stopRowIndex);
+    System.out.println("Selected "+ newkeys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
         IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, stopRow.length, Long.MAX_VALUE);
-    verifyScanner(scanner, keys);
+    verifyScanner(scanner, newkeys);
     scanner.close();
     dispose(keys);
     ib.free();
   }
+  
+  @Ignore
+  @Test
+  public void testOpenStartScanWithCompressionLZ4() throws IOException {
+    System.out.println("testOpenStartScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOpenStartScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenStartScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testOpenStartScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOpenStartScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
   
   @Ignore
   @Test
@@ -112,18 +194,37 @@ public class IndexBlockDirectMemoryScannerTest {
     int stopRowIndex = r.nextInt(keys.size());
     Key stopRow = keys.get(stopRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
-    keys = keys.subList(0, stopRowIndex);
-    System.out.println("Selected "+ keys.size()+" kvs");
+    List<Key> newkeys = keys.subList(0, stopRowIndex);
+    System.out.println("Selected "+ newkeys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
         IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, 
           stopRow.length, Long.MAX_VALUE, null, true);
-    verifyScannerReverse(scanner, keys);
+    verifyScannerReverse(scanner, newkeys);
     if (scanner != null) {
       scanner.close();
     }
     dispose(keys);
     ib.free();
   }
+  
+  @Ignore
+  @Test
+  public void testOpenStartScanReverseWithCompressionLZ4() throws IOException {
+    System.out.println("testOpenStartScanReverseWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOpenStartScanReverse();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenStartScanReverseWithCompressionLZ4HC() throws IOException {
+    System.out.println("testOpenStartScanReverseWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOpenStartScanReverse();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
   
   @Ignore
   @Test
@@ -136,16 +237,35 @@ public class IndexBlockDirectMemoryScannerTest {
     int startRowIndex = r.nextInt(keys.size());
     Key startRow = keys.get(startRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
-    keys = keys.subList(startRowIndex, keys.size());
-    System.out.println("Selected "+ keys.size()+" kvs");
+    List<Key> newkeys = keys.subList(startRowIndex, keys.size());
+    System.out.println("Selected "+ newkeys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
         IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, 
           startRow.length,0 , 0, Long.MAX_VALUE);
-    verifyScanner(scanner, keys);
+    verifyScanner(scanner, newkeys);
     scanner.close();
     dispose(keys);
     ib.free();
   }
+  
+  @Ignore
+  @Test
+  public void testOpenEndScanWithCompressionLZ4() throws IOException {
+    System.out.println("testOpenEndScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOpenEndScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenEndScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testOpenEndScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOpenEndScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
   
   @Ignore
   @Test
@@ -162,17 +282,35 @@ public class IndexBlockDirectMemoryScannerTest {
     int startRowIndex = r.nextInt(keys.size());
     Key startRow = keys.get(startRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
-    keys = keys.subList(startRowIndex, keys.size());
-    System.out.println("Selected "+ keys.size()+" kvs");
+    List<Key> newkeys = keys.subList(startRowIndex, keys.size());
+    System.out.println("Selected "+ newkeys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
         IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length,0 , 0, 
           Long.MAX_VALUE, null, true);
-    verifyScannerReverse(scanner, keys);
+    verifyScannerReverse(scanner, newkeys);
     if (scanner != null) {
       scanner.close();
     }
     dispose(keys);
     ib.free();
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenEndScanReverseWithCompressionLZ4() throws IOException {
+    System.out.println("testOpenEndScanReverseWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOpenEndScanReverse();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenEndScanReverseWithCompressionLZ4HC() throws IOException {
+    System.out.println("testOpenEndScanReverseWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOpenEndScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -193,15 +331,33 @@ public class IndexBlockDirectMemoryScannerTest {
     Key startRow = keys.get(startRowIndex);
     Key stopRow = keys.get(stopRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
-    keys = keys.subList(startRowIndex, stopRowIndex);
-    System.out.println("Selected "+ keys.size()+" kvs");
+    List<Key> newkeys = keys.subList(startRowIndex, stopRowIndex);
+    System.out.println("Selected "+ newkeys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
         IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length, 
           stopRow.address, stopRow.length, Long.MAX_VALUE);
-    verifyScanner(scanner, keys);
+    verifyScanner(scanner, newkeys);
     scanner.close();
     dispose(keys);
     ib.free();
+  }
+  
+  @Ignore
+  @Test
+  public void testSubScanWithCompressionLZ4() throws IOException {
+    System.out.println("testSubScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testSubScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testSubScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testSubScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testSubScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -228,12 +384,12 @@ public class IndexBlockDirectMemoryScannerTest {
     Key startRow = keys.get(startRowIndex);
     Key stopRow = keys.get(stopRowIndex);
     System.out.println("Loaded "+ keys.size()+" kvs");
-    keys = keys.subList(startRowIndex, stopRowIndex);
+    List<Key> newkeys = keys.subList(startRowIndex, stopRowIndex);
     System.out.println("Selected "+ keys.size()+" kvs");
     IndexBlockDirectMemoryScanner scanner = 
         IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length, 
           stopRow.address, stopRow.length, Long.MAX_VALUE, null, true);
-    verifyScannerReverse(scanner, keys);
+    verifyScannerReverse(scanner, newkeys);
     if (scanner != null) {
       scanner.close();
     }
@@ -241,9 +397,28 @@ public class IndexBlockDirectMemoryScannerTest {
     ib.free();
   }
   
+  @Ignore
+  @Test
+  public void testSubScanReverseWithCompressionLZ4() throws IOException {
+    System.out.println("testSubScanReverseWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testSubScanReverse();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testSubScanReverseWithCompressionLZ4HC() throws IOException {
+    System.out.println("testSubScanReverseWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testSubScanReverse();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  
   private void verifyScanner(IndexBlockDirectMemoryScanner scanner, List<Key> keys) {
     int count = 0;
-    DataBlockDirectMemoryScanner dbscn=null;
+    DataBlockDirectMemoryScanner dbscn = null;
     
     while ((dbscn = scanner.nextBlockScanner()) != null){
       while(dbscn.hasNext()) {
@@ -260,7 +435,7 @@ public class IndexBlockDirectMemoryScannerTest {
         dbscn.value(buf, 0);
         assertTrue(Utils.compareTo(buf, 0, valSize, key.address, key.length) == 0);
         dbscn.next();
-      } 
+      }
     } 
     assertEquals(keys.size(), count);
   }
@@ -297,6 +472,7 @@ public class IndexBlockDirectMemoryScannerTest {
     
     assertEquals(keys.size(), count);
   }
+  
   private IndexBlock getIndexBlock(int size) {
     IndexBlock ib = new IndexBlock(size);
     ib.setFirstIndexBlock();
@@ -308,10 +484,10 @@ public class IndexBlockDirectMemoryScannerTest {
     Random r = new Random();
     long seed = r.nextLong();
     r.setSeed(seed);
-    System.out.println("FIIL seed="+ seed);
+    System.out.println("FILL seed="+ seed);
     int kvSize = 32;
     boolean result = true;
-    while(true) {
+    while(result == true) {
       byte[] key = new byte[kvSize];
       r.nextBytes(key);
       long ptr = UnsafeAccess.malloc(kvSize);
@@ -320,7 +496,7 @@ public class IndexBlockDirectMemoryScannerTest {
       if(result) {
         keys.add( new Key(ptr, kvSize));
       } else {
-        break;
+        UnsafeAccess.free(ptr);
       }
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 

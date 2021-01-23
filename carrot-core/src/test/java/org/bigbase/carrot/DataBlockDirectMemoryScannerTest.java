@@ -9,6 +9,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
@@ -42,6 +44,29 @@ public class DataBlockDirectMemoryScannerTest {
     dispose(keys);
   }
   
+  
+  @Test
+  public void testFullScanCompressionDecompression() throws IOException {
+    System.out.println("testFullScanCompressionDecompression");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+
+    DataBlock ib = getDataBlock();
+    List<Key> keys = fillDataBlock(ib);
+    Utils.sortKeys(keys);
+    System.out.println("Loaded "+ keys.size()+" kvs");
+    ib.compressDataBlockIfNeeded();
+    ib.decompressDataBlockIfNeeded();
+    DataBlockDirectMemoryScanner scanner = 
+        DataBlockDirectMemoryScanner.getScanner(ib, 0, 0, 0, 0, Long.MAX_VALUE);
+    // Skip first system key
+    scanner.next();
+    verifyScanner(scanner, keys);
+    scanner.close();
+    dispose(keys);
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+
+  }
+  
   @Ignore
   @Test
   public void testReverseAll() throws IOException {
@@ -52,6 +77,29 @@ public class DataBlockDirectMemoryScannerTest {
       testOpenStartScanReverse();
       testSubScanReverse();
     }
+  }
+  
+  @Test
+  public void testFullScanReverseCompressionDecompression() throws IOException {
+    System.out.println("testFullScanReverseCompressionDecompression");  
+    // Enable data  block compression
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+
+    DataBlock ib = getDataBlock();
+    List<Key> keys = fillDataBlock(ib);
+    Utils.sortKeys(keys);
+    System.out.println("Loaded "+ keys.size()+" kvs");
+    ib.compressDataBlockIfNeeded();
+    ib.decompressDataBlockIfNeeded();
+    DataBlockDirectMemoryScanner scanner = 
+        DataBlockDirectMemoryScanner.getScanner(ib, 0, 0, 0, 0, Long.MAX_VALUE);
+    // Skip first system key
+    scanner.last();
+    verifyScannerReverse(scanner, keys);
+    scanner.close();
+    dispose(keys);
+    // Disable data  block compression
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Test

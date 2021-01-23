@@ -8,6 +8,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * Thread unsafe implementation
+ * 
  * TODO: stopRow logic
  */
 public final class DataBlockScanner extends BiScanner{
@@ -70,7 +71,7 @@ public final class DataBlockScanner extends BiScanner{
   /**
    * This method is to call when single instance of DataBlockScanner is 
    * expected inside one thread operation
-   * @param b data block
+   * @param b data block - de-compressed
    * @param startRow start row
    * @param stopRow stop row
    * @param snapshotId snapshotID
@@ -101,7 +102,7 @@ public final class DataBlockScanner extends BiScanner{
   /**
    * This method is to call when multiple instances of DataBlockScanners are 
    * expected inside one thread operation
-   * @param b data block
+   * @param b data block - decompressed
    * @param startRow start row
    * @param stopRow stop row
    * @param snapshotId snapshotID
@@ -259,6 +260,7 @@ public final class DataBlockScanner extends BiScanner{
    */
   private void setBlock(DataBlock b) throws RetryOperationException {
 
+    b.decompressDataBlockIfNeeded();
     this.blockSize = BigSortedMap.maxBlockSize;
     this.dataSize = b.getDataInBlockSize();
     this.numRecords = b.getNumberOfRecords();

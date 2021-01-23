@@ -8,6 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -17,16 +20,29 @@ import org.slf4j.LoggerFactory;
 public class IndexBlockScannerTest {
   Logger LOG = LoggerFactory.getLogger(IndexBlockScannerTest.class);
   
+  static {
+    UnsafeAccess.debug = true;
+  }
   
   @Test
   public void testAll() throws IOException {
-    for (int i = 0; i < 10000; i++) {
+    for (int i = 0; i < 100; i++) {
       System.out.println("\nRUN "+ i+"\n");
       testFullScan();
+      testFullScanWithCompressionLZ4();
+      testFullScanWithCompressionLZ4HC();
       testOpenEndScan();
+      testOpenEndScanWithCompressionLZ4();
+      testOpenEndScanWithCompressionLZ4HC();
       testOpenStartScan();
+      testOpenStartScanWithCompressionLZ4();
+      testOpenStartScanWithCompressionLZ4HC();
       testSubScan();
+      testSubScanWithCompressionLZ4();
+      testSubScanWithCompressionLZ4HC();
     }
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats();
   }
   
   @Ignore
@@ -40,14 +56,34 @@ public class IndexBlockScannerTest {
     IndexBlockScanner scanner = IndexBlockScanner.getScanner(ib, null, null, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
+    ib.free();
   }
 
+  @Ignore
+  @Test
+  public void testFullScanWithCompressionLZ4() throws IOException {
+    System.out.println("testFullScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testFullScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testFullScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testFullScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testFullScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
   @Ignore
   @Test
   public void testOpenStartScan() throws IOException {
     System.out.println("testOpenStartScan");  
     IndexBlock ib = getIndexBlock(4096);
     List<byte[]> keys = fillIndexBlock(ib);
+
     Utils.sort(keys);
     Random r = new Random();
     long seed = r.nextLong();
@@ -61,6 +97,25 @@ public class IndexBlockScannerTest {
     IndexBlockScanner scanner = IndexBlockScanner.getScanner(ib, null, stopRow, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
+    ib.free();
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenStartScanWithCompressionLZ4() throws IOException {
+    System.out.println("testOpenStartScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOpenStartScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenStartScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testOpenStartScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOpenStartScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -82,6 +137,27 @@ public class IndexBlockScannerTest {
     IndexBlockScanner scanner = IndexBlockScanner.getScanner(ib, startRow, null, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
+    ib.free();
+
+  }
+  
+  @Ignore
+  @Test
+  public void testOpenEndScanWithCompressionLZ4() throws IOException {
+    System.out.println("testOpenStartScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOpenEndScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  
+  @Ignore
+  @Test
+  public void testOpenEndScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testOpenStartScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOpenEndScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -111,8 +187,28 @@ public class IndexBlockScannerTest {
     IndexBlockScanner scanner = IndexBlockScanner.getScanner(ib, startRow, stopRow, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
+    ib.free();
+
   }
   
+  
+  @Ignore
+  @Test
+  public void testSubScanWithCompressionLZ4() throws IOException {
+    System.out.println("testSubScanWithCompressionLZ4");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testSubScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testSubScanWithCompressionLZ4HC() throws IOException {
+    System.out.println("testSubScanWithCompressionLZ4HC");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testSubScan();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
   
   private void verifyScanner(IndexBlockScanner scanner, List<byte[]> keys) throws IOException {
     int count = 0;

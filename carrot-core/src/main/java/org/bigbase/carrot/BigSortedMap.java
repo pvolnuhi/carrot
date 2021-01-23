@@ -7,14 +7,38 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.bigbase.carrot.compression.Codec;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.ops.Operation;
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 public class BigSortedMap {
 	
   Log LOG = LogFactory.getLog(BigSortedMap.class);
+  
+//TODO: configurable compression - default codec
+  static Codec codec = CodecFactory.getInstance().getCodec(CodecType.NONE);
+  
+  /**
+   * Is compression enabled
+   * @return true, if - yes, false otherwise
+   */
+  
+  static boolean isCompressionEnabled() {
+    return codec != null && codec.getType() != CodecType.NONE;
+  }
+  
+  
+  static void setCompressionCodec(Codec codec) {
+    BigSortedMap.codec = codec;
+  }
+  
+  static Codec getCompressionCodec() {
+    return codec;
+  }
+  
   /*
    * Thread local storage for index blocks used as a key in a 
    * Map<IndexBlock,IndexBlock> operations
@@ -39,9 +63,14 @@ public class BigSortedMap {
   static AtomicLong totalDataInDataBlocksSize = new AtomicLong(0);
 
   /*
-   * This tracks total data size  (total data size >= total data in block size)
+   * This tracks total compressed data size in data blocks (data can be allocated outside
+   * data blocks)
    */
-  static AtomicLong totalDataSize = new AtomicLong(0);
+  static AtomicLong totalCompressedDataInDataBlocksSize = new AtomicLong(0);
+  /*
+   * This tracks total data size  allocated externally (not in data blocks)
+   */
+  static AtomicLong totalExternalDataSize = new AtomicLong(0);
   
   /*
    * This tracks total index blocks size (memory allocated for index blocks) 
@@ -227,11 +256,19 @@ public class BigSortedMap {
   }
   
   /**
-   * Get total data size
+   * Get total data size (uncompressed)
    * @return size
    */
   public static long getTotalDataSize() {
-    return totalDataSize.get();
+    return totalExternalDataSize.get() + totalDataInDataBlocksSize.get();
+  }
+  
+  /**
+   * Get total compressed data size
+   * @return size
+   */
+  public static long getTotalCompressedDataSize() {
+    return totalExternalDataSize.get() + totalCompressedDataInDataBlocksSize.get();
   }
   /**
    * Get total index size
@@ -248,6 +285,21 @@ public class BigSortedMap {
     return totalDataInIndexBlocksSize.get();
   }
   
+  
+  public static void printMemoryAllocationStats() {
+    System.out.println("Carrot memory allocation statistics:");
+    System.out.println("Total memory               :" + getTotalAllocatedMemory());
+    System.out.println("Total data blocks          :" + getTotalBlockDataSize());
+    System.out.println("Total data size            :" + getTotalDataSize());
+    System.out.println("Total data block usage     :" + ((double)getTotalCompressedDataSize())
+      /getTotalBlockDataSize());
+    System.out.println("Total index size           :" + getTotalBlockIndexSize());
+    System.out.println("Total compressed data size :" + getTotalCompressedDataSize());
+    System.out.println("Total external data size   :" + totalExternalDataSize.get());
+    
+    System.out.println("Copmpression ratio         :" + ((double)getTotalDataSize()/ 
+        getTotalAllocatedMemory()));
+  }
   /** 
    * Gets maximum memory limit
    */
@@ -478,14 +530,13 @@ public class BigSortedMap {
         op.setFoundRecordAddress(recordAddress);
         // Execute operation
         boolean result = op.execute();
-        if (result == false ) {
+        int updatesCount = op.getUpdatesCount();
+
+        if (result == false || updatesCount == 0) {
+          b.compressDataBlockForKey(op.getKeyAddress(), op.getKeySize(), version);
           return result;
         } 
-        int updatesCount = op.getUpdatesCount();
-        if (updatesCount == 0) {
-          // Update in place was done, so we can return now
-          return result;
-        }
+        
         // updates count > 0
         // execute first update (update to existing key)
         long keyPtr = op.keys()[0];
@@ -943,12 +994,13 @@ public class BigSortedMap {
   
   
   /**
+   * TODO: test
    * Increment value (Long)  by key 
    * @param keyPtr address to look for
    * @param keyLength key length
    * @return value after increment. 
    */
-  public long increment(long keyPtr, int keyLength, long version, long incr) {
+  public long incrementLong(long keyPtr, int keyLength, long version, long incr) {
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(keyPtr, keyLength, version);
     IndexBlock b = null;
@@ -956,8 +1008,6 @@ public class BigSortedMap {
       try {
         b = map.floorKey(kvBlock);
         lock(b);
-
-        long ptr = b.get(keyPtr, keyLength,  version);
         if (b.hasRecentUnsafeModification()) {
           // check one more time with lock
           // - we caught split in flight
@@ -967,6 +1017,9 @@ public class BigSortedMap {
             continue;
           } 
         }
+        
+        // THIS CALL decompresses data block only
+        long ptr = b.get(keyPtr, keyLength,  version);
         
         if (ptr < 0) {
           // insert new
@@ -988,6 +1041,179 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
+        if (b != null) {
+          b.compressDataBlockForKey(keyPtr, keyLength, version);
+        }
+        unlock(b);
+      }
+    }
+  }
+  
+  /**
+   * TODO: test
+   * Increment value (Integer)  by key 
+   * @param keyPtr address to look for
+   * @param keyLength key length
+   * @return value after increment. 
+   */
+  public int incrementInt(long keyPtr, int keyLength, long version, int incr) {
+    IndexBlock kvBlock = getThreadLocalBlock();
+    kvBlock.putForSearch(keyPtr, keyLength, version);
+    IndexBlock b = null;
+    while (true) {
+      try {
+        b = map.floorKey(kvBlock);
+        lock(b);
+        if (b.hasRecentUnsafeModification()) {
+          // check one more time with lock
+          // - we caught split in flight
+          IndexBlock bb = null;
+          bb = map.floorKey(kvBlock);
+          if (bb != b) {
+            continue;
+          } 
+        }
+        
+        // THIS CALL decompresses data block only
+        long ptr = b.get(keyPtr, keyLength,  version);
+        
+        if (ptr < 0) {
+          // insert new
+          long vPtr = UnsafeAccess.mallocZeroed(Utils.SIZEOF_INT);
+          UnsafeAccess.putInt(vPtr, incr);
+          put(keyPtr, keyLength, vPtr, Utils.SIZEOF_INT, 0);
+          UnsafeAccess.free(vPtr);
+          return incr;
+        }
+        long vPtr = DataBlock.valueAddress(ptr);
+        int vSize = DataBlock.valueLength(ptr);
+        if (vSize != Utils.SIZEOF_INT) {
+          //TODO
+          return Integer.MIN_VALUE;
+        }
+        int value = UnsafeAccess.toInt(vPtr);
+        UnsafeAccess.putInt(vPtr, value + incr);
+        return value + incr;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        if (b != null) {
+          b.compressDataBlockForKey(keyPtr, keyLength, version);
+        }
+        unlock(b);
+      }
+    }
+  }
+  
+  /**
+   * TODO: test
+   * Increment value (Float)  by key 
+   * @param keyPtr address to look for
+   * @param keyLength key length
+   * @return value after increment. 
+   */
+  public float incrementFloat(long keyPtr, int keyLength, long version, float incr) {
+    IndexBlock kvBlock = getThreadLocalBlock();
+    kvBlock.putForSearch(keyPtr, keyLength, version);
+    IndexBlock b = null;
+    while (true) {
+      try {
+        b = map.floorKey(kvBlock);
+        lock(b);
+        if (b.hasRecentUnsafeModification()) {
+          // check one more time with lock
+          // - we caught split in flight
+          IndexBlock bb = null;
+          bb = map.floorKey(kvBlock);
+          if (bb != b) {
+            continue;
+          } 
+        }
+        
+        // THIS CALL decompresses data block only
+        long ptr = b.get(keyPtr, keyLength,  version);
+        
+        if (ptr < 0) {
+          // insert new
+          long vPtr = UnsafeAccess.mallocZeroed(Utils.SIZEOF_FLOAT);
+          UnsafeAccess.putInt(vPtr, Float.floatToIntBits(incr));
+          put(keyPtr, keyLength, vPtr, Utils.SIZEOF_FLOAT, 0);
+          UnsafeAccess.free(vPtr);
+          return incr;
+        }
+        long vPtr = DataBlock.valueAddress(ptr);
+        int vSize = DataBlock.valueLength(ptr);
+        if (vSize != Utils.SIZEOF_FLOAT) {
+          //TODO
+          return Float.MIN_VALUE;
+        }
+        int value = UnsafeAccess.toInt(vPtr);
+        float val = Float.intBitsToFloat(value);
+        UnsafeAccess.putInt(vPtr, Float.floatToIntBits(val + incr));
+        return val + incr;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        if (b != null) {
+          b.compressDataBlockForKey(keyPtr, keyLength, version);
+        }
+        unlock(b);
+      }
+    }
+  }
+  
+  /**
+   * TODO: test
+   * Increment value (Double)  by key 
+   * @param keyPtr address to look for
+   * @param keyLength key length
+   * @return value after increment. 
+   */
+  public double incrementDouble(long keyPtr, int keyLength, long version, double incr) {
+    IndexBlock kvBlock = getThreadLocalBlock();
+    kvBlock.putForSearch(keyPtr, keyLength, version);
+    IndexBlock b = null;
+    while (true) {
+      try {
+        b = map.floorKey(kvBlock);
+        lock(b);
+        if (b.hasRecentUnsafeModification()) {
+          // check one more time with lock
+          // - we caught split in flight
+          IndexBlock bb = null;
+          bb = map.floorKey(kvBlock);
+          if (bb != b) {
+            continue;
+          } 
+        }
+        
+        // THIS CALL decompresses data block only
+        long ptr = b.get(keyPtr, keyLength,  version);
+        
+        if (ptr < 0) {
+          // insert new
+          long vPtr = UnsafeAccess.mallocZeroed(Utils.SIZEOF_DOUBLE);
+          UnsafeAccess.putLong(vPtr, Double.doubleToLongBits(incr));
+          put(keyPtr, keyLength, vPtr, Utils.SIZEOF_DOUBLE, 0);
+          UnsafeAccess.free(vPtr);
+          return incr;
+        }
+        long vPtr = DataBlock.valueAddress(ptr);
+        int vSize = DataBlock.valueLength(ptr);
+        if (vSize != Utils.SIZEOF_DOUBLE) {
+          //TODO
+          return Double.MIN_VALUE;
+        }
+        long value = UnsafeAccess.toLong(vPtr);
+        double val = Double.longBitsToDouble(value);
+        UnsafeAccess.putLong(vPtr, Double.doubleToLongBits(val + incr));
+        return val + incr;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        if (b != null) {
+          b.compressDataBlockForKey(keyPtr, keyLength, version);
+        }
         unlock(b);
       }
     }
@@ -1262,7 +1488,7 @@ public class BigSortedMap {
     totalAllocatedMemory.set(0);
     totalBlockDataSize.set(0);
     totalBlockIndexSize.set(0);
-    totalDataSize.set(0);
+    totalExternalDataSize.set(0);
     totalIndexSize.set(0);
     totalDataInDataBlocksSize.set(0);
     totalDataInIndexBlocksSize.set(0);

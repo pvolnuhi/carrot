@@ -4,6 +4,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
 
+import org.bigbase.carrot.compression.Codec;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -69,14 +72,55 @@ public final class DataBlock  {
   public final static int EXTERNAL_KEY_VALUE = 0;
   // This is stored as value length
   public final static int EXTERNAL_VALUE = -1;
+  // Minimum data block size for compression
+  public final static int MIN_COMP_SIZE = 512;
 
-  
   static {
     String val = System.getProperty(MAX_BLOCK_SIZE_KEY);
     if (val != null) {
       MAX_BLOCK_SIZE = Short.parseShort(val);
     }
   }
+  
+  /**
+   * Is compression enabled
+   * @return true, if - yes, false otherwise
+   */
+  
+  static boolean isCompressionEnabled() {
+    return BigSortedMap.isCompressionEnabled();
+  }
+  
+  /** 
+   * Used to decompress data block
+   */
+  static ThreadLocal<Long> decompBuffer1 = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
+    }
+  };
+  
+  /**
+   * Used to decompress data block 
+   */
+  static ThreadLocal<Long> decompBuffer2 = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
+    }
+  };
+  
+  /**
+   * Used to compress data block 
+   */
+  static ThreadLocal<Long> compBuffer = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
+    }
+  };
+  
   // The greater factor is the worse is overall performance
   private static double MIN_MERGE_FACTOR = 0.75; 
   /*
@@ -86,8 +130,14 @@ public final class DataBlock  {
    * sizes of allocation 
    * 256 * 2, 3, 4, ... 16
    */
-  static int BASE_SIZE = 256;
-  static int[] BASE_MULTIPLIERS = new int[] {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  public static int BASE_SIZE = 128;
+  // TODO: align block multipliers with jemalloc
+  // 8K Block
+  //static int[] BASE_MULTIPLIERS = new int[] {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 
+  //    20, 22, 24, 26, 28, 30, 32};
+  // 4K block
+  static int[] BASE_MULTIPLIERS = new int[] {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+      18, 20, 22, 24, 26, 28, 30, 32};
   /*
    * Read-Write Lock TODO: StampedLock (Java 8)
    */
@@ -101,7 +151,6 @@ public final class DataBlock  {
   public static int getMaximumBlockSize() {
     return BASE_SIZE * BASE_MULTIPLIERS[BASE_MULTIPLIERS.length -1];
   }
-  
 
   /**
    * Get min size greater than current
@@ -137,9 +186,8 @@ public final class DataBlock  {
     } else {
       return AllocType.EXT_KEY_VALUE;
     }
-  }
-  
-  
+  }  
+
   final static int dataPtrOffset = 0;
 
   /*
@@ -163,12 +211,18 @@ public final class DataBlock  {
 
   /*
    * Auxiliary byte: is used to keep compression codec (lower 3 bits, 0 means 
-   * no compression, total up to 7 codecs can be used), bit 4. Four upper bits are 
+   * no compression, total up to 7 codecs can be used), 
+   * Bit 4: 1 - block is compressed, 0 - decompressed 
+   * Four upper bits are 
    * reserved for future use 
    * is used to keep long K-V presence
    */
   final static int auxOffset = 15;
 
+  final static int CODEC_MASK = 7; // 00000111;
+  
+  final static int COMPRESSED_MASK = 8; // 000001000;
+  
   /*
    * Number of deleted & updated records (2 bytes) - is used during compaction
    * actually, they are pending records waiting for compaction
@@ -181,6 +235,23 @@ public final class DataBlock  {
   volatile long dataPtr = 0;
 
   /*
+   * Compressed data pointer
+   */
+  long compressedDataPtr = 0;
+   
+  /*
+   * Compressed data size
+   */
+  short compDataSize = 0;
+  
+  
+  /*
+   * Compressed data block size 
+   */
+  
+  short compDataBlockSize = 0;
+  
+  /*
    * Initial block size
    */
   short blockSize;
@@ -190,25 +261,21 @@ public final class DataBlock  {
   short numRecords;
   
   short numDeletedAndUpdatedRecords;
-  
-  
+    
   byte seqNumberSplitOrMerge;
   
-  boolean compressed;
+  //boolean compressed;
   
   volatile boolean threadSafe;
   /*
    * Block header address (in index block)
    */
-
   volatile long indexPtr = 0;
 
   /*
    * Parent index block
    */
-
   IndexBlock indexBlock;
-
 
   /*
    * Current lock
@@ -216,14 +283,19 @@ public final class DataBlock  {
   ReentrantReadWriteLock curLock;
 
   volatile boolean valid = true;
-
+  /*
+   * Current operation is mutation
+   */
+  boolean mutation = false;
+  
   public void dump() {
     LOG.info("====================================");
     LOG.info("Address        =" + getDataPtr());
+    LOG.info("Address  index =" + getIndexPtr());
     LOG.info("Block size     =" + getBlockSize());
     LOG.info("Data size      =" + getDataInBlockSize());
     LOG.info("Number k/v's   =" + getNumberOfRecords());
-    LOG.info("Number del/upd =" + getNumberOfDeletedAndUpdatedRecords());
+    LOG.info("Compressed     =" + isCompressed());
     LOG.info("First key      =" + Bytes.toHex(getFirstKey()));
   }
   
@@ -266,13 +338,12 @@ public final class DataBlock  {
     return keyLength(dataPtr) == 1 && UnsafeAccess.toByte(keyAddress(dataPtr)) == 0;
   }
  
-  
   final boolean isValid() {
     return valid;
   }
 
   final void invalidate() {
-    this.valid = false;;
+    this.valid = false;
   }
   
   final long getIndexPtr() {
@@ -282,10 +353,133 @@ public final class DataBlock  {
   final void set(IndexBlock indexBlock, long off) {
     this.indexBlock = indexBlock;
     this.indexPtr = indexBlock.getAddress() + off;
+    this.compressedDataPtr = 0;
+    this.compDataSize = 0;
+    this.compDataBlockSize = 0;
+    
     this.dataPtr = getDataPtr();
     this.valid = true;
+    this.mutation = false;
   }
+  
+  private boolean isMutationOp() {
+    return this.mutation;
+  }
+  
+  private void setMutationOp(boolean v) {
+    this.mutation = v;
+  }
+  
 
+  /**
+   * De-compress data block using default buffer
+   */
+  final void decompressDataBlockIfNeeded() {
+    decompressDataBlockIfNeeded(false);
+  }
+  
+  /**
+   * Before data access and/or modification
+   */
+  final void decompressDataBlockIfNeeded(boolean useSecondBuffer) {
+    //if (!isCompressionEnabled()) return;
+    if (!isCompressed()) return;
+    this.compressedDataPtr = getDataPtr();
+    this.compDataSize = getDataInBlockSize();
+    this.compDataBlockSize = getBlockSize();
+    Codec codec = getCompressionCodec();
+    int compSize = UnsafeAccess.toInt(this.compressedDataPtr);
+    long buf = useSecondBuffer ? decompBuffer2.get() : decompBuffer1.get();
+    int dataSize = codec.decompress(this.compressedDataPtr + Utils.SIZEOF_INT, compSize, buf,
+      MAX_BLOCK_SIZE + 80);
+    this.dataPtr = buf;
+    setDataPtr(this.dataPtr);
+    setDataInBlockSize((short) dataSize);
+    setBlockSize((short) getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, dataSize));
+    setCompressed(false);
+  }
+  
+  /**
+   * Release block. Do compression, update
+   * index block
+   */
+  public void compressDataBlockIfNeeded() {
+    if (!isCompressionEnabled()) return;
+    if (isCompressed()) return;
+        
+    boolean wasCompressed = this.compressedDataPtr != 0;
+    
+    long ptr = wasCompressed? this.compressedDataPtr: getDataPtr();
+    short size = wasCompressed? this.compDataSize: getDataInBlockSize();
+    short blockSize = wasCompressed? this.compDataBlockSize: getBlockSize();
+    
+    // used for compression
+    long buf = compBuffer.get();
+    Codec codec = wasCompressed? getCompressionCodec(): BigSortedMap.codec /* default*/;  
+
+    //TODO: do not compress if data size is small
+    if ((isMutationOp() || !wasCompressed)) {
+      size = (short)codec.compress(this.dataPtr, getDataInBlockSize(), buf, 
+        MAX_BLOCK_SIZE + 80);
+
+      if (size + Utils.SIZEOF_INT < getDataInBlockSize()) {
+        short newBlockSize = (short)getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, size + Utils.SIZEOF_INT);
+        // Update memory stats
+        BigSortedMap.totalBlockDataSize.addAndGet(newBlockSize - blockSize);
+        BigSortedMap.totalAllocatedMemory.addAndGet(newBlockSize - blockSize);
+        BigSortedMap.totalCompressedDataInDataBlocksSize.addAndGet(size + Utils.SIZEOF_INT - this.compDataSize);
+        if (wasCompressed && newBlockSize != blockSize) {
+          blockSize = newBlockSize;
+          ptr = UnsafeAccess.malloc(blockSize);    
+          UnsafeAccess.free(this.compressedDataPtr);
+        } else if (!wasCompressed){
+          blockSize = newBlockSize;
+          // Compress previously uncompressed block
+          ptr = UnsafeAccess.malloc(blockSize);
+          // Deallocate dataPtr
+          UnsafeAccess.free(this.dataPtr);
+        }
+        setCompressionCodec(codec);
+        UnsafeAccess.putInt(ptr,  size);
+        UnsafeAccess.copy (buf, ptr + Utils.SIZEOF_INT, size);   
+        size += Utils.SIZEOF_INT;
+        setCompressed(true);
+
+      } else {
+        // Not compressible
+        size = getDataInBlockSize();
+        short newBlockSize = (short)getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, size);
+        if (this.dataPtr == decompBuffer1.get() ||
+            this.dataPtr == decompBuffer2.get()) {
+          ptr = UnsafeAccess.malloc(newBlockSize);
+          UnsafeAccess.copy(this.dataPtr, ptr, size);
+          UnsafeAccess.free(this.compressedDataPtr);
+          // Update memory stats
+          BigSortedMap.totalBlockDataSize.addAndGet(newBlockSize - blockSize);
+          BigSortedMap.totalAllocatedMemory.addAndGet(newBlockSize - blockSize);
+          BigSortedMap.totalCompressedDataInDataBlocksSize.addAndGet(- this.compDataSize);
+          blockSize = newBlockSize;
+        }       
+        // disable compression
+        setCompressed(false);
+      }
+    } else {
+      // not mutation (GET) and was compressed
+      // restore compressed ptr, size and block size
+      setCompressed(true);
+      setCompressionCodec(codec);
+    }
+    
+    setDataPtr(ptr);
+    setDataInBlockSize(size);
+    setBlockSize(blockSize);
+    this.compressedDataPtr = 0;
+    this.compDataSize = 0;
+    this.compDataBlockSize = 0;
+    setMutationOp(false);
+
+  }
+  
   /**
    *  Register new block
    * @param indexBlock - parent index block
@@ -302,26 +496,30 @@ public final class DataBlock  {
     setSeqNumberSplitOrMerge(seqNumberSplitOrMerge);
     setThreadSafe(threadSafe);
     // TODO compression
-    setCompressed(compressed);
+    setCompressed(false);
+    setCompressionCodec(BigSortedMap.codec);
   }
-
-  
-  public static AllocType getRecordAllocationType(long ptr) {
+ 
+  private static AllocType getRecordAllocationType(long ptr) {
     if( blockKeyLength(ptr) == EXTERNAL_KEY_VALUE) {
       return AllocType.EXT_KEY_VALUE;
     } else if (UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH) == EXTERNAL_VALUE) {
       return AllocType.EXT_VALUE;
     } else {
       return AllocType.EMBEDDED;
-    }
-      
+    }      
   }
-  
-  public static boolean isExternalAllocatedRecord(long ptr) {
+
+  private static boolean isExternalAllocatedRecord(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     return type != AllocType.EMBEDDED;
   }
   
+  /**
+   * WARNING: Public API
+   * @param ptr
+   * @return
+   */
   public static short blockKeyLength(long ptr) {
     return UnsafeAccess.toShort(ptr);
   }
@@ -331,6 +529,11 @@ public final class DataBlock  {
     return UnsafeAccess.toInt(address);
   }
   
+  /**
+   * WARNING: Public API
+   * @param ptr
+   * @return
+   */
   public static int keyLength(long ptr) {
     if (getRecordAllocationType(ptr) == AllocType.EXT_KEY_VALUE) {
       return externalKeyLength(ptr);
@@ -338,14 +541,21 @@ public final class DataBlock  {
       return blockKeyLength(ptr);
     }
   }
-  
+  /**
+   * WARNING: Public API
+   * @param ptr
+   * @return
+   */
   public static short blockValueLength(long ptr) {
     short len = UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH);
     if (len == EXTERNAL_VALUE) return INT_SIZE + ADDRESS_SIZE;
     return len;
   }
-  
-  
+  /**
+   * WARNING: Public API
+   * @param ptr
+   * @return
+   */ 
   public static final int valueLength(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     if (type == AllocType.EXT_KEY_VALUE) {
@@ -360,11 +570,16 @@ public final class DataBlock  {
     }
   }
   
-  public static long getExternalRecordAddress(long ptr) {
+  private static long getExternalRecordAddress(long ptr) {
     int klen = blockKeyLength(ptr);
     return UnsafeAccess.toLong(ptr + RECORD_TOTAL_OVERHEAD + klen + INT_SIZE);
   }
   
+  /**
+   * WARNING: Public API
+   * @param ptr
+   * @return
+   */
   public static long keyAddress(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     if (type != AllocType.EXT_KEY_VALUE) {
@@ -381,6 +596,11 @@ public final class DataBlock  {
     //return UnsafeAccess.toLong(ptr + RECORD_PREFIX_LENGTH + keylen);
   }
   
+  /**
+   * WARNING: Public API
+   * @param ptr
+   * @return
+   */
   public static long valueAddress(long ptr) {
     AllocType type = getRecordAllocationType(ptr);
     if (type == AllocType.EMBEDDED) {
@@ -483,7 +703,6 @@ public final class DataBlock  {
     setDataInBlockSize((short) (v + val));
     if (!isThreadSafe()) {
       BigSortedMap.totalDataInDataBlocksSize.addAndGet(val);
-      BigSortedMap.totalDataSize.addAndGet(val);     
     }
   }
 
@@ -599,27 +818,35 @@ public final class DataBlock  {
   }
 
   /**
+   * TODO: test
    * Is block compressed
    * @return compressed
    */
   final boolean isCompressed() {
-    return (UnsafeAccess.toByte(indexPtr + auxOffset) & 7) != 0;
+    return (UnsafeAccess.toByte(indexPtr + auxOffset) & COMPRESSED_MASK) != 0;
   }
 
   /**
-   * Set block is compressed
-   * @param b compressed or not
+   * TODO: test
+   * @param b
    */
   final void setCompressed(boolean b) {
-    setCompressionCodec(1);
+    int v = UnsafeAccess.toByte(indexPtr + auxOffset);
+    if (b) {
+      v |= COMPRESSED_MASK;
+    } else {
+      v &= ~COMPRESSED_MASK;
+    }
+    UnsafeAccess.putByte(indexPtr + auxOffset, (byte)v);
+    UnsafeAccess.storeFence();
   }
-
   /**
    * Returns compression codec id
    * @return codec id
    */
-  final int getCompressionCodec() {
-    return UnsafeAccess.toByte(indexPtr + auxOffset) & 7;
+  final Codec getCompressionCodec() {
+    int id = UnsafeAccess.toByte(indexPtr + auxOffset) & CODEC_MASK;
+    return CodecFactory.getCodec(id);
   }
   
   
@@ -627,11 +854,12 @@ public final class DataBlock  {
    * Sets compression codec id (0-7)
    * @param codec id
    */
-  final void setCompressionCodec(int codec) {
+  final void setCompressionCodec(Codec codec) {
     // codec is between 0 and 7, 0 - no compression
+    int type = codec == null? 0: codec.getType().ordinal();
     int v = UnsafeAccess.toByte(indexPtr + auxOffset);
     v &= 0xf8;
-    v |= codec;
+    v |= (codec == null? 0: type);
     UnsafeAccess.putByte(indexPtr + auxOffset, (byte)v);
     UnsafeAccess.storeFence();
   }
@@ -650,6 +878,12 @@ public final class DataBlock  {
     if (nextSize < 0 || nextSize < blockSize) {
       return false;
     }
+    
+    if ( isCompressedDataBlock()) {
+      setBlockSize((short) nextSize);
+      return true;
+    }
+    
     long newPtr = UnsafeAccess.malloc(nextSize);
     if (newPtr <= 0) {
       return false;
@@ -658,6 +892,7 @@ public final class DataBlock  {
     BigSortedMap.totalBlockDataSize.addAndGet(nextSize - blockSize);
     // Do copy
     UnsafeAccess.copy(dataPtr, newPtr, dataSize);
+    // DO not free local thread buffer
     UnsafeAccess.free(dataPtr);
     this.dataPtr = newPtr;
     setDataPtr(newPtr);
@@ -666,6 +901,10 @@ public final class DataBlock  {
     return true;
   }
 
+  private boolean isCompressedDataBlock() {
+    return dataPtr == decompBuffer1.get() || dataPtr == decompBuffer2.get();
+  }
+  
   /**
    * Shrink block
    * @return true if success, false - otherwise
@@ -678,6 +917,12 @@ public final class DataBlock  {
     if (nextSize < 0 || nextSize < dataSize || nextSize == blockSize) {
       return false;
     }
+    
+    if (isCompressedDataBlock()) {
+      setBlockSize((short) nextSize);
+      return true;
+    }
+    
     long newPtr = UnsafeAccess.malloc(nextSize);
     if (newPtr <= 0) {
       return false;
@@ -745,11 +990,13 @@ public final class DataBlock  {
   final boolean put(byte[] key, int keyOffset, int keyLength, byte[] value, int valueOffset,
       int valueLength, long version, long expire) throws RetryOperationException {
 
+    // Now this is a mutation
+    setMutationOp(true);
+    
     if (getNumberOfRecords() > 0 && isForbiddenKey(key, keyOffset, keyLength)) {
       // Return success silently TODO
       return true;
     }
-    
     if (mustStoreExternally(keyLength, valueLength)) {
       return putExternally(key, keyOffset, keyLength, value, valueOffset, 
         valueLength, version, expire);
@@ -761,7 +1008,7 @@ public final class DataBlock  {
     //long mostRecentActiveTxId = BigSortedMap.getMostRecentActiveTxSeqId();
     try {
       writeLock();
-      
+            
       onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
@@ -862,6 +1109,7 @@ public final class DataBlock  {
           (valueLength - vallen);
         if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
           // failed to insert, split is required
+          // Hack to avoid recompression
           return false;
         }
         
@@ -910,7 +1158,7 @@ public final class DataBlock  {
     }
     largeKVs.incrementAndGet();
     BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
-    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalExternalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
@@ -943,8 +1191,8 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
-    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength - vLen - kLen);
+    BigSortedMap.totalExternalDataSize.addAndGet(keyLength + valueLength  - vLen - kLen);
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
@@ -961,7 +1209,7 @@ public final class DataBlock  {
     largeKVs.incrementAndGet();
     BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
     //TODO dataSize ?
-    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap.totalExternalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
    // UnsafeAccess.putInt(recAddress , valueLength);
     UnsafeAccess.copy(valuePtr, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
@@ -980,9 +1228,9 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength -vLen/*+ INT_SIZE*/);
     //TODO dataSize ?
-    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap.totalExternalDataSize.addAndGet(valueLength -vLen/*+ INT_SIZE*/);
     //UnsafeAccess.putInt(recAddress , valueLength);
     UnsafeAccess.copy(valuePtr, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
@@ -1005,7 +1253,7 @@ public final class DataBlock  {
     }
     largeKVs.incrementAndGet();
     BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
-    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalExternalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
     
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
@@ -1041,8 +1289,8 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
-    BigSortedMap.totalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength - vLen - kLen);
+    BigSortedMap.totalExternalDataSize.addAndGet(keyLength + valueLength - vLen - kLen);
     
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
@@ -1073,7 +1321,7 @@ public final class DataBlock  {
     }
     largeKVs.incrementAndGet();
     BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
-    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap.totalExternalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
     //UnsafeAccess.putInt(recAddress, valueLength);
     UnsafeAccess.copy(value, valueOffset, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
@@ -1093,8 +1341,8 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
-    BigSortedMap.totalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength  - vLen/*+ INT_SIZE*/);
+    BigSortedMap.totalExternalDataSize.addAndGet(valueLength - vLen/*+ INT_SIZE*/);
     //UnsafeAccess.putInt(recAddress, valueLength);
     UnsafeAccess.copy(value, valueOffset, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
@@ -1111,10 +1359,10 @@ public final class DataBlock  {
     int blockSize = getBlockSize();
     if (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize) {
       // try compact first (remove deleted, updated)
-      compact(true);
+      //compact(true);
       // Get data size again
-      dataSize = getDataInBlockSize();
-      if (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize) {
+      //dataSize = getDataInBlockSize();
+      //if (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize) {
         // try to expand block
         boolean res = expand(dataSize + kvLength + RECORD_TOTAL_OVERHEAD);
         blockSize = getBlockSize();
@@ -1124,7 +1372,7 @@ public final class DataBlock  {
           // there are no conflicting Tx or snapshots exist
           return true;
         }
-      }
+      //}
     }
     return false;
   }
@@ -1141,8 +1389,12 @@ public final class DataBlock  {
     // TODO: result check
     int newKVLength = INT_SIZE + ADDRESS_SIZE +
         (type == AllocType.EXT_VALUE? keyLength:0);// 4 - contains overall length, 8 - address 
+    
+    setMutationOp(true);
+    
     try {
       writeLock();
+      
       onlyExactOverwrite = compactExpandIfNecessary(newKVLength);
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
@@ -1192,6 +1444,7 @@ public final class DataBlock  {
         // Failed to put - split the block
         return false;
       }
+            
       long recAddress = 0;
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
@@ -1359,36 +1612,45 @@ public final class DataBlock  {
     }
   }
   
-  public static long getRecordSeqId(long recordAddress) {
+  private static long getRecordSeqId(long recordAddress) {
   //  short keyLen = blockKeyLength(recordAddress);
   //  return UnsafeAccess.toLong(recordAddress + RECORD_PREFIX_LENGTH + keyLen);
     return 0;
   }
 
 
-  public static void setRecordSeqId(long recordAddress, long seqId) {
+  private static void setRecordSeqId(long recordAddress, long seqId) {
   //  short keyLen = blockKeyLength(recordAddress);
   //  UnsafeAccess.putLong(recordAddress + RECORD_PREFIX_LENGTH + keyLen, seqId);
   }
 
-
+  /**
+   * WARNING: Public API
+   * @param recordAddress
+   * @return
+   */
   public static long getRecordExpire(long recordAddress) {
     return 0;
     //return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH);
   }
 
-  public static void setRecordExpire(long recordAddress, long time) {
+  private static void setRecordExpire(long recordAddress, long time) {
     //UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH, time);
   }
 
-  public static long getRecordEviction(long recordAddress) {
+  private static long getRecordEviction(long recordAddress) {
     return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH /*+ EXPIRE_SIZE_LENGTH*/);
   }
 
-  public static void setRecordEviction(long recordAddress, long value) {
+  private static void setRecordEviction(long recordAddress, long value) {
     UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH /*+ EXPIRE_SIZE_LENGTH*/, value);
   }
 
+  /**
+   * WARNING: Public API
+   * @param recordAddress
+   * @return
+   */
   public static Op getRecordType(long recordAddress) {
     short keyLen = blockKeyLength(recordAddress);
     int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen /*+ SEQUENCEID_SIZE*/);
@@ -1400,22 +1662,6 @@ public final class DataBlock  {
     int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen /*+ SEQUENCEID_SIZE*/);
     UnsafeAccess.putByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen /*+ SEQUENCEID_SIZE*/,
       (byte) (val & 0xfe| type.ordinal()));
-  }
-
-  public static int getRecordDataType(long recordAddress) {
-    short keyLen = blockKeyLength(recordAddress);
-    int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen /*+ SEQUENCEID_SIZE*/);
-    // top 7 bits
-    return (val >>> 1);
-  }
-
-  public static void setRecordDataType(long recordAddress, int type) {
-    short keyLen = blockKeyLength(recordAddress);
-    int val = UnsafeAccess.toByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen /*+ SEQUENCEID_SIZE*/);
-    val &= 0x1;
-    val |= (type <<1);
-    UnsafeAccess.putByte(recordAddress + RECORD_PREFIX_LENGTH + keyLen /*+ SEQUENCEID_SIZE*/,
-      (byte) val);
   }
   
   /**
@@ -1447,6 +1693,8 @@ public final class DataBlock  {
    */
   final boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, long version,
       long expire, boolean reuseValue) throws RetryOperationException {
+
+    setMutationOp(true);
 
     if (getNumberOfRecords() > 0 && isForbiddenKey(keyPtr, keyLength)) {
       // Return success silently TODO
@@ -1513,7 +1761,7 @@ public final class DataBlock  {
         // Failed to put - split the block
         return false;
       }
-
+            
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
@@ -1624,8 +1872,12 @@ public final class DataBlock  {
     // TODO: result check
     int newKVLength = INT_SIZE + ADDRESS_SIZE +
         (type == AllocType.EXT_VALUE? keyLength:0);// 4 - contains overall length, 8 - address 
+
+    setMutationOp(true);
+
     try {
       writeLock();
+      
       onlyExactOverwrite = compactExpandIfNecessary(newKVLength);
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
@@ -1677,6 +1929,7 @@ public final class DataBlock  {
         // Do not free value
         return false;
       }
+            
       long recAddress = 0;
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
@@ -1849,7 +2102,7 @@ public final class DataBlock  {
     }
   }
   
-  final long search(byte[] key, int keyOffset, int keyLength, long version) {
+  private final long search(byte[] key, int keyOffset, int keyLength, long version) {
     return search(key, keyOffset, keyLength, version, false);
   }
   /**
@@ -1861,7 +2114,7 @@ public final class DataBlock  {
    * @param forPut
    * @return address to insert (or update)
    */
-  final long search(byte[] key, int keyOffset, int keyLength, long version, boolean forPut) {
+  private final long search(byte[] key, int keyOffset, int keyLength, long version, boolean forPut) {
     long ptr = dataPtr;
     long stopAddress =0;
     int numRecords = getNumberOfRecords();
@@ -1869,7 +2122,10 @@ public final class DataBlock  {
     //long txId = BigSortedMap.getMostRecentActiveTxSeqId();
     stopAddress = dataPtr + dataSize;
     while (ptr < stopAddress) {
-      int keylen = keyLength(ptr);     
+      int keylen = keyLength(ptr);
+      //if (keylen != 32 && keylen != 1) {
+      //  /*DEBUG*/ System.out.println("search keylen=" + keylen + " ptr="+ ptr);
+      //}
       int vallen = blockValueLength(ptr);
       int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
       if (res < 0 || (res == 0 /*&& version == NO_VERSION*/)) {
@@ -1897,6 +2153,7 @@ public final class DataBlock  {
   }
   
   /**
+   * WARNING: Public API
    * Search position of a first key which is greater or equals to a given key
    * @param keyPtr
    * @param keyLength
@@ -1938,7 +2195,7 @@ public final class DataBlock  {
    * @param keyLength
    * @return address to insert (or update)
    */
-  final long searchFloor(long keyPtr, int keyLength, long version) {
+  private final long searchFloor(long keyPtr, int keyLength, long version) {
     long ptr = dataPtr;
     long stopAddress =0;
     int numRecords = getNumberOfRecords();
@@ -1975,6 +2232,7 @@ public final class DataBlock  {
 
   
   /**
+   * WARNING: Public API
    * Checks if a given key is larger than maximum key 
    * in this data block
    * @param key
@@ -1989,6 +2247,7 @@ public final class DataBlock  {
   }
   
   /**
+   * WARNING: Public API
    * Checks if a given key is larger than maximum key 
    * in this data block
    * @param key
@@ -2002,30 +2261,30 @@ public final class DataBlock  {
     return address == dataPtr + getDataInBlockSize();
   }
   
-  /**
-   * Check if record is deleted
-   * @param addr record address
-   * @return true, false
-   */
-  private boolean isDeleted(long addr) {
-    return getRecordType(addr) == Op.DELETE;
-  }
+//  /**
+//   * Check if record is deleted
+//   * @param addr record address
+//   * @return true, false
+//   */
+//  private boolean isDeleted(long addr) {
+//    return getRecordType(addr) == Op.DELETE;
+//  }
 
-  /**
-   * Checks if this data block is in between two keys
-   * @param start start key address
-   * @param startSize start key size
-   * @param end end key address
-   * @param endSize end key size
-   * @param version version
-   * @return true, if - yes, false - otherwise
-   */
-  public boolean between(long start /*Inclusive*/, int startSize, long end /*Exclusive*/, 
-      int endSize, long version)
-  {
-    return compareTo(start, startSize, version, Op.PUT) >=0 && isLargerThanMax(end, endSize, version);
-  }
-  
+//  /**
+//   * Checks if this data block is in between two keys
+//   * @param start start key address
+//   * @param startSize start key size
+//   * @param end end key address
+//   * @param endSize end key size
+//   * @param version version
+//   * @return true, if - yes, false - otherwise
+//   */
+//  public boolean between(long start /*Inclusive*/, int startSize, long end /*Exclusive*/, 
+//      int endSize, long version)
+//  {
+//    return compareTo(start, startSize, version, Op.PUT) >=0 && isLargerThanMax(end, endSize, version);
+//  }
+//  
   /**
    * Bulk delete operation - for delete range operation. 
    * Additional handling is required at IndexBlock, such as updating first key
@@ -2036,7 +2295,7 @@ public final class DataBlock  {
    * @return number of deleted records
    */
   
-  public int deleteTo(long keyPtr, int keyLength) {
+  private int deleteTo(long keyPtr, int keyLength) {
     int deleted  = 0;
     int deletedSize = 0;
     int numRecords = getNumberOfRecords();
@@ -2081,7 +2340,7 @@ public final class DataBlock  {
    * @return number of deleted records
    */
   
-  public int deleteFrom(long keyPtr, int keyLength) {
+  private int deleteFrom(long keyPtr, int keyLength) {
     int deleted  = 0;
     int deletedSize = 0;
     int numRecords = getNumberOfRecords();
@@ -2117,7 +2376,7 @@ public final class DataBlock  {
    * @return number of deleted records
    */
   
-  public int deleteFromTo(long startKeyPtr, int startKeySize, long endKeyPtr, 
+  private int deleteFromTo(long startKeyPtr, int startKeySize, long endKeyPtr, 
       int endKeySize) {
     int deleted  = 0;
     int deletedSize = 0;
@@ -2147,6 +2406,7 @@ public final class DataBlock  {
   }
   
   /**
+   * WARNING: Public API
    * Deletes range of Key Values. The range is not necessary
    * inside this data block, so one should check all possible
    * situations. 
@@ -2160,12 +2420,15 @@ public final class DataBlock  {
   public int deleteRange(long startKeyPtr, int startKeySize, long endKeyPtr, int endKeySize, 
       long version)
   {
+    setMutationOp(true);
+
     boolean startInside = false;
     boolean endInside = false;
     // check if we out of range
     if (compareTo(endKeyPtr, endKeySize, version, Op.PUT) < 0) {
       return 0;
     }
+    
     
     startInside = compareTo(startKeyPtr, startKeySize, version, Op.PUT) >=0;
     endInside = !isLargerThanMax(endKeyPtr, endKeySize, version);
@@ -2193,6 +2456,8 @@ public final class DataBlock  {
 
   final OpResult delete(long keyPtr, int keyLength, long version) throws RetryOperationException {
 
+    setMutationOp(true);
+
     if (isForbiddenKey(keyPtr, keyLength)) {
       // Return NOT FOUND TODO
       return OpResult.NOT_FOUND;
@@ -2205,6 +2470,7 @@ public final class DataBlock  {
     long mostRecentActiveTxId = BigSortedMap.getMostRecentActiveTxSeqId();
     try {
       writeLock();
+            
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
       long foundSeqId;
@@ -2246,23 +2512,24 @@ public final class DataBlock  {
           keyLength = blockKeyLength(addr);
           valueLength = blockValueLength(addr); // 12 bytes
         }
-        
+                
         if (insert) {
           if (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize) {
             // try compact first (remove deleted, updated)
-            compact(true);
+            //compact(true);
             // Get data size again
             dataSize = getDataInBlockSize();
-            if (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize) {
+            //if (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize) {
               // try to expand block
               boolean res = expand(dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD);
               blockSize = getBlockSize();
               if (!res
                   || (dataSize + keyLength + valueLength + RECORD_TOTAL_OVERHEAD > blockSize)) {
                 // Still not enough room - bail out (split is required)
+                // Hack
                 return OpResult.SPLIT_REQUIRED;
               }
-            }
+            //}
           }
         }
 
@@ -2272,6 +2539,7 @@ public final class DataBlock  {
           // If we have single record - no need to check parent index block
           // The block will be deleted
           if (firstKey && this.indexBlock.tryUpdateFirstKey(this) == false) {
+            // Hack
             return OpResult.PARENT_SPLIT_REQUIRED;
           }
         }
@@ -2339,12 +2607,13 @@ public final class DataBlock  {
       } while (foundSeqId >= 0);
       
       return result;
-    } finally {
+    } finally {      
       writeUnlock();
     }
   }
   
   /**
+   * WARNING: Public API
    * TODO: check how this work with large K-V
    * Adds Delete tombstone to an empty block
    * @param key
@@ -2399,6 +2668,9 @@ public final class DataBlock  {
    */
   final OpResult delete(byte[] key, int keyOffset, int keyLength, long version)
       throws RetryOperationException {
+
+    setMutationOp(true);
+
     if (isForbiddenKey(key, keyOffset, keyLength)) {
       // Return NOT FOUND TODO
       return OpResult.NOT_FOUND;
@@ -2481,7 +2753,7 @@ public final class DataBlock  {
             return OpResult.PARENT_SPLIT_REQUIRED;
           }
         }
-        
+                
         if (insert) {
           // TODO: test case for this code
           //TODO: key is must be allocated externally due to size case !!!
@@ -3028,11 +3300,11 @@ public final class DataBlock  {
       return;
     }
     //CHANGE
-    int size = keyLength(ptr) + valueLength(ptr) + 
-        (type == AllocType.EXT_KEY_VALUE?(2 * INT_SIZE): 0/*INT_SIZE*/);
+    int size = (type == AllocType.EXT_KEY_VALUE)? keyLength(ptr) + valueLength(ptr) + 
+        (2 * INT_SIZE): valueLength(ptr);
     UnsafeAccess.free(getExternalRecordAddress(ptr));
     largeKVs.decrementAndGet();
-    BigSortedMap.totalDataSize.addAndGet(-size);
+    BigSortedMap.totalExternalDataSize.addAndGet(-size);
     BigSortedMap.totalAllocatedMemory.addAndGet(-size);
   }
   
@@ -3145,7 +3417,8 @@ public final class DataBlock  {
       right.numDeletedAndUpdatedRecords = (short)0;
       right.dataInBlockSize = (short)rightDataSize;
       right.seqNumberSplitOrMerge = 0;
-      right.compressed = false;
+      //TODO: compression
+      //right.compressed = false;
       right.threadSafe = false;
       UnsafeAccess.copy(dataPtr + off, right.dataPtr, right.dataInBlockSize);
       // shrink current
@@ -3358,8 +3631,7 @@ public final class DataBlock  {
       int size = right.getDataInBlockSize();
       incrDataSize((short)size);
       // We need to decrement overall
-      BigSortedMap.totalDataInDataBlocksSize.addAndGet(-size);
-      BigSortedMap.totalDataSize.addAndGet(-size);     
+      //BigSortedMap.totalDataInDataBlocksSize.addAndGet(-size);
       return true;
     } finally {
       right.writeUnlock();
@@ -3387,16 +3659,23 @@ public final class DataBlock  {
 
   
   /**
+   * TODO: FIXME for compression
    * Free block memory and external allocations (true/false) 
    * @param freeExternalAllocs if true, free all the memory of 
    *        external Key-Value allocations
    */
   final void free(boolean freeExternalAllocs) {
-    long ptr = dataPtr;
     int count = 0;
-    int numRecords = getNumberOfRecords();
-    int dataSize = getDataInBlockSize();
+
     int blockSize = getBlockSize();
+    int numRecords = getNumberOfRecords();
+
+    decompressDataBlockIfNeeded();
+
+    int dataSize = getDataInBlockSize();
+    
+    long ptr = dataPtr;
+
     while (count++ < numRecords) {
       int keylen = blockKeyLength(ptr);
       int vallen = blockValueLength(ptr);
@@ -3406,15 +3685,23 @@ public final class DataBlock  {
         long size = getExternalAllocationSize(ptr, type);
         UnsafeAccess.free(addr);
         BigSortedMap.totalAllocatedMemory.addAndGet(-size);
-        BigSortedMap.totalDataSize.addAndGet(-size);
+        BigSortedMap.totalExternalDataSize.addAndGet(-size);
         largeKVs.decrementAndGet();
       }
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
-    UnsafeAccess.free(dataPtr);
+
+    BigSortedMap.totalDataInDataBlocksSize.addAndGet(-dataSize);
+
+    if (this.compressedDataPtr > 0) {
+      UnsafeAccess.free(this.compressedDataPtr);
+      BigSortedMap.totalCompressedDataInDataBlocksSize.addAndGet(-this.compDataSize);
+      blockSize = this.compDataBlockSize;
+    } else {
+      UnsafeAccess.free(dataPtr);
+    }
     BigSortedMap.totalAllocatedMemory.addAndGet(-blockSize);
     BigSortedMap.totalBlockDataSize.addAndGet(-blockSize);
-    BigSortedMap.totalDataInDataBlocksSize.addAndGet(-dataSize);
     valid = false;
 
   }

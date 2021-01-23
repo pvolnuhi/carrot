@@ -75,7 +75,7 @@ public final class IndexBlockScanner implements Closeable{
       throws RetryOperationException {
     IndexBlockScanner bs = scanner.get();
     bs.reset();
-    bs.setBlock(b);
+    bs.setIndexBlock(b);
     bs.snapshotId = snapshotId;
     return bs;
   }
@@ -134,7 +134,7 @@ public final class IndexBlockScanner implements Closeable{
       };
       bs.reset();
       bs.setMultiInstanceSafe(true);
-      bs.setBlock(b);
+      bs.setIndexBlock(b);
       bs.snapshotId = snapshotId;
       bs.setStartStopRows(startRow, stopRow);
       return bs;
@@ -185,7 +185,7 @@ public final class IndexBlockScanner implements Closeable{
       // FATAL
       throw new RuntimeException("Index block scanner");
     }
-
+    this.currentDataBlock.decompressDataBlockIfNeeded();
   }
  
   /**
@@ -209,16 +209,15 @@ public final class IndexBlockScanner implements Closeable{
    * @param b block
    * @throws RetryOperationException 
    */
-  private void setBlock(IndexBlock b) throws RetryOperationException {
+  private void setIndexBlock(IndexBlock b) throws RetryOperationException {
     this.indexBlock = b;
   }
-  
 
-  
   /**
    * Advance scanner by one data block
    * @return data block scanner or null
    */
+  int count = 1;
   public final DataBlockScanner nextBlockScanner() {
     // No checks are required
     if (isClosed()) {
@@ -230,16 +229,21 @@ public final class IndexBlockScanner implements Closeable{
         this.curDataBlockScanner = null;
       } catch (IOException e) {
       }
+      // Compress current block if needed
+      this.currentDataBlock.compressDataBlockIfNeeded();
       this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock, isMultiSafe);
 
       if (this.currentDataBlock == null) {
         this.closed = true;
         return null;
+      } else {
+        this.currentDataBlock.decompressDataBlockIfNeeded();
       }
       
       //TODO: check stopRow, version and op
       if(stopRow != null) {
         if (this.currentDataBlock.compareTo(stopRow, 0, stopRow.length, 0, Op.DELETE) < 0) {
+          this.currentDataBlock.compressDataBlockIfNeeded();
           this.currentDataBlock = null;
           this.closed = true;
           return null;
@@ -279,6 +283,7 @@ public final class IndexBlockScanner implements Closeable{
   public boolean isClosed() {
     return this.closed;
   }
+  
   @Override
   public void close() throws IOException {
     // do nothing yet
@@ -289,6 +294,9 @@ public final class IndexBlockScanner implements Closeable{
       } catch (IOException e) {
         
       }
+    }
+    if (this.currentDataBlock != null) {
+      this.currentDataBlock.compressDataBlockIfNeeded();
     }
     // Unlock index block
     if (indexBlock != null) {

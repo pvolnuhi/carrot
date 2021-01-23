@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
@@ -16,30 +18,53 @@ import org.junit.Ignore;
 
 public class IndexBlockDirectMemoryTest {
   
+  static {
+    UnsafeAccess.debug = true;
+  }
   
   @Test
   public void testAll() throws RetryOperationException, IOException {
-    
-    for (int i=0; i < 1000; i++) {
+
+    for (int i = 0; i < 100; i++) {
+      System.out.println("\nRun " + (i+1)+"\n");
       testPutGet();
+      testPutGetWithCompressionLZ4();
+      testPutGetWithCompressionLZ4HC();
       testPutGetDeleteFull();
+      testPutGetDeleteFullWithCompressionLZ4();
+      testPutGetDeleteFullWithCompressionLZ4HC();
       testPutGetDeletePartial();
+      testPutGetDeletePartialWithCompressionLZ4();
+      testPutGetDeletePartialWithCompressionLZ4HC();
       testAutomaticDataBlockMerge();
+      testAutomaticDataBlockMergeWithCompressionLZ4();
+      testAutomaticDataBlockMergeWithCompressionLZ4HC();
       testOverwriteSameValueSize();
+      testOverwriteSameValueSizeWithCompressionLZ4();
+      testOverwriteSameValueSizeWithCompressionLZ4HC();
       testOverwriteSmallerValueSize();
+      testOverwriteSmallerValueSizeWithCompressionLZ4();
+      testOverwriteSmallerValueSizeWithCompressionLZ4HC();
       testOverwriteLargerValueSize();
-    }   
+      testOverwriteLargerValueSizeWithCompressionLZ4();
+      testOverwriteLargerValueSizeWithCompressionLZ4HC();
+    }
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats();
   }
   
+  protected void freeKeys(ArrayList<Key> keys) {
+    for(Key key: keys) {
+      UnsafeAccess.free(key.address);
+    }
+  }
   
   @Ignore
   @Test
   public void testPutGet() {
     System.out.println("testPutGet");  
-
     IndexBlock ib = getIndexBlock(4096);
     ArrayList<Key> keys = fillIndexBlock(ib);
-
     for(Key key: keys) {
       long valuePtr = UnsafeAccess.malloc(key.length);
       long size = ib.get(key.address, key.length, valuePtr, key.length, Long.MAX_VALUE);
@@ -48,7 +73,26 @@ public class IndexBlockDirectMemoryTest {
       assertEquals(0, res);
       UnsafeAccess.free(valuePtr);
     }
-    
+    ib.free();
+    freeKeys(keys);
+  }
+  
+  @Ignore
+  @Test
+  public void testPutGetWithCompressionLZ4() {
+    System.out.println("testPutGetWithCompressionLZ4");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testPutGet();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+
+  @Ignore
+  @Test
+  public void testPutGetWithCompressionLZ4HC() {
+    System.out.println("testPutGetWithCompressionLZ4HC");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testPutGet();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -57,6 +101,8 @@ public class IndexBlockDirectMemoryTest {
     System.out.println("testAutomaticDataBlockMerge");  
     IndexBlock ib = getIndexBlock(4096);
     ArrayList<Key> keys = fillIndexBlock(ib);
+    Utils.sortKeys(keys);
+
     int before = ib.getNumberOfDataBlock();
     
     // Delete half of records
@@ -67,9 +113,29 @@ public class IndexBlockDirectMemoryTest {
       assertTrue(res == OpResult.OK);
     }
     int after = ib.getNumberOfDataBlock();
-    
     System.out.println("Before =" + before + " After=" + after);
     assertTrue(before > after);
+    ib.free();
+    freeKeys(keys);
+
+  }
+  
+  @Ignore
+  @Test
+  public void testAutomaticDataBlockMergeWithCompressionLZ4() {
+    System.out.println("testAutomaticDataBlockMergeWithCompressionLZ4");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testAutomaticDataBlockMerge();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+
+  @Ignore
+  @Test
+  public void testAutomaticDataBlockMergeWithCompressionLZ4HC() {
+    System.out.println("testAutomaticDataBlockMergeWithCompressionLZ4HC");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testAutomaticDataBlockMerge();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -92,8 +158,9 @@ public class IndexBlockDirectMemoryTest {
     
     // now delete all
     List<Key> splitRequires = new ArrayList<Key>();
+    //int count = 0;
     for(Key key: keys) {
-      
+      //*DEBUG*/System.out.println(count++);
       OpResult result = ib.delete(key.address, key.length, Long.MAX_VALUE);
       if (result == OpResult.SPLIT_REQUIRED) {
         splitRequires.add(key);
@@ -116,7 +183,27 @@ public class IndexBlockDirectMemoryTest {
       }
       UnsafeAccess.free(valuePtr);
     }
+    ib.free();
+    freeKeys(keys);
+
   } 
+  
+  @Ignore
+  @Test
+  public void testPutGetDeleteFullWithCompressionLZ4() {
+    System.out.println("testPutGetDeleteFullWithCompressionLZ4");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testPutGetDeleteFull();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  @Ignore
+  @Test
+  public void testPutGetDeleteFullWithCompressionLZ4HC() {
+    System.out.println("testPutGetDeleteFullWithCompressionLZ4HC");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testPutGetDeleteFull();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
   
   @Ignore
   @Test
@@ -171,29 +258,74 @@ public class IndexBlockDirectMemoryTest {
       assertEquals(0, res);
       UnsafeAccess.free(valuePtr);
     }
+    
+    ib.free();
+    freeKeys(keys);
+
   } 
+  
+  @Ignore
+  @Test
+  public void testPutGetDeletePartialWithCompressionLZ4() {
+    System.out.println("testPutGetDeletePartialWithCompressionLZ4");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testPutGetDeletePartial();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testPutGetDeletePartialWithCompressionLZ4HC() {
+    System.out.println("testPutGetDeletePartiallWithCompressionLZ4HC");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testPutGetDeletePartial();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
   
   @Ignore
   @Test
   public void testOverwriteSameValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSameValueSize");
     Random r = new Random();
-    IndexBlock b = getIndexBlock(4096);
-    List<Key> keys = fillIndexBlock(b);
+    IndexBlock ib = getIndexBlock(4096);
+    ArrayList<Key> keys = fillIndexBlock(ib);
     for( Key key: keys) {
       byte[] value = new byte[key.length];
       r.nextBytes(value);
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
       long buf = UnsafeAccess.malloc(value.length);
-      boolean res = b.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
+      boolean res = ib.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
+      long size = ib.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
       UnsafeAccess.free(buf);
     }
-    scanAndVerify(b, keys);    
+    scanAndVerify(ib, keys);  
+    ib.free();
+    freeKeys(keys);
+
+  }
+  
+  @Ignore
+  @Test
+  public void testOverwriteSameValueSizeWithCompressionLZ4()
+      throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSameValueSizeWithCompressionLZ4");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOverwriteSameValueSize();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+  
+  @Ignore
+  @Test
+  public void testOverwriteSameValueSizeWithCompressionLZ4HC()
+      throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSameValueSizeWithCompressionLZ4HC");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOverwriteSameValueSize();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -201,23 +333,45 @@ public class IndexBlockDirectMemoryTest {
   public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSmallerValueSize");
     Random r = new Random();
-    IndexBlock b = getIndexBlock(4096);
-    List<Key> keys = fillIndexBlock(b);
+    IndexBlock ib = getIndexBlock(4096);
+    ArrayList<Key> keys = fillIndexBlock(ib);
     for( Key key: keys) {
-      byte[] value = new byte[key.length-2];
+      byte[] value = new byte[key.length - 2];
       r.nextBytes(value);
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
       long buf = UnsafeAccess.malloc(value.length);
-      boolean res = b.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
+      boolean res = ib.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
+      long size = ib.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
       UnsafeAccess.free(buf);
     }
-    scanAndVerify(b, keys);    
+    scanAndVerify(ib, keys);    
+    ib.free();
+    freeKeys(keys);
 
+  }
+  
+  @Ignore
+  @Test
+  public void testOverwriteSmallerValueSizeWithCompressionLZ4()
+      throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSmallerValueSizeWithCompressionLZ4");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOverwriteSmallerValueSize();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+
+  @Ignore
+  @Test
+  public void testOverwriteSmallerValueSizeWithCompressionLZ4HC()
+      throws RetryOperationException, IOException {
+    System.out.println("testOverwriteSmallerValueSizeWithCompressionLZ4HC");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOverwriteSmallerValueSize();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   @Ignore
@@ -225,29 +379,52 @@ public class IndexBlockDirectMemoryTest {
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteLargerValueSize");
     Random r = new Random();
-    IndexBlock b = getIndexBlock(4096);
-    List<Key> keys = fillIndexBlock(b);
+    IndexBlock ib = getIndexBlock(4096);
+    ArrayList<Key> keys = fillIndexBlock(ib);
     // Delete half keys
     int toDelete = keys.size()/2;
     for(int i=0; i < toDelete; i++) {
       Key key = keys.remove(0);
-      OpResult res = b.delete(key.address, key.length, Long.MAX_VALUE);
+      OpResult res = ib.delete(key.address, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, res);
+      UnsafeAccess.free(key.address);
     }
     for( Key key: keys) {
       byte[] value = new byte[key.length + 2];
       r.nextBytes(value);      
       long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
       long buf = UnsafeAccess.malloc(value.length);
-      boolean res = b.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
+      boolean res = ib.put(key.address, key.length, valuePtr, value.length, Long.MAX_VALUE, 0);
       assertTrue(res);
-      long size = b.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
+      long size = ib.get(key.address, key.length, buf, value.length, Long.MAX_VALUE);
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(buf, value.length, valuePtr, value.length) == 0);
       UnsafeAccess.free(valuePtr);
       UnsafeAccess.free(buf);
     }
-    scanAndVerify(b, keys);    
+    scanAndVerify(ib, keys);   
+    ib.free();
+    freeKeys(keys);
+  }
+
+  @Ignore
+  @Test
+  public void testOverwriteLargerValueSizeWithCompressionLZ4()
+      throws RetryOperationException, IOException {
+    System.out.println("testOverwriteLargerValueSizeWithCompressionLZ4");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    testOverwriteLargerValueSize();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+  }
+
+  @Ignore
+  @Test
+  public void testOverwriteLargerValueSizeWithCompressionLZ4HC()
+      throws RetryOperationException, IOException {
+    System.out.println("testOverwriteLargerValueSizeWithCompressionLZ4HC");
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    testOverwriteLargerValueSize();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
   }
   
   protected void scanAndVerify(IndexBlock b, List<Key> keys)
@@ -303,7 +480,7 @@ public class IndexBlockDirectMemoryTest {
   protected ArrayList<Key> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<Key> keys = new ArrayList<Key>();
     Random r = new Random();
-    long seed = r.nextLong();//-5970531640484485069L;//;
+    long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println("Fill seed=" + seed);
     int kvSize = 32;
@@ -313,9 +490,11 @@ public class IndexBlockDirectMemoryTest {
       r.nextBytes(key);
       long ptr = UnsafeAccess.malloc(kvSize);
       UnsafeAccess.copy(key, 0, ptr, kvSize);
-      result = b.put(key, 0, key.length, key, 0, key.length, Long.MAX_VALUE, 0);
+      result = b.put(ptr, kvSize, ptr, kvSize, 0, 0);
       if(result) {
         keys.add(new Key(ptr, kvSize));
+      } else {
+        UnsafeAccess.free(ptr);
       }
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 

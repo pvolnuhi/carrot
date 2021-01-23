@@ -12,11 +12,11 @@ import java.util.Random;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.bigbase.carrot.RetryOperationException;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import org.junit.Ignore;
 import org.junit.Test;
 
 
@@ -567,6 +567,19 @@ public class DataBlockTest extends DataBlockTestBase{
     assertEquals( OpResult.OK, res);    
   }
     
+  @Test
+  public void testCompressionDecompression() throws RetryOperationException, IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    System.out.println("testCompression");
+
+    DataBlock b = getDataBlock();
+    List<byte[]> keys = fillDataBlock(b);
+    b.compressDataBlockIfNeeded();
+    b.decompressDataBlockIfNeeded();
+    scanAndVerify(b, keys);
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    
+  }
   
   protected ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
     ArrayList<byte[]> keys = new ArrayList<byte[]>();
@@ -580,7 +593,7 @@ public class DataBlockTest extends DataBlockTestBase{
         keys.add(key);
       }
     }
-    System.out.println(b.getNumberOfRecords() + " " + b.getNumberOfDeletedAndUpdatedRecords() + " " + b.getDataInBlockSize());
+    System.out.println(b.getNumberOfRecords() + " " + b.getDataInBlockSize());
     return keys;
   }
   

@@ -9,6 +9,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -37,6 +39,7 @@ public class DataBlockScannerTest {
       testOpenStartScanReverse();
       testSubScan();
       testSubScanReverse();
+      testCompressionDecompression();
     }
   }
   
@@ -54,6 +57,27 @@ public class DataBlockScannerTest {
     verifyScanner(scanner, keys);
     scanner.close();
   }
+  
+  @Ignore
+  @Test
+  public void testCompressionDecompression() throws IOException {
+    System.out.println("testCompressionDecompression");  
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    DataBlock ib = getDataBlock();
+    List<byte[]> keys = fillDataBlock(ib);
+    Utils.sort(keys);
+    ib.compressDataBlockIfNeeded();
+    ib.decompressDataBlockIfNeeded();
+    System.out.println("Loaded "+ keys.size()+" kvs");
+    DataBlockScanner scanner = DataBlockScanner.getScanner(ib, null, null, Long.MAX_VALUE);
+    // Skip first system key
+    scanner.next();
+    verifyScanner(scanner, keys);
+    scanner.close();
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+
+  }
+  
   @Ignore
   @Test
   public void testFullScanReverse() throws IOException {

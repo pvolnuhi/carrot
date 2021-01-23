@@ -26,17 +26,14 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
   @Test
   public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteSmallerValueSize - LargeKVs");
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 1; i++) {
       Random r = new Random();
-      //long seed = r.nextLong();
-      //r.setSeed(seed);
-      //System.out.println("SEED="+seed);
+      long seed = r.nextLong();
+      r.setSeed(seed);
+      System.out.println("SEED="+seed);
       IndexBlock b = getIndexBlock(4096);
       List<byte[]> keys = fillIndexBlock(b);
-      System.out.println("KEYS ="+ keys.size());
-      int count=0;
       for (byte[] key : keys) {
-        //System.out.println(++count);
         int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
@@ -71,7 +68,7 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
   @Test
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteLargerValueSize- LargeKVs");
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 1; i++) {
       Random r = new Random();
       IndexBlock b = getIndexBlock(4096);
       List<byte[]> keys = fillIndexBlock(b);
@@ -127,12 +124,9 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
       } else {
         break;
       }
-      //System.out.println("rec=" + (2*len));
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 
         b.getDataInBlockSize()+" num records=" + keys.size());
     return keys;
   }
-  
-  
 }

@@ -249,7 +249,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
           : reverse? indexBlock.lastBlock(b):indexBlock.firstBlock(b);
     }
     this.currentDataBlock = b;
-
+    this.currentDataBlock.decompressDataBlockIfNeeded();
     if (b == null) {
       // FATAL
       throw new RuntimeException("Index block scanner");
@@ -308,29 +308,39 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     if (isClosed()) {
       return null;
     }
-    DataBlock b = this.curDataBlockScanner == null? null: 
-      this.indexBlock.nextBlock(this.currentDataBlock, isMultiSafe);
-    
+    if (this.currentDataBlock != null && this.curDataBlockScanner != null) {
+      this.currentDataBlock.compressDataBlockIfNeeded();
+    }
+    DataBlock b = this.currentDataBlock;
+    if (this.curDataBlockScanner != null) {
+      b =  this.indexBlock.nextBlock(this.currentDataBlock, isMultiSafe);
+    }
     return setBlockAndReturnScanner(b);
   }
 
   
   private DataBlockDirectMemoryScanner setBlockAndReturnScanner(DataBlock b) {
+    
+    this.currentDataBlock = b;
+    if (this.currentDataBlock != null) {
+      this.currentDataBlock.decompressDataBlockIfNeeded();
+    }
+    
     if (this.curDataBlockScanner != null) {
       try {
         this.curDataBlockScanner.close();
         this.curDataBlockScanner = null;
       } catch (IOException e) {
       }
-      this.currentDataBlock = b;
 
       if (this.currentDataBlock == null) {
         this.closed = true;
         return null;
-      }
+      } 
       
       if(stopRowPtr != 0) {
         if (this.currentDataBlock.compareTo(stopRowPtr, stopRowLength, 0, Op.DELETE) < 0) {
+          this.currentDataBlock.compressDataBlockIfNeeded();
           this.currentDataBlock = null;
           this.closed = true;
           return null;
@@ -339,6 +349,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
       if(startRowPtr != 0) {
         long lastRecord = this.currentDataBlock.last();
         if (DataBlock.compareTo(lastRecord, startRowPtr, startRowLength, 0, Op.DELETE) > 0) {
+          this.currentDataBlock.compressDataBlockIfNeeded();
           this.currentDataBlock = null;
           this.closed = true;
           return null;
@@ -391,8 +402,13 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     if (isClosed()) {
       return null;
     }
-    DataBlock b = this.curDataBlockScanner == null? null: 
-      this.indexBlock.lastBlock(this.currentDataBlock, stopRowPtr, stopRowLength);
+    if (this.currentDataBlock != null && this.curDataBlockScanner != null) {
+      this.currentDataBlock.compressDataBlockIfNeeded();
+    }
+    DataBlock b = this.currentDataBlock;
+    if (this.curDataBlockScanner != null) {    
+      b = this.indexBlock.lastBlock(this.currentDataBlock, stopRowPtr, stopRowLength);
+    }
     DataBlockDirectMemoryScanner scanner =  setBlockAndReturnScanner(b);
     if (scanner != null) {
       return scanner;
@@ -409,8 +425,13 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     if (isClosed()) {
       return null;
     }
-    DataBlock b = this.curDataBlockScanner == null? null: 
-      this.indexBlock.firstBlock(this.currentDataBlock, startRowPtr, startRowLength);
+    if (this.currentDataBlock != null && this.curDataBlockScanner != null) {
+      this.currentDataBlock.compressDataBlockIfNeeded();
+    }
+    DataBlock b = this.currentDataBlock;
+    if (this.curDataBlockScanner != null) {
+      b =  this.indexBlock.firstBlock(this.currentDataBlock, startRowPtr, startRowLength);
+    }
     return setBlockAndReturnScanner(b);
   }
   
@@ -423,16 +444,24 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     if (isClosed()) {
       return null;
     }
-    DataBlock b = this.curDataBlockScanner == null? null: 
-      this.indexBlock.previousBlock(this.currentDataBlock);
-    
+    if (this.currentDataBlock != null && this.curDataBlockScanner != null) {
+      this.currentDataBlock.compressDataBlockIfNeeded();
+    }
+    DataBlock b = this.currentDataBlock;
+    if (this.curDataBlockScanner != null) {
+      b =  this.indexBlock.previousBlock(this.currentDataBlock);
+    }
     return setBlockAndReturnScanner(b);
- }
+  }
   
+  public DataBlockDirectMemoryScanner getBlockScanner() {
+    return this.curDataBlockScanner;
+  }
   
   public boolean isClosed() {
     return this.closed;
   }
+  
   @Override
   public void close() throws IOException {
     // do nothing yet
@@ -443,6 +472,9 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
       } catch (IOException e) {
         
       }
+    }
+    if (this.currentDataBlock != null) {
+      this.currentDataBlock.compressDataBlockIfNeeded();
     }
     // Unlock index block
     if (indexBlock != null) {

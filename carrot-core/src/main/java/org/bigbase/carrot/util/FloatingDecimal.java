@@ -29,9 +29,9 @@ package org.bigbase.carrot.util;
 import java.util.Arrays;
 import java.util.regex.*;
 
-import sun.misc.DoubleConsts;
-import sun.misc.FDBigInteger;
-import sun.misc.FloatConsts;
+//import sun.misc.DoubleConsts;
+//import sun.misc.FDBigInteger;
+//import sun.misc.FloatConsts;
 
 /**
  * A class for converting between ASCII and decimal representations of a single
@@ -2387,8 +2387,8 @@ public class FloatingDecimal{
 
                 // Float calculations
                 int floatBits = isNegative ? FloatConsts.SIGN_BIT_MASK : 0;
-                if (exponent >= FloatConsts.MIN_EXPONENT) {
-                    if (exponent > FloatConsts.MAX_EXPONENT) {
+                if (exponent >= Float.MIN_EXPONENT) {
+                    if (exponent > Float.MAX_EXPONENT) {
                         // Float.POSITIVE_INFINITY
                         floatBits |= FloatConsts.EXP_BIT_MASK;
                     } else {
@@ -2419,12 +2419,12 @@ public class FloatingDecimal{
                 float fValue = Float.intBitsToFloat(floatBits);
 
                 // Check for overflow and update exponent accordingly.
-                if (exponent > DoubleConsts.MAX_EXPONENT) {         // Infinite result
+                if (exponent > Double.MAX_EXPONENT) {         // Infinite result
                     // overflow to properly signed infinity
                     return isNegative ? A2BC_NEGATIVE_INFINITY : A2BC_POSITIVE_INFINITY;
                 } else {  // Finite return value
-                    if (exponent <= DoubleConsts.MAX_EXPONENT && // (Usually) normal result
-                            exponent >= DoubleConsts.MIN_EXPONENT) {
+                    if (exponent <= Double.MAX_EXPONENT && // (Usually) normal result
+                            exponent >= Double.MIN_EXPONENT) {
 
                         // The result returned in this block cannot be a
                         // zero or subnormal; however after the
@@ -2484,7 +2484,7 @@ public class FloatingDecimal{
                             // Now, discard the bits
                             significand = significand >> bitsDiscarded;
 
-                            significand = ((((long) (DoubleConsts.MIN_EXPONENT - 1) + // subnorm exp.
+                            significand = ((((long) (Double.MIN_EXPONENT - 1) + // subnorm exp.
                                     (long) DoubleConsts.EXP_BIAS) <<
                                     (DoubleConsts.SIGNIFICAND_WIDTH - 1))
                                     & DoubleConsts.EXP_BIT_MASK) |

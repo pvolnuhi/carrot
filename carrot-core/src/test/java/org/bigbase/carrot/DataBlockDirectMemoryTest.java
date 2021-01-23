@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -365,6 +367,20 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     for(int i=1; i < 100000; i++) {
       testOverwriteOnUpdateEnabled();
     }
+  }
+  
+  @Test
+  public void testCompressionDecompression() throws RetryOperationException, IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    System.out.println("testCompression");
+
+    DataBlock b = getDataBlock();
+    List<Key> keys = fillDataBlock(b);
+    b.compressDataBlockIfNeeded();
+    b.decompressDataBlockIfNeeded();
+    scanAndVerify(b, keys);
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    
   }
   
   @Test

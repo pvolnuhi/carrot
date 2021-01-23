@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.util.RangeTree.Range;
 
 import sun.misc.Unsafe;
@@ -27,6 +28,8 @@ public final class UnsafeAccess {
     
     public void allocEvent(long address, long alloced) {
       if (!UnsafeAccess.debug) return;
+      //*DEBUG*/ System.out.println("malloc " + address + " size=" + alloced);
+      //Thread.dumpStack();
       allocEvents.incrementAndGet();
       allocated.addAndGet(alloced);
       allocMap.delete(address);
@@ -36,15 +39,30 @@ public final class UnsafeAccess {
       }
     }
     
+    public void reallocEvent(long address, long alloced) {
+      if (!UnsafeAccess.debug) return;
+      //*DEBUG*/ System.out.println("remalloc " + address + " size=" + alloced);
+      //Thread.dumpStack();
+      //allocEvents.incrementAndGet();
+      Range r = allocMap.delete(address);
+      allocMap.add(new Range(address, (int)alloced));
+      allocated.addAndGet(alloced - r.size);
+    }
+    
     public void freeEvent(long address) {
       if (!UnsafeAccess.debug) return;
+      //*DEBUG*/ System.out.println("free " + address);
 
       Range mem = allocMap.delete(address);
       if (mem == null) {
         System.out.println("FATAL: not found address "+ address);
+        Thread.dumpStack();
         System.exit(-1);
       }
-      freed.addAndGet(mem.size);
+      
+      //Thread.dumpStack();
+
+      freed.addAndGet(mem.size);      
       freeEvents.incrementAndGet();
     }
     
@@ -805,9 +823,11 @@ public final class UnsafeAccess {
   
   public static long realloc(long ptr, long newSize) {
     long pptr = theUnsafe.reallocateMemory(ptr, newSize);
-    mallocStats.allocEvent(pptr, newSize);
     if(pptr != ptr) {
       mallocStats.freeEvent(ptr);
+      mallocStats.allocEvent(pptr, newSize);
+    } else {
+      mallocStats.reallocEvent(pptr, newSize);
     }
     return pptr;
 
@@ -820,9 +840,11 @@ public final class UnsafeAccess {
   public static long reallocZeroed(long ptr, long oldSize, long newSize) {
     long addr = theUnsafe.reallocateMemory(ptr, newSize);
     theUnsafe.setMemory(addr + oldSize, newSize - oldSize, (byte) 0);
-    mallocStats.allocEvent(addr, newSize);
-    if (addr != ptr) {
+    if(addr != ptr) {
       mallocStats.freeEvent(ptr);
+      mallocStats.allocEvent(addr, newSize);
+    } else {
+      mallocStats.reallocEvent(addr, newSize);
     }
 
     return addr;

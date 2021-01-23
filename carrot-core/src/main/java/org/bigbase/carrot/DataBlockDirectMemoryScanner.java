@@ -81,7 +81,7 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
       
   /**
    * Call this method when single instance is expected inside one thread operation
-   * @param b data block
+   * @param b data block decompressed
    * @param startRowPtr start row address
    * @param startRowLength start row length
    * @param stopRowPtr stop row address 
@@ -115,7 +115,7 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
   /**
    * Call this method when multiple instances are expected inside 
    * one thread operation
-   * @param b data block
+   * @param b data block - decompressed
    * @param startRowPtr start row address
    * @param startRowLength start row length
    * @param stopRowPtr stop row address 
@@ -279,14 +279,15 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
    * @throws RetryOperationException 
    */
   private void setBlock(DataBlock b) throws RetryOperationException {
-    
-      this.blockSize = BigSortedMap.maxBlockSize;
-      this.dataSize = b.getDataInBlockSize();
-      this.numRecords = b.getNumberOfRecords();
-      this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
-      this.ptr = b.getAddress(); 
-      this.curPtr = this.ptr;
-      this.isFirst = b.isFirstBlock();
+
+    b.decompressDataBlockIfNeeded();
+    this.blockSize = BigSortedMap.maxBlockSize;
+    this.dataSize = b.getDataInBlockSize();
+    this.numRecords = b.getNumberOfRecords();
+    this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
+    this.ptr = b.getAddress();
+    this.curPtr = this.ptr;
+    this.isFirst = b.isFirstBlock();
   }
   
   protected void setSnapshotId(long snapshotId) {
