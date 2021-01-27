@@ -26,16 +26,16 @@ public class BigSortedMap {
    * @return true, if - yes, false otherwise
    */
   
-  static boolean isCompressionEnabled() {
+  public static boolean isCompressionEnabled() {
     return codec != null && codec.getType() != CodecType.NONE;
   }
   
   
-  static void setCompressionCodec(Codec codec) {
+  public static void setCompressionCodec(Codec codec) {
     BigSortedMap.codec = codec;
   }
   
-  static Codec getCompressionCodec() {
+  public static Codec getCompressionCodec() {
     return codec;
   }
   
@@ -132,7 +132,8 @@ public class BigSortedMap {
   public static void memoryStats() {
     System.out.println("            Total : " + getTotalAllocatedMemory());
     System.out.println(" Data Blocks Size : " + getTotalBlockDataSize());
-    System.out.println("Index Blocks Size : " + getTotalIndexSize());
+    System.out.println("Index Blocks Size : " + getTotalBlockIndexSize());
+    System.out.println("       Index Size : " + getTotalIndexSize());
     System.out.println("        Data Size : " + getTotalDataSize());
 
   }
@@ -268,7 +269,7 @@ public class BigSortedMap {
    * @return size
    */
   public static long getTotalCompressedDataSize() {
-    return totalExternalDataSize.get() + totalCompressedDataInDataBlocksSize.get();
+    return  totalCompressedDataInDataBlocksSize.get();
   }
   /**
    * Get total index size
@@ -287,7 +288,7 @@ public class BigSortedMap {
   
   
   public static void printMemoryAllocationStats() {
-    System.out.println("Carrot memory allocation statistics:");
+    System.out.println("\nCarrot memory allocation statistics:");
     System.out.println("Total memory               :" + getTotalAllocatedMemory());
     System.out.println("Total data blocks          :" + getTotalBlockDataSize());
     System.out.println("Total data size            :" + getTotalDataSize());
@@ -298,7 +299,7 @@ public class BigSortedMap {
     System.out.println("Total external data size   :" + totalExternalDataSize.get());
     
     System.out.println("Copmpression ratio         :" + ((double)getTotalDataSize()/ 
-        getTotalAllocatedMemory()));
+        getTotalAllocatedMemory())+"\n");
   }
   /** 
    * Gets maximum memory limit
@@ -519,11 +520,14 @@ public class BigSortedMap {
         } 
         
         // When map is empty, recordAddress is always 0
+        // This call ONLY decompresses data
         long recordAddress = lowerKey == false? 
             b.get(op.getKeyAddress(), op.getKeySize(), version, op.isFloorKey()):
               b.lastRecordAddress();
         if (recordAddress < 0 && op.isFloorKey() && lowerKey == false && !firstBlock) {
           lowerKey = true;
+          //b.compressDataBlockForKey(op.getKeyAddress(), op.getKeySize(), version);
+          b.compressLastUsedDataBlock();
           continue;
         }
         
@@ -531,12 +535,12 @@ public class BigSortedMap {
         // Execute operation
         boolean result = op.execute();
         int updatesCount = op.getUpdatesCount();
-
+        // Compress again to preserve compressed data ptr
+        //b.compressDataBlockForKey(op.getKeyAddress(), op.getKeySize(), version);
+        b.compressLastUsedDataBlock();
         if (result == false || updatesCount == 0) {
-          b.compressDataBlockForKey(op.getKeyAddress(), op.getKeySize(), version);
           return result;
-        } 
-        
+        }         
         // updates count > 0
         // execute first update (update to existing key)
         long keyPtr = op.keys()[0];
@@ -561,6 +565,7 @@ public class BigSortedMap {
         if (updateType == true) { // DELETE
           // Single update can be delete - NOW WE DO NOT INSERT DELETE MARKERS
           // So DELETE will always succeed (true or false)
+          // This call compress data block in b
           OpResult res = b.delete(keyPtr, keyLength, version);
           // We do not check result? Should always be OK?
           if (updatesCount < 2) {
@@ -571,7 +576,7 @@ public class BigSortedMap {
           }
           
         } else { // PUT
-          //*DEBUG*/ System.out.println("PUT KEY="+ Bytes.toHex(keyPtr, keyLength));
+          // This call compress data block in b
           result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
           if (!result && getTotalAllocatedMemory() < maxMemory) {
             bb = b.split();
@@ -776,6 +781,7 @@ public class BigSortedMap {
     }
   }
   /**
+   * TODO: TEST delete empty index blocks
    * Delete key range operation
    * @param startKeyPtr key address
    * @param startKeyLength key length
@@ -815,7 +821,7 @@ public class BigSortedMap {
           toDelete.free();
           toDelete = null;
         }
-        if (b.isEmpty()) {
+        if (b.isEmpty() && !b.isFirstIndexBlock()) {
           toDelete = b;
         }
         // and continue loop
@@ -1422,7 +1428,10 @@ public class BigSortedMap {
       return null;
     }
     
-    return getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
+    BigSortedMapDirectMemoryScanner scanner =
+        getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
+    scanner.setPrefixScanner(true);
+    return scanner;
   }
   
   /**
@@ -1440,7 +1449,10 @@ public class BigSortedMap {
       return null;
     }
     
-    return getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
+    BigSortedMapDirectMemoryScanner scanner =
+        getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
+    scanner.setPrefixScanner(true);
+    return scanner;
   }
   
   

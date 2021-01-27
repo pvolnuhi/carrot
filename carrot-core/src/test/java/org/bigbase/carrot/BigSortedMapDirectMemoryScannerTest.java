@@ -8,19 +8,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
 public class BigSortedMapDirectMemoryScannerTest {
 
-  static BigSortedMap map;
-  static long totalLoaded;
-  static long MAX_ROWS = 1000000;
-  @BeforeClass 
-  public static void setUp() throws IOException {
+  static {
+    UnsafeAccess.debug = true;
+  }
+  
+  BigSortedMap map;
+  long totalLoaded;
+  long MAX_ROWS = 1000000;
+  
+  private void setUp() throws IOException {
     BigSortedMap.setMaxBlockSize(4096);
     map = new BigSortedMap(100000000);
     totalLoaded = 0;
@@ -30,16 +35,21 @@ public class BigSortedMapDirectMemoryScannerTest {
       load(totalLoaded);
     }
     long end = System.currentTimeMillis();
-    map.dumpStats();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
     long scanned = countRecords();
     System.out.println("Scanned="+ countRecords());
-    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
+    System.out.println("\nTotal memory      =" + BigSortedMap.getTotalAllocatedMemory());
+    System.out.println("Total   data      =" + BigSortedMap.getTotalDataSize());
+    System.out.println("Compression ratio =" + ((float)BigSortedMap.getTotalDataSize())/
+      BigSortedMap.getTotalAllocatedMemory()+"\n");
     assertEquals(totalLoaded, scanned);
   }
   
-  private static boolean load(long totalLoaded) {
+  private void tearDown() {
+    map.dispose();
+  }
+  
+  private boolean load(long totalLoaded) {
     byte[] key = ("KEY"+ (totalLoaded)).getBytes();
     byte[] value = ("VALUE"+ (totalLoaded)).getBytes();
     long keyPtr = UnsafeAccess.malloc(key.length);
@@ -53,7 +63,7 @@ public class BigSortedMapDirectMemoryScannerTest {
   }
   
    
-  static long countRecords() throws IOException {
+  long countRecords() throws IOException {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long counter = 0;
     while(scanner.hasNext()) {
@@ -63,7 +73,57 @@ public class BigSortedMapDirectMemoryScannerTest {
     scanner.close();
     return counter;
   }
+ 
+  private void allTests() throws IOException {
+    testDirectMemoryAllRangesMapScanner();
+    testDirectMemoryAllRangesMapScannerReverse();
+    testDirectMemoryFullMapScanner();
+    testDirectMemoryAllRangesMapScannerReverse();
+    testDirectMemoryFullMapScannerWithDeletes();
+    testDirectMemoryFullMapScannerWithDeletesReverse();
+    testDirectMemoryScannerSameStartStopRow();
+    testDirectMemoryScannerSameStartStopRowReverse();
   
+  }
+  
+  @Test
+  public void runAllNoCompression() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    for (int i = 0; i < 1; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = NONE\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    for (int i=0; i < 1; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4HC() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    for (int i=0; i < 1; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4HC\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
   
   @Ignore
   @Test  
@@ -112,21 +172,6 @@ public class BigSortedMapDirectMemoryScannerTest {
     assertEquals(totalLoaded, count1 + count2 + count3); 
     UnsafeAccess.free(startPtr);
     UnsafeAccess.free(stopPtr);
-  }
-  
-  @Test
-  public void runTests() throws IOException {
-    for (int i=0; i < 1000; i++) {
-      System.out.println("\nRUN "+i+"\n");
-      testDirectMemoryAllRangesMapScanner();
-      testDirectMemoryAllRangesMapScannerReverse();
-      testDirectMemoryFullMapScanner();
-      testDirectMemoryAllRangesMapScannerReverse();
-      testDirectMemoryFullMapScannerWithDeletes();
-      testDirectMemoryFullMapScannerWithDeletesReverse();
-      testDirectMemoryScannerSameStartStopRow();
-      testDirectMemoryScannerSameStartStopRowReverse();
-    }
   }
   
   @Ignore
@@ -268,6 +313,8 @@ public class BigSortedMapDirectMemoryScannerTest {
       UnsafeAccess.copy(value, 0, valPtr, value.length);
       boolean res = map.put(keyPtr, key.length, valPtr, value.length, 0);
       assertTrue(res);
+      UnsafeAccess.free(valPtr);
+      UnsafeAccess.free(keyPtr);
     }
   }
   

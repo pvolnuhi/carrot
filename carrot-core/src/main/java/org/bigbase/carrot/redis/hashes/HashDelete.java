@@ -101,6 +101,7 @@ public class HashDelete extends Operation{
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
+    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize); 
     // Prefix keys must be equals
     if (Utils.compareTo(keyAddress, setKeySize , foundKeyAddress, 
       setKeySize) != 0) {
@@ -149,13 +150,22 @@ public class HashDelete extends Operation{
     this.keySizes[0] = foundKeySize;
     this.values[0] = ptr;
     this.valueSizes[0] = valueSize - toCut;
-    if (numElements == 0 && canDelete(foundKeyAddress, foundKeySize)) {
+    //TODO: Verify that we do not need to check canDelete to delete
+    if (numElements == 0 && !isFirstKey /*&& canDelete(foundKeyAddress, foundKeySize)*/) {
       // Delete Key, b/c its empty
+      //TODO: we postpone deleting empty first key
       this.updateTypes[0] = true;
     }
     return true;
   }
   
+  private boolean isFirstKey(long foundKeyAddress, int foundKeySize) {
+    if (foundKeySize > keySize + 2 * Utils.SIZEOF_BYTE + Utils.SIZEOF_INT) {
+      return false;
+    }
+    return UnsafeAccess.toByte(foundKeyAddress + foundKeySize -1) == 0;
+  }
+
   /**
    * We can delete K-V only when it is empty, not a first key (ends with '\0' 
    * or (TODO) first and the only K-V for the set)

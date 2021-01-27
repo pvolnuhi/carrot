@@ -10,6 +10,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -23,9 +25,11 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
   BigSortedMap map;
   long totalLoaded;
   List<Key> keys;
+  
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
+  
   public  void setUp() throws IOException {
     BigSortedMap.setMaxBlockSize(4096);
     map = new BigSortedMap(100000000);
@@ -45,34 +49,33 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     deallocate(deleted);
 
     long end = System.currentTimeMillis();
-    map.dumpStats();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
     verifyGets(keys);
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long scanned = verifyScanner(scanner, keys);
     scanner.close();
     System.out.println("Scanned="+ scanned);
-    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-    System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println("\nTotal memory      ="+BigSortedMap.getTotalAllocatedMemory());
+    System.out.println("Total   data      ="+BigSortedMap.getTotalDataSize());
+    System.out.println("Compression ratio =" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println();
     assertEquals(totalLoaded, scanned);
+  }
+  
+  private void tearDown() {
+    map.dispose();
+    // Free keys
+    deallocate(keys);
   }
   
   void verifyGets(List<Key> keys) {
     int counter = 0;
     for(Key key: keys) {
-      
       if (!map.exists(key.address, key.length)) {
         fail("FAILED index=" + counter+" key length=" + key.length+" key=" + key.address);
       }
       counter++;
     }
-  }
-  
-  public void tearDown() {
-    map.dispose();
-    // Free keyes
-    deallocate(keys);
   }
   
   private void deallocate(List<Key> keys) {
@@ -82,28 +85,52 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     keys.clear();
   }
   
+  
+  public void allTests() throws IOException {
+    testDirectMemoryAllRangesMapScanner();
+    testDirectMemoryAllRangesMapScannerReverse();
+    testDirectMemoryFullMapScanner();
+    testDirectMemoryFullMapScannerReverse();
+    testDirectMemoryFullMapScannerWithDeletes();
+    testDirectMemoryFullMapScannerWithDeletesReverse();
+  }
+  
   @Test
-  public void testAll() throws IOException {
-    
-    for(int i=0; i < 1000; i++) {
-      System.out.println("\n\n\n\n********* " + i+" **********\n\n\n\n");
-
-      // First group does not undelete
+  public void runAllNoCompression() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    for (int i = 0; i < 100; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = NONE\n");
       setUp();
-      testDirectMemoryAllRangesMapScanner();
-      testDirectMemoryAllRangesMapScannerReverse();
-      testDirectMemoryFullMapScanner();
-      testDirectMemoryFullMapScannerReverse();
-      testDirectMemoryFullMapScannerWithDeletes();
-      testDirectMemoryFullMapScannerWithDeletesReverse();
+      allTests();
       tearDown();
-      
+      BigSortedMap.printMemoryAllocationStats();
       UnsafeAccess.mallocStats();
-      System.out.println("DataBlock large KV leak :" +DataBlock.largeKVs.get());
-      System.out.println("IndexBlock large KV leak :" +IndexBlock.largeKVs.get());
-      System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-      System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-      System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    for (int i=0; i < 100; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4HC() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    for (int i=0; i < 100; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4HC\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
     }
   }
   
@@ -191,6 +218,8 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     scanner.close();
   }
   
+  @Ignore
+  @Test
   public void testDirectMemoryFullMapScannerReverse() throws IOException {
     System.out.println("testDirectMemoryFullMapScanner ");
     BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0, true);
@@ -253,6 +282,8 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     assertEquals(totalLoaded, count1 + count2 + count3); 
   }
   
+  @Ignore
+  @Test
   public void testDirectMemoryAllRangesMapScannerReverse() throws IOException {
     System.out.println("testDirectMemoryAllRangesMapScannerReverse ");
     Random r = new Random();
@@ -289,115 +320,6 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     }
     assertEquals(totalLoaded, count1 + count2 + count3); 
   }
-  
-  private long countRows(BigSortedMapDirectMemoryScanner scanner) throws IOException {
-    long start = System.currentTimeMillis();
-    long count = 0;
-    long prev = 0;
-    int prevLen = 0;
-  
-    while(scanner.hasNext()) {
-      count++;
-      int keySize = scanner.keySize();
-      long key = UnsafeAccess.malloc(keySize);      
-      scanner.key(key, keySize);
-      if (prev != 0) {
-        assertTrue (Utils.compareTo(prev,  prevLen, key, keySize) < 0);
-        UnsafeAccess.free(prev);
-      }
-      prev = key;
-      prevLen = keySize;
-      scanner.next();
-    }   
-    if (prev != 0) {
-      UnsafeAccess.free(prev);
-    }
-    long end = System.currentTimeMillis();
-    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
-    return count;
-  }
-  
-  private long countRowsReverse(BigSortedMapDirectMemoryScanner scanner) throws IOException {
-    long start = System.currentTimeMillis();
-    long count = 0;
-    long prev = 0;
-    int prevLen = 0;
-  
-    if (scanner == null) {
-      return 0;
-    }
-    do {
-      count++;
-      int keySize = scanner.keySize();
-      long key = UnsafeAccess.malloc(keySize);      
-      scanner.key(key, keySize);
-      if (prev != 0) {
-        assertTrue (Utils.compareTo(prev,  prevLen, key, keySize) > 0);
-        UnsafeAccess.free(prev);
-      }
-      prev = key;
-      prevLen = keySize;
-    } while(scanner.previous());
-    
-    if (prev != 0) {
-      UnsafeAccess.free(prev);
-    }
-    long end = System.currentTimeMillis();
-    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
-    return count;
-  }
-  
-  //private long[] seeds = new long[] {-5550167234949718619L, 1363812911114937526L};
-  //private int index = 0;
-  private List<Key> delete(int num) {
-    Random r = new Random();
-    long seed = r.nextLong();
-    r.setSeed(seed);
-    System.out.println("Delete seed ="+seed);
-    int numDeleted = 0;
-    long valPtr = UnsafeAccess.malloc(1);
-    List<Key> list = new ArrayList<Key>();
-    int collisions = 0;
-    while (numDeleted < num) {
-      int i = r.nextInt((int)totalLoaded);
-      Key key = keys.get(i);
-      long len = map.get(key.address, key.length, valPtr, 0, Long.MAX_VALUE);
-      if (len == DataBlock.NOT_FOUND) {
-        collisions++;
-        continue;
-      } else {
-        boolean res = map.delete(key.address, key.length);
-        assertTrue(res);
-        numDeleted++;
-        list.add(key);
-      }
-    }
-    UnsafeAccess.free(valPtr);
-    System.out.println("Deleted="+ numDeleted +" collisions="+collisions);
-    return list;
-  }
-  
-  /**
-   * Delete X - Undelete X not always work, b/c our map is FULL
-   * before deletion and there is no guarantee that insertion X deleted
-   * rows back will succeed
-   * @param keys
-   */
-  private void undelete(List<Key> keys) {
-    /*DEBUG*/ System.out.println("Undelete "+ keys.size()+" keys");
-    int count = 1;
-    for (Key key: keys) {
-      count++;
-      boolean res = map.put(key.address, key.length, key.address, key.length, 0);
-      if (res == false) {
-        System.out.println("Count = "+count+" total="+ keys.size()+" memory ="+ 
-      BigSortedMap.getTotalAllocatedMemory());
-      }
-      assertTrue(res);
-    }
-  }
-  
-    
   @Ignore
   @Test
   public void testDirectMemoryFullMapScannerWithDeletes() throws IOException {
@@ -481,5 +403,109 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     undelete(deletedKeys);
 
   }
+  
+  private long countRows(BigSortedMapDirectMemoryScanner scanner) throws IOException {
+    long start = System.currentTimeMillis();
+    long count = 0;
+    long prev = 0;
+    int prevLen = 0;
+  
+    while(scanner.hasNext()) {
+      count++;
+      int keySize = scanner.keySize();
+      long key = UnsafeAccess.malloc(keySize);      
+      scanner.key(key, keySize);
+      if (prev != 0) {
+        assertTrue (Utils.compareTo(prev,  prevLen, key, keySize) < 0);
+        UnsafeAccess.free(prev);
+      }
+      prev = key;
+      prevLen = keySize;
+      scanner.next();
+    }   
+    if (prev != 0) {
+      UnsafeAccess.free(prev);
+    }
+    long end = System.currentTimeMillis();
+    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
+    return count;
+  }
+  
+  private long countRowsReverse(BigSortedMapDirectMemoryScanner scanner) throws IOException {
+    long start = System.currentTimeMillis();
+    long count = 0;
+    long prev = 0;
+    int prevLen = 0;
+  
+    if (scanner == null) {
+      return 0;
+    }
+    do {
+      count++;
+      int keySize = scanner.keySize();
+      long key = UnsafeAccess.malloc(keySize);      
+      scanner.key(key, keySize);
+      if (prev != 0) {
+        assertTrue (Utils.compareTo(prev,  prevLen, key, keySize) > 0);
+        UnsafeAccess.free(prev);
+      }
+      prev = key;
+      prevLen = keySize;
+    } while(scanner.previous());
+    
+    if (prev != 0) {
+      UnsafeAccess.free(prev);
+    }
+    long end = System.currentTimeMillis();
+    System.out.println("Scanned "+ count+" in "+ (end- start)+"ms");
+    return count;
+  }
 
+  private List<Key> delete(int num) {
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("Delete seed ="+seed);
+    int numDeleted = 0;
+    long valPtr = UnsafeAccess.malloc(1);
+    List<Key> list = new ArrayList<Key>();
+    int collisions = 0;
+    while (numDeleted < num) {
+      int i = r.nextInt((int)totalLoaded);
+      Key key = keys.get(i);
+      long len = map.get(key.address, key.length, valPtr, 0, Long.MAX_VALUE);
+      if (len == DataBlock.NOT_FOUND) {
+        collisions++;
+        continue;
+      } else {
+        boolean res = map.delete(key.address, key.length);
+        assertTrue(res);
+        numDeleted++;
+        list.add(key);
+      }
+    }
+    UnsafeAccess.free(valPtr);
+    System.out.println("Deleted="+ numDeleted +" collisions="+collisions);
+    return list;
+  }
+  
+  /**
+   * Delete X - Undelete X not always work, b/c our map is FULL
+   * before deletion and there is no guarantee that insertion X deleted
+   * rows back will succeed
+   * @param keys
+   */
+  private void undelete(List<Key> keys) {
+    /*DEBUG*/ System.out.println("Undelete "+ keys.size()+" keys");
+    int count = 1;
+    for (Key key: keys) {
+      count++;
+      boolean res = map.put(key.address, key.length, key.address, key.length, 0);
+      if (res == false) {
+        System.out.println("Count = "+count+" total="+ keys.size()+" memory ="+ 
+      BigSortedMap.getTotalAllocatedMemory());
+      }
+      assertTrue(res);
+    }
+  }
 }

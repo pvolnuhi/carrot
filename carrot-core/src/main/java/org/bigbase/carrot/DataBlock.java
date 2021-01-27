@@ -97,7 +97,9 @@ public final class DataBlock  {
   static ThreadLocal<Long> decompBuffer1 = new ThreadLocal<Long>() {
     @Override
     protected Long initialValue() {
-      return UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
+      long ptr = UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
+      /*DEBUG*/ System.out.println("Decomp buf1=" + ptr);
+      return ptr;
     }
   };
   
@@ -107,7 +109,9 @@ public final class DataBlock  {
   static ThreadLocal<Long> decompBuffer2 = new ThreadLocal<Long>() {
     @Override
     protected Long initialValue() {
-      return UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
+      long ptr = UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
+      /*DEBUG*/ System.out.println("Decomp buf2=" + ptr);
+      return ptr;    
     }
   };
   
@@ -289,14 +293,15 @@ public final class DataBlock  {
   boolean mutation = false;
   
   public void dump() {
-    LOG.info("====================================");
-    LOG.info("Address        =" + getDataPtr());
-    LOG.info("Address  index =" + getIndexPtr());
-    LOG.info("Block size     =" + getBlockSize());
-    LOG.info("Data size      =" + getDataInBlockSize());
-    LOG.info("Number k/v's   =" + getNumberOfRecords());
-    LOG.info("Compressed     =" + isCompressed());
-    LOG.info("First key      =" + Bytes.toHex(getFirstKey()));
+    System.out.println("====================================");
+    System.out.println("Address        =" + getDataPtr());
+    System.out.println("Address  index =" + getIndexPtr());
+    System.out.println("Block size     =" + getBlockSize());
+    System.out.println("Data size      =" + getDataInBlockSize());
+    System.out.println("Number k/v's   =" + getNumberOfRecords());
+    System.out.println("Compressed     =" + isCompressed());
+    System.out.println("First key      =" + Bytes.toHex(getFirstKey()));
+    System.out.println();
   }
   
   public void dumpData() {
@@ -382,8 +387,8 @@ public final class DataBlock  {
    * Before data access and/or modification
    */
   final void decompressDataBlockIfNeeded(boolean useSecondBuffer) {
-    //if (!isCompressionEnabled()) return;
     if (!isCompressed()) return;
+   
     this.compressedDataPtr = getDataPtr();
     this.compDataSize = getDataInBlockSize();
     this.compDataBlockSize = getBlockSize();
@@ -393,6 +398,9 @@ public final class DataBlock  {
     int dataSize = codec.decompress(this.compressedDataPtr + Utils.SIZEOF_INT, compSize, buf,
       MAX_BLOCK_SIZE + 80);
     this.dataPtr = buf;
+    //*DEBUG*/ System.out.println("decompress " + this.compressedDataPtr + 
+    //  " to " + this.dataPtr);
+    
     setDataPtr(this.dataPtr);
     setDataInBlockSize((short) dataSize);
     setBlockSize((short) getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, dataSize));
@@ -406,7 +414,11 @@ public final class DataBlock  {
   public void compressDataBlockIfNeeded() {
     if (!isCompressionEnabled()) return;
     if (isCompressed()) return;
-        
+    //*DEBUG*/ System.out.println("compress data=" + this.dataPtr + 
+    //  " compPtr=" + this.compressedDataPtr);;
+    long allocs = UnsafeAccess.mallocStats.getAllocEventNumber();
+    long frees = UnsafeAccess.mallocStats.getFreeEventNumber();
+    
     boolean wasCompressed = this.compressedDataPtr != 0;
     
     long ptr = wasCompressed? this.compressedDataPtr: getDataPtr();
@@ -437,7 +449,11 @@ public final class DataBlock  {
           // Compress previously uncompressed block
           ptr = UnsafeAccess.malloc(blockSize);
           // Deallocate dataPtr
-          UnsafeAccess.free(this.dataPtr);
+          if (this.dataPtr != decompBuffer1.get() 
+              && this.dataPtr != decompBuffer2.get()) {
+            
+            UnsafeAccess.free(this.dataPtr);
+          }
         }
         setCompressionCodec(codec);
         UnsafeAccess.putInt(ptr,  size);
@@ -449,8 +465,8 @@ public final class DataBlock  {
         // Not compressible
         size = getDataInBlockSize();
         short newBlockSize = (short)getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, size);
-        if (this.dataPtr == decompBuffer1.get() ||
-            this.dataPtr == decompBuffer2.get()) {
+        if ((this.dataPtr == decompBuffer1.get() ||
+            this.dataPtr == decompBuffer2.get()) && this.compressedDataPtr > 0) {
           ptr = UnsafeAccess.malloc(newBlockSize);
           UnsafeAccess.copy(this.dataPtr, ptr, size);
           UnsafeAccess.free(this.compressedDataPtr);
@@ -477,7 +493,12 @@ public final class DataBlock  {
     this.compDataSize = 0;
     this.compDataBlockSize = 0;
     setMutationOp(false);
-
+    long newallocs = UnsafeAccess.mallocStats.getAllocEventNumber();
+    long newfrees = UnsafeAccess.mallocStats.getFreeEventNumber();
+    if (newallocs - allocs != newfrees - frees) {
+      /*DEBUG*/ System.out.println("\nCOMPRESS allocs =" + (newallocs - allocs) + " frees="+ (newfrees - frees));
+      Thread.dumpStack();
+    }
   }
   
   /**
@@ -902,7 +923,8 @@ public final class DataBlock  {
   }
 
   private boolean isCompressedDataBlock() {
-    return dataPtr == decompBuffer1.get() || dataPtr == decompBuffer2.get();
+    return (dataPtr == decompBuffer1.get() || dataPtr == decompBuffer2.get()) 
+        && compressedDataPtr > 0;
   }
   
   /**
@@ -3666,7 +3688,6 @@ public final class DataBlock  {
    */
   final void free(boolean freeExternalAllocs) {
     int count = 0;
-
     int blockSize = getBlockSize();
     int numRecords = getNumberOfRecords();
 
@@ -3693,16 +3714,19 @@ public final class DataBlock  {
 
     BigSortedMap.totalDataInDataBlocksSize.addAndGet(-dataSize);
 
+    valid = false;
+
     if (this.compressedDataPtr > 0) {
       UnsafeAccess.free(this.compressedDataPtr);
       BigSortedMap.totalCompressedDataInDataBlocksSize.addAndGet(-this.compDataSize);
       blockSize = this.compDataBlockSize;
-    } else {
+    } else if (dataPtr != decompBuffer1.get() && dataPtr != decompBuffer2.get()){
       UnsafeAccess.free(dataPtr);
+    } else {
+      return;
     }
     BigSortedMap.totalAllocatedMemory.addAndGet(-blockSize);
     BigSortedMap.totalBlockDataSize.addAndGet(-blockSize);
-    valid = false;
 
   }
 

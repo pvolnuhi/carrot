@@ -393,7 +393,7 @@ public class Hashes {
           long valuePtr = scanner.valueAddress();
           total += numElementsInValue(valuePtr);
           scanner.next();
-        }
+        } 
         scanner.close();
       } catch (IOException e) {
         // should never be thrown

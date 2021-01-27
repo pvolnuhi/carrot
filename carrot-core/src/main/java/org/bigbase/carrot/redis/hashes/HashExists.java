@@ -1,14 +1,11 @@
 package org.bigbase.carrot.redis.hashes;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
-import static org.bigbase.carrot.redis.Commons.keySize;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
-import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.Utils;
 /**
  * Although not a mutation this operation is executed as a mutation

@@ -13,6 +13,7 @@ import static org.bigbase.carrot.redis.Commons.setNumElements;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -25,11 +26,6 @@ import org.bigbase.carrot.util.Utils;
  *
  */
 public class HashSet extends Operation{
-  
-  static long ZERO = UnsafeAccess.malloc(1);  
-  static {
-    UnsafeAccess.putByte(ZERO,  (byte)0);
-  }
   
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
@@ -45,6 +41,11 @@ public class HashSet extends Operation{
     }
   };
   
+  private long fieldValueAddress;
+  
+  private int fieldValueSize;
+  
+  private MutationOptions opts;
     
   /**
    * Checks key arena size
@@ -85,9 +86,6 @@ public class HashSet extends Operation{
     }
     return kSize;
   }
-  private long fieldValueAddress;
-  private int fieldValueSize;
-  private MutationOptions opts;
   
   public HashSet() {
     setFloorKey(true);
@@ -118,13 +116,13 @@ public class HashSet extends Operation{
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress <=0 && opts == MutationOptions.XX) {
+    if (foundRecordAddress <= 0 && opts == MutationOptions.XX) {
       return false;
     }
     // check prefix
     int setKeySize = keySizeWithPrefix(keyAddress);
-    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
+    int foundKeySize = foundRecordAddress > 0? DataBlock.keyLength(foundRecordAddress): 0;
+    long foundKeyAddress = foundRecordAddress > 0? DataBlock.keyAddress(foundRecordAddress): 0;
     long fieldPtr = elementAddressFromKey(keyAddress);
     int fieldSize = elementSizeFromKey(keyAddress, keySize);
     // Prefix keys must be equals if set exists, otherwise insert new set KV
@@ -137,11 +135,13 @@ public class HashSet extends Operation{
       return true;
     }
     // Set exists
- 
+    long valueAddress = DataBlock.valueAddress(foundRecordAddress);
+    int valueSize = DataBlock.valueLength(foundRecordAddress);
     // First two bytes are number of elements in a value
     long addr = Hashes.insertSearch(foundRecordAddress, fieldPtr, fieldSize);
+    boolean append = addr == (valueAddress + valueSize);
     // check if the same element
-    boolean exists = Hashes.compareFields(addr, fieldPtr, fieldSize) == 0;
+    boolean exists = append? false: Hashes.compareFields(addr, fieldPtr, fieldSize) == 0;
     if ( exists && opts == MutationOptions.NX || !exists && opts == MutationOptions.XX) {
       // Can not insert, because of mutation options
       return false;
@@ -150,18 +150,14 @@ public class HashSet extends Operation{
     int fieldSizeSize = Utils.sizeUVInt(fieldSize);
     int fieldValueSizeSize = Utils.sizeUVInt(fieldValueSize);
     int toAdd = fieldSizeSize + fieldSize + fieldValueSize + fieldValueSizeSize;
-    long valueAddress = DataBlock.valueAddress(foundRecordAddress);
 
-    int valueSize = DataBlock.valueLength(foundRecordAddress);
     int newValueSize = valueSize + toAdd;
     
     boolean needSplit = DataBlock.mustStoreExternally(foundKeySize, newValueSize);
 
     if (!needSplit) {
-
       Hashes.checkValueArena(newValueSize);
-      insertFieldValue(valueAddress, valueSize, addr, fieldPtr, fieldSize); 
-    
+      insertFieldValue(valueAddress, valueSize, addr, fieldPtr, fieldSize);    
       // set # of updates to 1
       this.updatesCount = 1;
       this.keys[0] = foundKeyAddress; // use the key we found
@@ -263,7 +259,7 @@ public class HashSet extends Operation{
     int kSize = keySize(keyAddress);
     checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE + 1 /*ZERO*/); 
     // Build first key for the new set
-    int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, ZERO, 1);
+    int totalKeySize = buildKey(keyAddress + KEY_SIZE + Utils.SIZEOF_BYTE, kSize, Commons.ZERO, 1);
     long kPtr = keyArena.get();
     int fSizeSize = Utils.sizeUVInt(fieldSize);
     int vSizeSize = Utils.sizeUVInt(fieldValueSize);

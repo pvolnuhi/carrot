@@ -8,19 +8,28 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import org.junit.BeforeClass;
+
+import org.junit.Ignore;
 import org.junit.Test;
+
+//TODO: MEMORY LEAK
 
 public class BigSortedMapTest {
 
-  static BigSortedMap map;
-  static long totalLoaded;
+  BigSortedMap map;
+  long totalLoaded;
   
-  @BeforeClass 
-  public static void setUp() throws IOException {
-	  BigSortedMap.setMaxBlockSize(4096);
+  static {
+    UnsafeAccess.debug = true;
+  }
+  
+  public void setUp() throws IOException {
+    BigSortedMap.setMaxBlockSize(4096);
     map = new BigSortedMap(100000000L);
     totalLoaded = 0;
     long start = System.currentTimeMillis();
@@ -29,21 +38,76 @@ public class BigSortedMapTest {
       byte[] key = ("KEY"+ (totalLoaded)).getBytes();
       byte[] value = ("VALUE"+ (totalLoaded)).getBytes();
       map.put(key, 0, key.length, value, 0, value.length, 0);
-      if (totalLoaded % 1000000 == 0) {
+      if (totalLoaded % 100000 == 0) {
         System.out.println("Loaded = " + totalLoaded+" of "+ 100000000);
       }
     }
     long end = System.currentTimeMillis();
-    map.dumpStats();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
     long scanned = countRecords();
     System.out.println("Scanned="+ countRecords());
-    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-    System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println("\nTotal memory      =" + BigSortedMap.getTotalAllocatedMemory());
+    System.out.println("Total  index      =" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println("Total   data      =" + BigSortedMap.getTotalDataSize());
+    System.out.println("Compressed size   =" + BigSortedMap.getTotalCompressedDataSize());
+    System.out.println("Compression ratio =" + ((float)BigSortedMap.getTotalDataSize())/
+      BigSortedMap.getTotalAllocatedMemory());
+    System.out.println();
+
     assertEquals(totalLoaded, scanned);
   }
-    
+   
+  public void tearDown() {
+    map.dispose();
+  }
+  
+  @Test
+  public void runAllNoCompression() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    for (int i = 0; i < 1; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = NONE\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    for (int i=0; i < 1; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4HC() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    for (int i=0; i < 1; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4HC\n");
+      setUp();
+      allTests();
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
+  
+  private void allTests() throws IOException {
+    testDeleteUndeleted();
+    testExists();
+    testFirstKey();
+    testPutGet();
+  }
+  
+  @Ignore
   @Test
   public void testDeleteUndeleted() throws IOException {
     System.out.println("testDeleteUndeleted");
@@ -54,7 +118,7 @@ public class BigSortedMapTest {
 
   }
   
-  static long countRecords() throws IOException {
+  long countRecords() throws IOException {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long counter = 0;
     while(scanner.hasNext()) {
@@ -65,6 +129,7 @@ public class BigSortedMapTest {
     return counter;
   }
   
+  @Ignore
   @Test
   public void testPutGet() {   
     System.out.println("testPutGet");
@@ -80,14 +145,14 @@ public class BigSortedMapTest {
         assertTrue(Utils.compareTo(value, 0, value.length, tmp, 0,(int) size) == 0);
       } catch(Throwable t) {
         throw t;
-      }
-      
+      }      
     }    
     long end = System.currentTimeMillis();   
     System.out.println("Time to get "+ totalLoaded+" ="+ (end - start)+"ms");    
     
   }
   
+  @Ignore
   @Test
   public void testExists() {   
     System.out.println("testExists");
@@ -99,6 +164,7 @@ public class BigSortedMapTest {
     }            
   }
   
+  @Ignore
   @Test
   public void testFirstKey() throws IOException {
     System.out.println("testFirstKey");
@@ -152,84 +218,5 @@ public class BigSortedMapTest {
       assertTrue(res);
     }
   }
-      
-  @Test
-  public void testSequentialInsert() {
-    System.out.println("testSequentialInsert");
-    BigSortedMap.setMaxBlockSize(4096);
-
-    BigSortedMap map = new BigSortedMap(1000);
-    int counter = 0;
-    while(true) {
-      byte[] key = nextKeySeq(counter);
-      byte[] value = nextValueSeq(counter);
-      if(map.put(key, 0, key.length, value, 0, value.length, 0)) {
-        counter++;
-      } else {
-        counter--;
-        break;
-      }
-    }
-    System.out.println("SEQ: Inserted "+counter+" kvs");
-  }
   
-  @Test
-  public void testNonSequentialInsert() {
-    System.out.println("testNonSequentialInsert");
-    BigSortedMap.setMaxBlockSize(4096);
-    BigSortedMap map = new BigSortedMap(1000);
-    int counter = 0;
-    while(true) {
-      byte[] key = nextKey(counter);
-      byte[] value = nextValue(counter);
-      if(map.put(key, 0, key.length, value, 0, value.length, 0)) {
-        counter++;
-      } else {
-        counter--;
-        break;
-      }
-    }
-    System.out.println("NON-SEQ: Inserted "+counter+" kvs");
-  }
-  
-  private byte[] nextKeySeq (long n) {
-    String s = format(n , 6);
-    return ("KEY"+s).getBytes();
-  }
-  
-  private byte[] nextValueSeq(long n) {
-    String s = format(n , 6);
-    return ("VALUE"+s).getBytes();
-  }
-  
-  private byte[] nextKey(long n) {
-    String s = formatReverse(n, 6);
-    return ("KEY" + s).getBytes();
-  }
-  
-  private byte[] nextValue(long n) {
-    String s = formatReverse(n, 6);
-    return ("VALUE"+s).getBytes();
-  }
-  
-  private String format (long n, int pos) {
-    String s = Long.toString(n);
-    int len = s.length();
-    for (int k=0; k < pos - len; k++) {
-      s = "0" + s;
-    }
-    
-    return s;
-  }
-  
-  private String formatReverse (long n, int pos) {
-    String s = Long.toString(n);
-    int len = s.length();
-
-    for (int k=0; k < pos - len; k++) {
-      s = s + "0";
-    }
-    
-    return s;
-  }
 }

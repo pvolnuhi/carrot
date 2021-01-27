@@ -174,6 +174,9 @@ public class BigSortedMapScanner implements Closeable{
         }
         this.currentIndexBlock = tmp;
         this.blockScanner = this.indexScanner.nextBlockScanner();
+        if (this.blockScanner == null) {
+          return false;
+        }
         updateNextFirstKey();
         return true;
       } catch (RetryOperationException e) {

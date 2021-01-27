@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -20,9 +22,11 @@ public class BigSortedMapLargeKVsTest {
   BigSortedMap map;
   long totalLoaded;
   List<byte[]> keys;
+  
   static {
     UnsafeAccess.debug = true;
   }
+  
   public  void setUp() throws IOException {
     BigSortedMap.setMaxBlockSize(4096);
     map = new BigSortedMap(100000000);
@@ -39,7 +43,7 @@ public class BigSortedMapLargeKVsTest {
     Utils.sort(keys);
     totalLoaded = keys.size();
     long end = System.currentTimeMillis();
-    map.dumpStats();
+    //map.dumpStats();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
     verifyGets(keys);
     BigSortedMapScanner scanner = map.getScanner(null, null);
@@ -60,10 +64,7 @@ public class BigSortedMapLargeKVsTest {
     System.out.println("FILL SEED="+seed);
     int maxSize = 2048;
     boolean result = true;
-    //int counter = 0;
     while(true) {
-      //counter++;
-      //System.out.println(counter);
       int len = r.nextInt(maxSize-16) + 16;
       byte[] key = new byte[len];
       r.nextBytes(key);
@@ -79,20 +80,65 @@ public class BigSortedMapLargeKVsTest {
   }
   
   @Test
-  public void runAll() throws IOException {
-    for (int i = 0; i < 1000; i++) {
-      System.out.println("\n\n\n\n********* " + i+" **********\n\n\n\n");
-
+  public void runAllNoCompression() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    for (int i = 0; i < 10; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = NULL\n");
       setUp();
       allTests();
+      System.out.println("\nTotal memory     =" + BigSortedMap.getTotalAllocatedMemory());
+      System.out.println("Total   data     =" + BigSortedMap.getTotalDataSize());
+      System.out.println("Total  index     =" + BigSortedMap.getTotalBlockIndexSize());
+      System.out.println("Compressed data  =" + BigSortedMap.getTotalCompressedDataSize());
+      System.out.println("Compression ratio=" + ((float)BigSortedMap.getTotalDataSize())/
+        BigSortedMap.getTotalAllocatedMemory());
+      System.out.println();
+      
       tearDown();
+      BigSortedMap.printMemoryAllocationStats();
       UnsafeAccess.mallocStats();
-      System.out.println("DataBlock large KV leak :" +DataBlock.largeKVs.get());
-      System.out.println("IndexBlock large KV leak :" +IndexBlock.largeKVs.get());
-      System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-      System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-      System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
-
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    for (int i = 0; i < 10; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4\n");
+      setUp();
+      allTests();
+      System.out.println("\nTotal memory     =" + BigSortedMap.getTotalAllocatedMemory());
+      System.out.println("Total   data     =" + BigSortedMap.getTotalDataSize());
+      System.out.println("Total  index     =" + BigSortedMap.getTotalBlockIndexSize());
+      System.out.println("Compressed data  =" + BigSortedMap.getTotalCompressedDataSize());
+      System.out.println("Compression ratio=" + ((float)BigSortedMap.getTotalDataSize())/
+        BigSortedMap.getTotalAllocatedMemory());
+      System.out.println();
+      
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
+    }
+  }
+  
+  @Test
+  public void runAllCompressionLZ4HC() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    for (int i = 0; i < 10; i++) {
+      System.out.println("\n********* " + i+" ********** Codec = LZ4HC\n");
+      setUp();
+      allTests();
+      System.out.println("\nTotal memory     =" + BigSortedMap.getTotalAllocatedMemory());
+      System.out.println("Total   data     =" + BigSortedMap.getTotalDataSize());
+      System.out.println("Total  index     =" + BigSortedMap.getTotalBlockIndexSize());
+      System.out.println("Compressed data  =" + BigSortedMap.getTotalCompressedDataSize());
+      System.out.println("Compression ratio=" + ((float)BigSortedMap.getTotalDataSize())/
+        BigSortedMap.getTotalAllocatedMemory());
+      System.out.println();
+      
+      tearDown();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats();
     }
   }
   
@@ -323,6 +369,9 @@ public class BigSortedMapLargeKVsTest {
   public void testAllScannerStartStopRow() throws IOException {
     System.out.println("testAllScannerStartStopRow ");
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("Test seed="+ seed);
     int startIndex = r.nextInt((int)totalLoaded);
     int stopIndex = r.nextInt((int)totalLoaded - startIndex) + startIndex;
     byte[] key1 = keys.get(startIndex);
@@ -335,7 +384,10 @@ public class BigSortedMapLargeKVsTest {
       startKey = key1;
       stopKey = key2;
     }
-    //System.out.println("Start="+ Bytes.toString(startKey) + " stop="+ Bytes.toString(stopKey));
+    System.out.println("Total selected=" + (Math.abs(startIndex - stopIndex) + 1) +" of "+ totalLoaded);
+    System.out.println("Min selected=" + (Math.min(startIndex, stopIndex)));
+    System.out.println("Max selected=" + (Math.max(startIndex, stopIndex)));
+    
     BigSortedMapScanner scanner = map.getScanner(null, startKey);
     long count1 = countRows(scanner); 
     scanner.close();

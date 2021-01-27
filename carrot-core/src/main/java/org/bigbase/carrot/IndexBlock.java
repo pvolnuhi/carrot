@@ -236,7 +236,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		BigSortedMap.totalAllocatedMemory.addAndGet(size);
     BigSortedMap.totalBlockIndexSize.addAndGet(size);
 
-		this.blockSize = (short) size;
+    this.blockSize = (short) size;
 		updateUnsafeModificationTime();
 	}
 
@@ -875,6 +875,15 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
   }
   
+  void dumpFirstBlock() {
+    DataBlock b = block.get();
+    b.set(this,  0);
+    /*DEBUG*/System.out.println("COMPRESSED=" + b.isCompressed());
+    b.decompressDataBlockIfNeeded();
+    b.dump();
+    b.compressDataBlockIfNeeded();
+  }
+  
   void dumpIndexBlockExt() {
     int count =0;
     long ptr = dataPtr;
@@ -882,8 +891,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     while(count++ < numDataBlocks) {
       DataBlock b = block.get();
       b.set(this,  ptr - dataPtr);
+      /*DEBUG*/System.out.println("COMPRESSED=" + b.isCompressed());
       b.decompressDataBlockIfNeeded();
-      b.dumpData();
+      b.dump();
       b.compressDataBlockIfNeeded();
       ptr += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(ptr);
       
@@ -1068,29 +1078,31 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       // List of blocks which requires update first key
       List<Long> toUpdate = null;
       do {
+ 
         dataBlock.decompressDataBlockIfNeeded();
+        
+        Key key = getFirstKey(dataBlock);
+        
         long del = dataBlock.deleteRange(startKeyPtr, startKeySize, endKeyPtr, endKeySize, version);
         if (del == 0) {
+          UnsafeAccess.free(key.address);
           dataBlock.compressDataBlockIfNeeded();
           dataBlock = null;
           break;
         }
         deleted += del;
+        long bptr = dataBlock.getIndexPtr();
+
         if (dataBlock.isFirstBlock()) {
-          dataBlock.compressDataBlockIfNeeded();
-          continue;
-        }
-        if (dataBlock.isEmpty()) {
-          long indexPtr = dataBlock.getIndexPtr();
-          long keyPtr = keyAddress(indexPtr);
-          int keySize = keyLength(indexPtr);
-          long kPtr = UnsafeAccess.allocAndCopy(keyPtr, keySize);
+          UnsafeAccess.free(key.address);
+        } else if (dataBlock.isEmpty()) {
           if (toDelete == null) {
             toDelete = new ArrayList<Key>();
           }
-          toDelete.add(new Key(kPtr, keySize));
-          
+          toDelete.add(key);
         } else {
+          // dispose key first
+          UnsafeAccess.free(key.address);
           if (updateRequired(dataBlock)) {
             if (toUpdate == null) {
               toUpdate = new ArrayList<Long>();
@@ -1099,10 +1111,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
             toUpdate.add(dataBlock.getIndexPtr() - this.dataPtr);
           }
         }
-        // Compress if necessary
-        DataBlock db = nextBlock(dataBlock);
         dataBlock.compressDataBlockIfNeeded();
-        dataBlock = db;
+        dataBlock = nextBlock(bptr);
+        
       } while (dataBlock != null);
       
       processUpdates(toUpdate);
@@ -1114,19 +1125,30 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	    }
 	    writeUnlock();
 	  }
-	  
 	  return deleted;
 	}
 	
-	private void processDeletes(List<Key> toDelete) {
+	private Key getFirstKey(DataBlock dataBlock) {
+    long ptr = dataBlock.getFirstKeyAddress();
+    int size = dataBlock.getFirstKeyLength();
+    long pptr = UnsafeAccess.allocAndCopy(ptr, size);
+    return new Key(pptr, size);
+  }
+
+  private void processDeletes(List<Key> toDelete) {
 	  if (toDelete == null) return;
-	  for(int i = 0; i < toDelete.size(); i++) {
-	    deleteBlockStartWith(toDelete.get(i));
+	  Utils.sortKeys(toDelete);
+	  for(int i = toDelete.size() -1; i >= 0; i--) {
+	    Key key = toDelete.get(i);
+	    deleteBlockStartWith(key);
+	    UnsafeAccess.free(key.address);
 	  }
   }
 
   private void processUpdates(List<Long> toUpdate) {
     if (toUpdate == null) return;
+    
+    //*DEBUG*/ System.out.println("updates - " + toUpdate.size());
     // During bulk first key updates we can not split index block
     // index block size will be increased
     // We iterate from the end to preserve yet not processed offsets
@@ -2423,9 +2445,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       }
     } finally {
 // DO NOT COMPRESS      
-//      if (dataBlock != null) {
-//        dataBlock.compressDataBlockIfNeeded();
-//      }
+// Keep uncompressed
       readUnlock();
     }
 	}
@@ -2457,6 +2477,12 @@ public final class IndexBlock implements Comparable<IndexBlock> {
      } finally {
        writeUnlock();
      }
+	}
+	
+	
+	public void compressLastUsedDataBlock() {
+    DataBlock dataBlock = block.get();
+    dataBlock.compressDataBlockIfNeeded();
 	}
 	 /**
    * Get key-value address
@@ -2503,9 +2529,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       return res;
     } finally {
 // DO NOT COMPRESS      
-//      if (dataBlock != null) {
-//        dataBlock.compressDataBlockIfNeeded();
-//      }
+// Keep block uncompressed
       readUnlock();
     }
   }

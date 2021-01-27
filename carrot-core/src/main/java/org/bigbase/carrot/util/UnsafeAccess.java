@@ -25,11 +25,24 @@ public final class UnsafeAccess {
     public AtomicLong freed = new AtomicLong();
     private RangeTree allocMap = new RangeTree();
         
+    public long getAllocEventNumber() 
+    {
+      return allocEvents.get();
+    }
+    
+    public long getFreeEventNumber() {
+      return freeEvents.get();
+    }
+    
     
     public void allocEvent(long address, long alloced) {
       if (!UnsafeAccess.debug) return;
-      //*DEBUG*/ System.out.println("malloc " + address + " size=" + alloced);
-      //Thread.dumpStack();
+
+      //if (alloced == 256) {
+        //*DEBUG*/ System.out.println("malloc " + address + " size=" + alloced);
+        //Thread.dumpStack();
+      //}
+      
       allocEvents.incrementAndGet();
       allocated.addAndGet(alloced);
       allocMap.delete(address);
@@ -41,8 +54,9 @@ public final class UnsafeAccess {
     
     public void reallocEvent(long address, long alloced) {
       if (!UnsafeAccess.debug) return;
-      //*DEBUG*/ System.out.println("remalloc " + address + " size=" + alloced);
+      //*DEBUG*/ System.out.println("realloc " + address + " size=" + alloced);
       //Thread.dumpStack();
+      
       //allocEvents.incrementAndGet();
       Range r = allocMap.delete(address);
       allocMap.add(new Range(address, (int)alloced));
@@ -52,16 +66,17 @@ public final class UnsafeAccess {
     public void freeEvent(long address) {
       if (!UnsafeAccess.debug) return;
       //*DEBUG*/ System.out.println("free " + address);
-
       Range mem = allocMap.delete(address);
       if (mem == null) {
         System.out.println("FATAL: not found address "+ address);
         Thread.dumpStack();
         System.exit(-1);
       }
-      
-      //Thread.dumpStack();
-
+//      if (mem.size > 4096) {
+//        /*DEBUG*/ System.out.println("free " + address);
+//
+//        Thread.dumpStack();
+//      }
       freed.addAndGet(mem.size);      
       freeEvents.incrementAndGet();
     }
@@ -79,17 +94,20 @@ public final class UnsafeAccess {
     public void printStats() {
       if (!UnsafeAccess.debug) return;
 
-      System.out.println("allocations        ="+ allocEvents.get());
-      System.out.println("allocated memory   ="+ allocated.get());
-      System.out.println("deallocations      ="+ freeEvents.get());
-      System.out.println("deallocated memory ="+ freed.get());
-      System.out.println("leaked             ="+ (allocated.get() - freed.get()));
+      System.out.println("\nMalloc stats:");
+      System.out.println("allocations          ="+ allocEvents.get());
+      System.out.println("allocated memory     ="+ allocated.get());
+      System.out.println("deallocations        ="+ freeEvents.get());
+      System.out.println("deallocated memory   ="+ freed.get());
+      System.out.println("leaked               ="+ (allocated.get() - freed.get()));
+      System.out.println("Orphaned allocations =" + (allocMap.size()));
       if (allocMap.size() > 0) {
         System.out.println("Orphaned allocation sizes:");
         for(Map.Entry<Range, Range> entry: allocMap.entrySet()) {
           System.out.println(entry.getKey().start +" size="+ entry.getValue().size);
         }
       }
+      System.out.println();
     }
   }
   

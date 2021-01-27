@@ -30,6 +30,7 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
   private long snapshotId;
   private boolean isMultiSafe = false;
   private boolean reverse = false;
+  private boolean isPrefixScanner = false;
   
   /**
    * Multi - instance SAFE (can be used in multiple instances in context of a one thread)
@@ -81,6 +82,14 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
     this.isMultiSafe = isMultiSafe;
     this.reverse = reverse;
     init();
+  }
+  
+  public boolean isPrefixScanner() {
+    return this.isPrefixScanner;
+  }
+  
+  public void setPrefixScanner(boolean v) {
+    this.isPrefixScanner = v;
   }
   
   private void checkArgs(long startRowPtr, int startRowLength, long stopRowPtr, int stopRowLength) {
@@ -157,6 +166,38 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
       close();
       throw new IOException("empty scanner");
     }
+  }
+  
+  /**
+   * Get start row pointer
+   * @return start row pointer
+   */
+  public long getStartRowPtr () {
+    return this.startRowPtr;
+  }
+  
+  /**
+   * Get start row length
+   * @return start row length
+   */
+  public long getStartRowLength () {
+    return this.startRowLength;
+  }
+  
+  /**
+   * Get stop row pointer
+   * @return stop row pointer
+   */
+  public long getStopRowPtr () {
+    return this.stopRowPtr;
+  }
+  
+  /**
+   * Get stop row length
+   * @return stop row pointer
+   */
+  public long getStopRowLength () {
+    return this.stopRowLength;
   }
   
   //TODO : is it safe?
@@ -472,6 +513,10 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
       if (startRowPtr > 0) {
         UnsafeAccess.free(startRowPtr);
       }
+      if (stopRowPtr > 0) {
+        UnsafeAccess.free(stopRowPtr);
+      }
+    } else if (isPrefixScanner) {
       if (stopRowPtr > 0) {
         UnsafeAccess.free(stopRowPtr);
       }

@@ -303,7 +303,7 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
    * @return true, false
    */
   public final boolean hasNext() {
-    skipDeletedAndIrrelevantRecords();
+    //skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr >= this.dataSize) {
       return false;
     } else if (stopRowPtr != 0) {
