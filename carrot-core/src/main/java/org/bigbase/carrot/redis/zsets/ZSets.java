@@ -525,8 +525,7 @@ public class ZSets {
           }
         }
       }
-      long total = addToHash(map, keyPtr, keySize, scores, ptrs, sizes, MutationOptions.NONE);
-      /*DEBUG*/ System.out.println("added ="+ total);
+      addToHash(map, keyPtr, keySize, scores, ptrs, sizes, MutationOptions.NONE);
       // Free memory
       for (long ptr: ptrs) {
         UnsafeAccess.free(ptr);
@@ -2873,7 +2872,6 @@ public class ZSets {
        // TODO: Reverse search?
        SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
        try {
-         //int i=0;
          while(scanner.hasNext()) {
            long ptr = scanner.memberAddress();
            int size = scanner.memberSize();
@@ -2883,8 +2881,6 @@ public class ZSets {
            if (res == 0) {
              return Utils.lexToDouble(ptr);
            }
-           //*DEBUG*/ System.out.println(i+ "  ptr ="+ ptr+" size="+ size +" res ="+ res);
-           //i++;
            scanner.next();
         }
       } catch (IOException e) {

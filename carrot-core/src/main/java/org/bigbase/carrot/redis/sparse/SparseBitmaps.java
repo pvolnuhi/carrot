@@ -174,13 +174,22 @@ public class SparseBitmaps {
   /**
    * Compress chunk into provided buffer
    * @param chunkAddress chunk address
+   * @param bitCount bits count
+   * @param newChunk is this chunk new
    * @param buffer to compress to address
    * @return compressed chunk size, address is in buffer
    */
-  static int compress(long chunkAddress /*Size is CHUNK_SIZE*/, int bitCount, long buffer) {
+  static int compress(long chunkAddress /*Size is CHUNK_SIZE*/, int bitCount, 
+      boolean newChunk, long buf) {
     int compSize = codec.compress(chunkAddress + HEADER_SIZE, CHUNK_SIZE - HEADER_SIZE, 
-      buffer + HEADER_SIZE, BUFFER_CAPACITY);
-    setBitCount(buffer, bitCount, true);
+      buf + HEADER_SIZE, BUFFER_CAPACITY);
+    setBitCount(buf, bitCount, true);
+    if (newChunk && chunkAddress != buffer.get()) {
+      // deallocate previous address
+      UnsafeAccess.free(chunkAddress);
+      // Update memory stats
+      BigSortedMap.totalAllocatedMemory.addAndGet(-CHUNK_SIZE);
+    }
     return compSize;
   }
   

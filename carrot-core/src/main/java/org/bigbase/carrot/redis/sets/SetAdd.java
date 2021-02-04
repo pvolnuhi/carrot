@@ -22,8 +22,6 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 
-
-
 /**
  * This read-modify-write mutation is executed atomically and isolated
  * It adds new element to a given set, defined by a Key
@@ -146,7 +144,6 @@ public class SetAdd extends Operation{
     }
     return kSize;
   }
-  public static int SPLITS = 0;
   
   @Override
   public boolean execute() {
@@ -185,8 +182,6 @@ public class SetAdd extends Operation{
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
     boolean append = addr == (valueAddress + valueSize);
-    ///*DEBUG*/System.out.println("Found KEY "+ foundKeyAddress+" value size="+ valueSize+ " key="+
-    //Bytes.toHex(foundKeyAddress, foundKeySize) + " append=" + append);
     
     if (!append && Sets.compareElements(addr, elementPtr, elementSize) == 0) {
       // Can not insert, because it is already there
@@ -220,8 +215,6 @@ public class SetAdd extends Operation{
       return true;
     } else {
       // Do split
-      //*DEBUG*/ System.out.println("\nSPLIT\n");
-      SPLITS++;
       Sets.checkValueArena(newValueSize + NUM_ELEM_SIZE);
       // Sets.valueArena is used
       insertElement(valueAddress, valueSize, addr, elementPtr, elementSize);
@@ -261,8 +254,7 @@ public class SetAdd extends Operation{
       this.keySizes[1] = totalKeySize;
       this.values[1] = splitPos;
       this.valueSizes[1] = rightValueSize;
-     //*DEBUG*/ System.out.println("\nSPLIT created "+ Bytes.toHex(foundKeyAddress, foundKeySize) +
-     //   " "+ Bytes.toHex(kPtr, totalKeySize)+"\n");
+     
       return true;
     }
   }
@@ -287,7 +279,6 @@ public class SetAdd extends Operation{
     Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, eSize);
     // Copy element
     UnsafeAccess.copy(ePtr, vPtr + NUM_ELEM_SIZE + eSizeSize, eSize);
-    /*DEBUG*/ System.out.println("New KV =" + Bytes.toHex(kPtr, totalKeySize));
 
     // set number of updates to 1
     this.updatesCount = 1;

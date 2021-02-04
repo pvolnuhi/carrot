@@ -158,9 +158,7 @@ public class IndexBlockDirectMemoryTest {
     
     // now delete all
     List<Key> splitRequires = new ArrayList<Key>();
-    //int count = 0;
     for(Key key: keys) {
-      //*DEBUG*/System.out.println(count++);
       OpResult result = ib.delete(key.address, key.length, Long.MAX_VALUE);
       if (result == OpResult.SPLIT_REQUIRED) {
         splitRequires.add(key);

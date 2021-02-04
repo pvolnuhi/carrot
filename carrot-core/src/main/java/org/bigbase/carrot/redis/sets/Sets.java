@@ -703,7 +703,7 @@ public class Sets {
    * @param keySize key size
    * @return number of deleted K-Vs
    */
-  public static long DELETE(BigSortedMap map, long keyPtr, int keySize) {
+  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(k);
@@ -714,11 +714,10 @@ public class Sets {
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
       long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
       
-      long deleted = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
+      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
       
       UnsafeAccess.free(kPtr);
       UnsafeAccess.free(endKeyPtr);
-      return deleted;
     } finally {
       KeysLocker.writeUnlock(k);
     }

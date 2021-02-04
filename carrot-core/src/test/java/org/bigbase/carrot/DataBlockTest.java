@@ -37,7 +37,6 @@ public class DataBlockTest extends DataBlockTestBase{
     int found = 0;
     long start = System.currentTimeMillis();
     for(int i = 0 ; i < 100000; i++) {
-      //*DEBUG*/ System.out.println(i);
       int index = r.nextInt(keys.size());
       byte[] key = keys.get(index);
       byte[] value = new byte[key.length];

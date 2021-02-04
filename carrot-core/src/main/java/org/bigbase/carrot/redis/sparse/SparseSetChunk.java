@@ -47,7 +47,7 @@ public class SparseSetChunk extends Operation {
 
     int popCount = (int) Utils.bitcount(ptr, SparseBitmaps.BYTES_PER_CHUNK);
     if (SparseBitmaps.shouldCompress(popCount)) {
-      int compSize = compress(ptr, popCount, buffer.get());
+      int compSize = compress(ptr, popCount, false, buffer.get());
       valueSize = compSize + HEADER_SIZE;
       valuePtr = buffer.get();
     } else {

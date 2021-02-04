@@ -3,11 +3,8 @@ package org.bigbase.carrot.redis.sets;
 import static org.bigbase.carrot.redis.Commons.addNumElements;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
-import static org.bigbase.carrot.redis.Commons.firstKVinType;
+import static org.bigbase.carrot.redis.Commons.isFirstKey;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
-import static org.bigbase.carrot.redis.Commons.nextKVisInType;
-
-import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
@@ -54,6 +51,8 @@ public class SetDelete extends Operation{
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
+    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, keySize); 
+
     // Prefix keys must be equals
     if (Utils.compareTo(keyAddress, setKeySize, foundKeyAddress, 
       setKeySize) != 0) {
@@ -87,8 +86,9 @@ public class SetDelete extends Operation{
     this.keySizes[0] = foundKeySize;
     this.values[0] = ptr;
     this.valueSizes[0] = valueSize - toCut;
-    if (numElements == 0 && canDelete(foundKeyAddress, foundKeySize)) {
+    if (numElements == 0 && !isFirstKey/*canDelete(foundKeyAddress, foundKeySize)*/) {
       // Delete Key, b/c its empty
+      //TODO - this code leaves last key, which needs to be deleted explicitly
       this.updateTypes[0] = true;
     }
     return true;
@@ -101,13 +101,12 @@ public class SetDelete extends Operation{
    * @return true if can be deleted, false -otherwise
    * @throws IOException 
    */
-  private boolean canDelete(long foundKeyAddress, int foundKeySize) {
-    if (!firstKVinType(foundKeyAddress, foundKeySize)) {
-      return true;
-    }
-    // this first KV in set, we can delete it if it is the only one in the set
-    return !nextKVisInType(map, foundKeyAddress);
-  }
-
+  // private boolean canDelete(long foundKeyAddress, int foundKeySize) {
+  // if (!firstKVinType(foundKeyAddress, foundKeySize)) {
+  // return true;
+  // }
+  // // this first KV in set, we can delete it if it is the only one in the set
+  // return !nextKVisInType(map, foundKeyAddress);
+  // }
 
 }

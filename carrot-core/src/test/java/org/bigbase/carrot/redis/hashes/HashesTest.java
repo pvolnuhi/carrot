@@ -3,6 +3,7 @@ package org.bigbase.carrot.redis.hashes;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -12,6 +13,7 @@ import org.bigbase.carrot.Key;
 import org.bigbase.carrot.Value;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
@@ -24,17 +26,17 @@ public class HashesTest {
   int bufferSize = 64;
   int keySize = 8;
   int valSize = 8;
-  long n = 2000;
+  long n = 200000;
   List<Value> values;
   
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   
   private List<Value> getValues(long n) {
     List<Value> values = new ArrayList<Value>();
     Random r = new Random();
-    long seed = -5383581744249684084L;//r.nextLong();
+    long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println("VALUES SEED=" + seed);
     byte[] buf = new byte[valSize];
@@ -51,7 +53,7 @@ public class HashesTest {
     long ptr = UnsafeAccess.malloc(keySize);
     byte[] buf = new byte[keySize];
     Random r = new Random();
-    long seed = 2429934184943245518L;//r.nextLong();
+    long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println("KEY SEED=" + seed);
     r.nextBytes(buf);
@@ -65,11 +67,13 @@ public class HashesTest {
     values = getValues(n);
   }
   
+
+  @Ignore
   @Test
-  public void runAllNoCompression() {
+  public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -77,11 +81,12 @@ public class HashesTest {
     }
   }
   
+  //@Ignore
   @Test
-  public void runAllCompressionLZ4() {
+  public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -89,11 +94,12 @@ public class HashesTest {
     }
   }
   
+  //@Ignore
   @Test
-  public void runAllCompressionLZ4HC() {
+  public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -101,7 +107,7 @@ public class HashesTest {
     }
   }
   
-  private void allTests() {
+  private void allTests() throws IOException {
     setUp();
     testSetExists();
     tearDown();
@@ -115,7 +121,7 @@ public class HashesTest {
   
   @Ignore
   @Test
-  public void testSetExists () {
+  public void testSetExists () throws IOException {
     System.out.println("\nTest Set - Exists");
     Key key = getKey();
     long elemPtr;
@@ -141,13 +147,14 @@ public class HashesTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time exist="+(end -start)+"ms");
+    System.out.println("Map.size =" + Commons.countRecords(map));
     Hashes.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
   }
   
   @Ignore
   @Test
-  public void testSetGet () {
+  public void testSetGet () throws IOException {
     System.out.println("\nTest Set - Get");
     Key key = getKey();
     long elemPtr;
@@ -161,9 +168,9 @@ public class HashesTest {
     }
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + keySize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - 2*keySize)+
-    " bytes per value. Time to load: "+(end -start)+"ms");
+    + " for "+ n + " " + (keySize + valSize)+ " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (keySize + valSize))+
+    " bytes per value. Time to load: "+(end - start)+"ms");
     
     assertEquals(n, Hashes.HLEN(map, key.address, key.length));
     start = System.currentTimeMillis();
@@ -179,9 +186,10 @@ public class HashesTest {
     
     end = System.currentTimeMillis();
     System.out.println("Time get="+(end -start)+"ms");
-    
+
     BigSortedMap.printMemoryAllocationStats();
-    
+    System.out.println("Map.size =" + Commons.countRecords(map));
+
     Hashes.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
     UnsafeAccess.free(buffer);
@@ -190,7 +198,7 @@ public class HashesTest {
   
   @Ignore
   @Test
-  public void testAddRemove() {
+  public void testAddRemove() throws IOException {
     System.out.println("Test Add - Remove");
     Key key = getKey();
     long elemPtr;
@@ -204,24 +212,24 @@ public class HashesTest {
     }
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + keySize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - 2*keySize)+
+    + " for "+ n + " " + (keySize + valSize) + " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (keySize + valSize))+
     " bytes per value. Time to load: "+(end -start)+"ms");
     assertEquals(n, Hashes.HLEN(map, key.address, key.length));
 
     BigSortedMap.printMemoryAllocationStats();
     
-    start = System.currentTimeMillis();
-    //int count = 1;
-    for (int i =0; i < n; i++) {
-      //*DEBUG*/System.out.println("HDEL=" + count++);
-      int res = Hashes.HDEL(map, key.address, key.length, values.get(i).address, values.get(i).length);
-      assertEquals(1, res);
-    }
-    end = System.currentTimeMillis();
-    System.out.println("Time to delete="+(end -start)+"ms");
-    
-    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
+//    start = System.currentTimeMillis();
+//    for (int i =0; i < n; i++) {
+//      int res = Hashes.HDEL(map, key.address, key.length, values.get(i).address, values.get(i).length);
+//      assertEquals(1, res);
+//    }
+//    end = System.currentTimeMillis();
+//    System.out.println("Time to delete="+(end -start)+"ms");
+//
+//    System.out.println("Map.size =" + Commons.countRecords(map));
+
+//    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
 
     Hashes.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));

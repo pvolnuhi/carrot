@@ -6,9 +6,9 @@ import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -19,9 +19,11 @@ public class ListsTest {
   int bufferSize = 64;
   int keySize = 16;
   long n = 100000;
+  
   static {
-    //UnsafeAccess.debug = true;
+    UnsafeAccess.debug = true;
   }
+  
   private Key getKey() {
     long ptr = UnsafeAccess.malloc(keySize);
     byte[] buf = new byte[keySize];
@@ -34,15 +36,87 @@ public class ListsTest {
     return key = new Key(ptr, keySize);
   }
   
-  @Before
-  public void setUp() {
+  private void setUp() {
     map = new BigSortedMap(100000000);
     buffer = UnsafeAccess.mallocZeroed(bufferSize); 
   }
   
+  private void tearDown() {
+    // Dispose
+    map.dispose();
+    UnsafeAccess.free(key.address);
+    UnsafeAccess.free(buffer);
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllNoCompression() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4HC() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  private void allTests() {
+    setUp();
+    testLPUSHLINDEX();
+    tearDown();
+    setUp();
+    testLPUSHLPOP();
+    tearDown();
+    setUp();
+    testLPUSHRPOP();
+    tearDown();
+    setUp();
+    testLRMIX();
+    tearDown();
+    setUp();
+    testRPUSHLINDEX();
+    tearDown();
+    setUp();
+    testRPUSHLPOP();
+    tearDown();
+    setUp();
+    testRPUSHRPOP(); 
+    tearDown();
+  }
+  
+  @Ignore
   @Test
   public void testLPUSHLPOP () {
-    System.out.println("Test LPUSHLPOP");
+    System.out.println("\nTest LPUSHLPOP");
     Key key = getKey();
     for (int i =0; i < n; i++) {
       //System.out.println(i);
@@ -67,9 +141,10 @@ public class ListsTest {
  
   }
   
+  @Ignore
   @Test
   public void testRPUSHRPOP () {
-    System.out.println("Test RPUSHRPOP");
+    System.out.println("\nTest RPUSHRPOP");
     Key key = getKey();
     for (int i =0; i < n; i++) {
       //System.out.println(i);
@@ -92,9 +167,10 @@ public class ListsTest {
  
   }
   
+  @Ignore
   @Test
   public void testLPUSHRPOP () {
-    System.out.println("Test LPUSHRPOP");
+    System.out.println("\nTest LPUSHRPOP");
     Key key = getKey();
     for (int i =0; i < n; i++) {
       //System.out.println(i);
@@ -117,9 +193,10 @@ public class ListsTest {
  
   }
   
+  @Ignore
   @Test
   public void testLRMIX () {
-    System.out.println("Test LRMIX");
+    System.out.println("\nTest LRMIX");
     Key key = getKey();
     Random r = new Random();
     long seed = r.nextLong();
@@ -156,9 +233,10 @@ public class ListsTest {
  
   }
   
+  @Ignore
   @Test
   public void testRPUSHLPOP () {
-    System.out.println("Test RPUSHLPOP");
+    System.out.println("\nTest RPUSHLPOP");
     Key key = getKey();
     for (int i =0; i < n; i++) {
       //System.out.println(i);
@@ -181,9 +259,10 @@ public class ListsTest {
  
   }
   
+  @Ignore
   @Test
   public void testLPUSHLINDEX () {
-    System.out.println("Test LPUSHLINDEX");
+    System.out.println("\nTest LPUSHLINDEX");
     Key key = getKey();
     for (int i =0; i < n; i++) {
       //System.out.println(i);
@@ -208,9 +287,10 @@ public class ListsTest {
  
   }
   
+  @Ignore
   @Test
   public void testRPUSHLINDEX () {
-    System.out.println("Test RPUSHLINDEX");
+    System.out.println("\nTest RPUSHLINDEX");
     Key key = getKey();
     for (int i =0; i < n; i++) {
       //System.out.println(i);
@@ -233,12 +313,5 @@ public class ListsTest {
     Lists.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Lists.LLEN(map, key.address, key.length));
  
-  }
-  
-  @After
-  public void tearDown() {
-    // Dispose
-    map.dispose();
-    UnsafeAccess.free(key.address);
   }
 }

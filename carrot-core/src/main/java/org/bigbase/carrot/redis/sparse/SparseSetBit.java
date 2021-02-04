@@ -1,5 +1,6 @@
 package org.bigbase.carrot.redis.sparse;
 
+import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -34,9 +35,10 @@ public class SparseSetBit extends Operation {
   
   @Override
   public boolean execute() {
+    
     this.updatesCount = 0;
     boolean existKey = true;
-
+    boolean newChunk = false;
     if (foundRecordAddress < 0) {
       existKey = false;
     } else {
@@ -69,11 +71,14 @@ public class SparseSetBit extends Operation {
       valueSize = SparseBitmaps.CHUNK_SIZE;
       valuePtr = UnsafeAccess.mallocZeroed(valueSize);
       this.updatesCount = 1; 
+      newChunk = true;
+      // Update memory stats
+      BigSortedMap.totalAllocatedMemory.addAndGet(SparseBitmaps.CHUNK_SIZE);
     }
     this.oldBit = getsetbit(valuePtr, valueSize);
     int bitCount = existKey? SparseBitmaps.getBitCount(valuePtr): 1;
     if (bitCount > 0 && SparseBitmaps.shouldCompress(bitCount)) {
-      int compSize = SparseBitmaps.compress(valuePtr, bitCount, buffer.get());
+      int compSize = SparseBitmaps.compress(valuePtr, bitCount, newChunk, buffer.get());
       valueSize = compSize + SparseBitmaps.HEADER_SIZE;
       valuePtr = buffer.get();
       this.updatesCount = 1; 

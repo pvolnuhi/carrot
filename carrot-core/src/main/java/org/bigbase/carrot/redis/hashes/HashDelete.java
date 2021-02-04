@@ -3,11 +3,8 @@ package org.bigbase.carrot.redis.hashes;
 import static org.bigbase.carrot.redis.Commons.addNumElements;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
-import static org.bigbase.carrot.redis.Commons.firstKVinType;
+import static org.bigbase.carrot.redis.Commons.isFirstKey;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
-import static org.bigbase.carrot.redis.Commons.nextKVisInType;
-
-import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
@@ -101,7 +98,7 @@ public class HashDelete extends Operation{
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
-    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize); 
+    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, keySize); 
     // Prefix keys must be equals
     if (Utils.compareTo(keyAddress, setKeySize , foundKeyAddress, 
       setKeySize) != 0) {
@@ -159,27 +156,21 @@ public class HashDelete extends Operation{
     return true;
   }
   
-  private boolean isFirstKey(long foundKeyAddress, int foundKeySize) {
-    if (foundKeySize > keySize + 2 * Utils.SIZEOF_BYTE + Utils.SIZEOF_INT) {
-      return false;
-    }
-    return UnsafeAccess.toByte(foundKeyAddress + foundKeySize -1) == 0;
-  }
 
-  /**
-   * We can delete K-V only when it is empty, not a first key (ends with '\0' 
-   * or (TODO) first and the only K-V for the set)
-   * @param foundKeyAddress
-   * @return true if can be deleted, false -otherwise
-   * @throws IOException 
-   */
-  private boolean canDelete(long foundKeyAddress, int foundKeySize) {
-    if (!firstKVinType(foundKeyAddress, foundKeySize)) {
-      return true;
-    }
-    // this first KV in set, we can delete it if it is the only one in the set
-    return !nextKVisInType(map, foundKeyAddress);
-  }
+//  /**
+//   * We can delete K-V only when it is empty, not a first key (ends with '\0' 
+//   * or (TODO) first and the only K-V for the set)
+//   * @param foundKeyAddress
+//   * @return true if can be deleted, false -otherwise
+//   * @throws IOException 
+//   */
+//  private boolean canDelete(long foundKeyAddress, int foundKeySize) {
+//    if (!firstKVinType(foundKeyAddress, foundKeySize)) {
+//      return true;
+//    }
+//    // this first KV in set, we can delete it if it is the only one in the set
+//    return !nextKVisInType(map, foundKeyAddress);
+//  }
 
 
 }

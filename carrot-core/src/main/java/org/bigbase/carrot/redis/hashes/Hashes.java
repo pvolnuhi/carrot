@@ -233,8 +233,7 @@ public class Hashes {
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
       long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
 
-      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
-
+      long total = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
       UnsafeAccess.free(kPtr);
       UnsafeAccess.free(endKeyPtr);
 

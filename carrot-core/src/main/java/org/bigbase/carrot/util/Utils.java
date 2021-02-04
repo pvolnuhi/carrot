@@ -449,7 +449,7 @@ public class Utils {
     });
   }
   
-  public static void sortKeys(List<Key> list) {
+  public static void sortKeys(List<? extends Key> list) {
     Collections.sort(list, new Comparator<Key> () {
       @Override
       public int compare(Key k1, Key k2) {

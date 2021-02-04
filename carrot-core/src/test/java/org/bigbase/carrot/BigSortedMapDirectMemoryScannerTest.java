@@ -491,7 +491,6 @@ public class BigSortedMapDirectMemoryScannerTest {
     
     do {
       count++;
-      //*DEBUG*/System.out.println(count);
       int keySize = scanner.keySize();
       long key = UnsafeAccess.malloc(keySize);
       

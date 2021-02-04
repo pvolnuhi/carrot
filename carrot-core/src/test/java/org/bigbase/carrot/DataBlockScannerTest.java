@@ -270,15 +270,12 @@ public class DataBlockScannerTest {
   
   private void verifyScannerReverse(DataBlockScanner scanner, List<byte[]> keys) {
     int count = 0;
-    
-    //*DEBUG*/ System.out.println("Verify reverse");
-    
+        
     Collections.reverse(keys);
       do {
         count++;
         byte[] key = keys.get(count-1);
         int keySize = scanner.keySize();
-        //*DEBUG*/ System.out.println(keySize);
         int valSize = scanner.valueSize();
         assertEquals(key.length, keySize);
         assertEquals(key.length, valSize);
@@ -287,10 +284,8 @@ public class DataBlockScannerTest {
         assertTrue(Utils.compareTo(buf, 0, buf.length, key, 0, key.length) == 0);
         scanner.value(buf, 0);
         assertTrue(Utils.compareTo(buf, 0, buf.length, key, 0, key.length) == 0);
-      } while(scanner.previous());
-      
+      } while(scanner.previous()); 
       Collections.reverse(keys);
- 
     assertEquals(keys.size(), count);
   }
   
@@ -299,7 +294,7 @@ public class DataBlockScannerTest {
     Random r = new Random();
     long seed = r.nextLong();
     r.setSeed(seed);
-    /*DEBUG*/ System.out.println("fill seed =" + seed);
+    /*DEBUG*/ System.out.println("FILL seed =" + seed);
     boolean result = true;
     while(result == true) {
       byte[] key = new byte[32];

@@ -182,10 +182,15 @@ public final class IndexBlockScanner implements Closeable{
     // It can not be null
     this.currentDataBlock = b;
     if (b == null) {
-      // FATAL
-      throw new RuntimeException("Index block scanner");
+      try {
+        close();
+      } catch (IOException e) {
+      }
+      return;
     }
-    this.currentDataBlock.decompressDataBlockIfNeeded();
+    if (this.currentDataBlock != null) {
+      this.currentDataBlock.decompressDataBlockIfNeeded();
+    } 
   }
  
   /**
@@ -219,7 +224,7 @@ public final class IndexBlockScanner implements Closeable{
    */
   int count = 1;
   public final DataBlockScanner nextBlockScanner() {
-    // No checks are required
+
     if (isClosed()) {
       return null;
     }
@@ -234,7 +239,6 @@ public final class IndexBlockScanner implements Closeable{
       this.currentDataBlock = this.indexBlock.nextBlock(this.currentDataBlock, isMultiSafe);
 
       if (this.currentDataBlock == null) {
-        this.closed = true;
         return null;
       } else {
         this.currentDataBlock.decompressDataBlockIfNeeded();
@@ -245,7 +249,6 @@ public final class IndexBlockScanner implements Closeable{
         if (this.currentDataBlock.compareTo(stopRow, 0, stopRow.length, 0, Op.DELETE) < 0) {
           this.currentDataBlock.compressDataBlockIfNeeded();
           this.currentDataBlock = null;
-          this.closed = true;
           return null;
         }
       }
@@ -286,7 +289,10 @@ public final class IndexBlockScanner implements Closeable{
   
   @Override
   public void close() throws IOException {
-    // do nothing yet
+    if (closed) {
+      return;
+    }
+    
     closed = true;
     if(this.curDataBlockScanner != null) {
       try {

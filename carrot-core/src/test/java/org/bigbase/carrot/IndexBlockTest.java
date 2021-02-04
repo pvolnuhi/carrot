@@ -380,7 +380,6 @@ public class IndexBlockTest {
     // Delete half keys
     int toDelete = keys.size() / 2;
     for (int i = 0; i < toDelete; i++) {
-      //*DEBUG*/ System.out.println(i + " of " + toDelete );
       byte[] key = keys.remove(0);
       OpResult res = ib.delete(key, 0, key.length, Long.MAX_VALUE);
       assertEquals(OpResult.OK, res);

@@ -70,7 +70,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * performance is for put/delete operations.
 	 */
 	private static long SAFE_UNSAFE_THRESHOLD = 500;// in ms
-	
+
+	 private static long SAFE_UNSAFE_THRESHOLD_A = 10;// in ms
+
 	// bytes
 
 	static {
@@ -248,6 +250,10 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  return System.currentTimeMillis() - this.lastUnsafeModTime < SAFE_UNSAFE_THRESHOLD;
 	}
 	
+	boolean hasRecentUnsafeModification(long time) {
+	    return time - this.lastUnsafeModTime < SAFE_UNSAFE_THRESHOLD_A;
+	}
+	 
 	void setFirstIndexBlock() {
     byte[] kk = new byte[] { (byte) 0};
     put(kk, 0, kk.length, kk, 0, kk.length, -1, Op.PUT.ordinal());
@@ -566,7 +572,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	private boolean insertBlock(DataBlock bb) {
 		// required space for new entry
 		int len = bb.getFirstKeyLength();
-		//*DEBUG*/ System.out.println("Insert new block " + len);
 
 		boolean extAlloc = mustAllocateExternally(len);
 		int required = (extAlloc? ADDRESS_SIZE:len) + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
@@ -583,7 +588,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
 		UnsafeAccess.copy(pos, pos + required, blockDataSize - (pos - dataPtr));
 		bb.register(this, pos - dataPtr);
-    //*DEBUG*/bb.dump();
 
 		this.blockDataSize += required;
 		BigSortedMap.totalDataInIndexBlocksSize.addAndGet(required);
@@ -1148,7 +1152,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
   private void processUpdates(List<Long> toUpdate) {
     if (toUpdate == null) return;
     
-    //*DEBUG*/ System.out.println("updates - " + toUpdate.size());
     // During bulk first key updates we can not split index block
     // index block size will be increased
     // We iterate from the end to preserve yet not processed offsets
@@ -1743,7 +1746,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     //compression is enabled
     
     //bb = prevBlockInIndex(b);
-    //*DEBUG*/ System.out.println("TRY PREVIOUS MERGE");
 
     //result = tryMergeBlocks(bb, b);
     return result;

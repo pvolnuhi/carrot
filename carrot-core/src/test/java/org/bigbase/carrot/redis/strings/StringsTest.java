@@ -9,10 +9,13 @@ import java.util.Properties;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class StringsTest {
@@ -20,11 +23,11 @@ public class StringsTest {
   Key key;
   long buffer;
   int bufferSize = 512;
-  long n = 1000000;
+  long n = 100000;
   List<KeyValue> keyValues;
   
   static {
-   // UnsafeAccess.debug = true;
+    UnsafeAccess.debug = true;
   }
   
   private List<KeyValue> getKeyValues(long n) {
@@ -38,7 +41,6 @@ public class StringsTest {
       
       // value
       FakeUserSession session = FakeUserSession.newSession(i);
-      //*DEBUG*/ System.out.println(session);
       byte[] value = session.toString().getBytes();
       int valueSize = value.length;
       long valuePtr = UnsafeAccess.malloc(valueSize);
@@ -48,15 +50,62 @@ public class StringsTest {
     return keyValues;
   }
   
-
+  //@Ignore
+  @Test
+  public void runAllNoCompression() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
   
-  @Before
-  public void setUp() {
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4HC() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  private void allTests() {
+    setUp();
+    testSetGet();
+    tearDown();
+    setUp();
+    testSetRemove();
+    tearDown();
+  }
+  
+  
+  private void setUp() {
     map = new BigSortedMap(1000000000);
     buffer = UnsafeAccess.mallocZeroed(bufferSize); 
     keyValues = getKeyValues(n);
   }
   
+  @Ignore
   @Test
   public void testSetGet () {
     System.out.println("Test Strings Set/Get ");
@@ -69,8 +118,8 @@ public class StringsTest {
       boolean result = Strings.SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
         MutationOptions.NONE, true);
       assertEquals(true, result);
-      if (i % 1000000 == 0) {
-        System.out.println(i);
+      if ((i+1) % 10000 == 0) {
+        System.out.println(i+1);
       }
     }
     long end = System.currentTimeMillis();
@@ -86,11 +135,12 @@ public class StringsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time GET ="+(end -start)+"ms");
-    BigSortedMap.memoryStats();
+    BigSortedMap.printMemoryAllocationStats();
    
  
   }
   
+  @Ignore
   @Test
   public void testSetRemove() {
     System.out.println("Test Strings Set/Remove ");
@@ -103,10 +153,13 @@ public class StringsTest {
       boolean result = Strings.SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
         MutationOptions.NONE, true);
       assertEquals(true, result);
-      if (i % 1000000 == 0) {
-        System.out.println(i);
+      if ((i+1) % 10000 == 0) {
+        System.out.println(i+1);
       }
     }
+    
+    BigSortedMap.printMemoryAllocationStats();
+    
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
     + " for "+ n + " " + (totalSize) + " byte values. Overhead="+ 
@@ -120,19 +173,18 @@ public class StringsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time DELETE ="+(end -start)+"ms");
-    BigSortedMap.memoryStats();
   }
   
-  @After
-  public void tearDown() {
+  private void tearDown() {
     // Dispose
     map.dispose();
     for (KeyValue k: keyValues) {
       UnsafeAccess.free(k.keyPtr);
       UnsafeAccess.free(k.valuePtr);
     }
+    UnsafeAccess.free(buffer);
+    BigSortedMap.printMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
-    BigSortedMap.memoryStats();
   }
 }
 

@@ -10,7 +10,7 @@ public class DataBlockScannerLargeKVsTest extends DataBlockScannerTest{
     Random r = new Random();
     long seed = r.nextLong();
     r.setSeed(seed);
-    /*DEBUG*/ System.out.println("fill seed =" + seed);
+    /*DEBUG*/ System.out.println("FILL seed =" + seed);
     int maxSize = 4096;
     boolean result = true;
     while(result == true) {

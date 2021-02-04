@@ -98,7 +98,6 @@ public final class DataBlock  {
     @Override
     protected Long initialValue() {
       long ptr = UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
-      /*DEBUG*/ System.out.println("Decomp buf1=" + ptr);
       return ptr;
     }
   };
@@ -110,7 +109,6 @@ public final class DataBlock  {
     @Override
     protected Long initialValue() {
       long ptr = UnsafeAccess.malloc(MAX_BLOCK_SIZE + 80);
-      /*DEBUG*/ System.out.println("Decomp buf2=" + ptr);
       return ptr;    
     }
   };
@@ -387,19 +385,20 @@ public final class DataBlock  {
    * Before data access and/or modification
    */
   final void decompressDataBlockIfNeeded(boolean useSecondBuffer) {
-    if (!isCompressed()) return;
+    if (!isCompressed()) {
+      return;
+    }
    
     this.compressedDataPtr = getDataPtr();
     this.compDataSize = getDataInBlockSize();
     this.compDataBlockSize = getBlockSize();
+    
     Codec codec = getCompressionCodec();
     int compSize = UnsafeAccess.toInt(this.compressedDataPtr);
     long buf = useSecondBuffer ? decompBuffer2.get() : decompBuffer1.get();
     int dataSize = codec.decompress(this.compressedDataPtr + Utils.SIZEOF_INT, compSize, buf,
       MAX_BLOCK_SIZE + 80);
     this.dataPtr = buf;
-    //*DEBUG*/ System.out.println("decompress " + this.compressedDataPtr + 
-    //  " to " + this.dataPtr);
     
     setDataPtr(this.dataPtr);
     setDataInBlockSize((short) dataSize);
@@ -414,11 +413,8 @@ public final class DataBlock  {
   public void compressDataBlockIfNeeded() {
     if (!isCompressionEnabled()) return;
     if (isCompressed()) return;
-    //*DEBUG*/ System.out.println("compress data=" + this.dataPtr + 
-    //  " compPtr=" + this.compressedDataPtr);;
-    long allocs = UnsafeAccess.mallocStats.getAllocEventNumber();
-    long frees = UnsafeAccess.mallocStats.getFreeEventNumber();
-    
+    byte[] fk = getFirstKey();
+          
     boolean wasCompressed = this.compressedDataPtr != 0;
     
     long ptr = wasCompressed? this.compressedDataPtr: getDataPtr();
@@ -493,12 +489,6 @@ public final class DataBlock  {
     this.compDataSize = 0;
     this.compDataBlockSize = 0;
     setMutationOp(false);
-    long newallocs = UnsafeAccess.mallocStats.getAllocEventNumber();
-    long newfrees = UnsafeAccess.mallocStats.getFreeEventNumber();
-    if (newallocs - allocs != newfrees - frees) {
-      /*DEBUG*/ System.out.println("\nCOMPRESS allocs =" + (newallocs - allocs) + " frees="+ (newfrees - frees));
-      Thread.dumpStack();
-    }
   }
   
   /**
@@ -2145,9 +2135,6 @@ public final class DataBlock  {
     stopAddress = dataPtr + dataSize;
     while (ptr < stopAddress) {
       int keylen = keyLength(ptr);
-      //if (keylen != 32 && keylen != 1) {
-      //  /*DEBUG*/ System.out.println("search keylen=" + keylen + " ptr="+ ptr);
-      //}
       int vallen = blockValueLength(ptr);
       int res = Utils.compareTo(key, keyOffset, keyLength, keyAddress(ptr), keylen);
       if (res < 0 || (res == 0 /*&& version == NO_VERSION*/)) {
@@ -2317,9 +2304,9 @@ public final class DataBlock  {
    * @return number of deleted records
    */
   
-  private int deleteTo(long keyPtr, int keyLength) {
-    int deleted  = 0;
-    int deletedSize = 0;
+  private long deleteTo(long keyPtr, int keyLength) {
+    long deleted  = 0;
+    long deletedSize = 0;
     int numRecords = getNumberOfRecords();
     int dataSize = getDataInBlockSize();
     long ptr = this.dataPtr;
@@ -2362,9 +2349,9 @@ public final class DataBlock  {
    * @return number of deleted records
    */
   
-  private int deleteFrom(long keyPtr, int keyLength) {
-    int deleted  = 0;
-    int deletedSize = 0;
+  private long deleteFrom(long keyPtr, int keyLength) {
+    long deleted  = 0;
+    long deletedSize = 0;
     int numRecords = getNumberOfRecords();
     int dataSize = getDataInBlockSize();
     
@@ -2398,10 +2385,10 @@ public final class DataBlock  {
    * @return number of deleted records
    */
   
-  private int deleteFromTo(long startKeyPtr, int startKeySize, long endKeyPtr, 
+  private long deleteFromTo(long startKeyPtr, int startKeySize, long endKeyPtr, 
       int endKeySize) {
-    int deleted  = 0;
-    int deletedSize = 0;
+    long deleted  = 0;
+    long deletedSize = 0;
     int numRecords = getNumberOfRecords();
     int dataSize = getDataInBlockSize();
     
@@ -2437,9 +2424,9 @@ public final class DataBlock  {
    * @param endKeyPtr
    * @param endKeySize
    * @param version
-   * @return
+   * @return number of records deleted
    */
-  public int deleteRange(long startKeyPtr, int startKeySize, long endKeyPtr, int endKeySize, 
+  public long deleteRange(long startKeyPtr, int startKeySize, long endKeyPtr, int endKeySize, 
       long version)
   {
     setMutationOp(true);
@@ -3446,8 +3433,6 @@ public final class DataBlock  {
       // shrink current
       int blockSize = getBlockSize();
       shrink();
-      //*DEBUG*/ System.out.println("b: "+ blockSize+" a: "+ getBlockSize()+
-      //  " "+getDataInBlockSize()+" r: "+ rightBlockSize+" "+ right.getDataInBlockSize());
       return right;
     } finally {
       writeUnlock();

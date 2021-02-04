@@ -248,12 +248,22 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
         indexBlock.searchBlock(ptr, len, snapshotId, Op.PUT, b)
           : reverse? indexBlock.lastBlock(b):indexBlock.firstBlock(b);
     }
-    this.currentDataBlock = b;
-    this.currentDataBlock.decompressDataBlockIfNeeded();
+    
     if (b == null) {
       // FATAL
-      throw new RuntimeException("Index block scanner");
+      //throw new RuntimeException("Index block scanner");
+      try {
+        close();
+      } catch (IOException e) {
+      }
+      return;
     }
+    
+    this.currentDataBlock = b;
+    if (this.currentDataBlock != null) {
+      this.currentDataBlock.decompressDataBlockIfNeeded();
+    }
+    
   }
  
   /**
@@ -304,7 +314,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return data block scanner or null
    */
   public final DataBlockDirectMemoryScanner nextBlockScanner() {
-    // No checks are required
+
     if (isClosed()) {
       return null;
     }
@@ -334,7 +344,6 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
       }
 
       if (this.currentDataBlock == null) {
-        this.closed = true;
         return null;
       } 
       
@@ -342,7 +351,6 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
         if (this.currentDataBlock.compareTo(stopRowPtr, stopRowLength, 0, Op.DELETE) < 0) {
           this.currentDataBlock.compressDataBlockIfNeeded();
           this.currentDataBlock = null;
-          this.closed = true;
           return null;
         }
       }
@@ -351,7 +359,6 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
         if (DataBlock.compareTo(lastRecord, startRowPtr, startRowLength, 0, Op.DELETE) > 0) {
           this.currentDataBlock.compressDataBlockIfNeeded();
           this.currentDataBlock = null;
-          this.closed = true;
           return null;
         }
       }
@@ -398,7 +405,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return last block scanner
    */
   DataBlockDirectMemoryScanner lastBlockScanner() {
-    // No checks are required
+
     if (isClosed()) {
       return null;
     }
@@ -440,7 +447,6 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return previous block scanner
    */
   DataBlockDirectMemoryScanner previousBlockScanner() {
-    // No checks are required
     if (isClosed()) {
       return null;
     }
@@ -464,7 +470,9 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
   
   @Override
   public void close() throws IOException {
-    // do nothing yet
+    if (closed) {
+      return;
+    }
     closed = true;
     if(this.curDataBlockScanner != null) {
       try {

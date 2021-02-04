@@ -496,7 +496,6 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
    * @param keys
    */
   private void undelete(List<Key> keys) {
-    /*DEBUG*/ System.out.println("Undelete "+ keys.size()+" keys");
     int count = 1;
     for (Key key: keys) {
       count++;

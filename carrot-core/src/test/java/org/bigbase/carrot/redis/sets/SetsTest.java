@@ -8,9 +8,11 @@ import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
+import org.bigbase.carrot.Value;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class SetsTest {
@@ -18,49 +20,99 @@ public class SetsTest {
   Key key;
   long buffer;
   int bufferSize = 64;
-  int keySize = 8;
+  int valSize = 16;
   long n = 200000;
-  List<Key> values;
+  List<Value> values;
   
   static {
-   // UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   
-  private List<Key> getKeys(long n) {
-    List<Key> keys = new ArrayList<Key>();
+  private List<Value> getValues(long n) {
+    List<Value> values = new ArrayList<Value>();
     Random r = new Random();
     long seed = r.nextLong();
     r.setSeed(seed);
-    System.out.println("KEYS SEED=" + seed);
-    byte[] buf = new byte[keySize];
+    System.out.println("VALUES SEED=" + seed);
+    byte[] buf = new byte[valSize/2];
     for (int i=0; i < n; i++) {
       r.nextBytes(buf);
-      long ptr = UnsafeAccess.malloc(keySize);
-      UnsafeAccess.copy(buf, 0, ptr, keySize);
-      keys.add(new Key(ptr, keySize));
+      long ptr = UnsafeAccess.malloc(valSize);
+      UnsafeAccess.copy(buf, 0, ptr, buf.length);
+      UnsafeAccess.copy(buf, 0, ptr + buf.length, buf.length);
+      values.add(new Value(ptr, valSize));
     }
-    return keys;
+    return values;
   }
   
   private Key getKey() {
-    long ptr = UnsafeAccess.malloc(keySize);
-    byte[] buf = new byte[keySize];
+    long ptr = UnsafeAccess.malloc(valSize);
+    byte[] buf = new byte[valSize];
     Random r = new Random();
     long seed = r.nextLong();
     r.setSeed(seed);
-    System.out.println("SEED=" + seed);
+    System.out.println("KEY SEED=" + seed);
     r.nextBytes(buf);
-    UnsafeAccess.copy(buf, 0, ptr, keySize);
-    return key = new Key(ptr, keySize);
+    UnsafeAccess.copy(buf, 0, ptr, valSize);
+    return key = new Key(ptr, valSize);
   }
   
-  @Before
-  public void setUp() {
+  
+  private void setUp() {
     map = new BigSortedMap(1000000000);
     buffer = UnsafeAccess.mallocZeroed(bufferSize); 
-    values = getKeys(n);
+    values = getValues(n);
   }
   
+  @Ignore
+  @Test
+  public void runAllNoCompression() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4HC() {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  private void allTests() {
+    setUp();
+    testSADDSISMEMBER();
+    tearDown();
+    setUp();
+    testAddRemove();
+    tearDown();
+  }
+  
+  @Ignore
   @Test
   public void testSADDSISMEMBER () {
     System.out.println("Test SADDSISMEMBER");
@@ -73,33 +125,30 @@ public class SetsTest {
       elemSizes[0] = values.get(i).length;
       int num = Sets.SADD(map, key.address, key.length, elemPtrs, elemSizes);
       assertEquals(1, num);
-      if (i % 1000000 == 0) {
-        System.out.println(i);
-      }
     }
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + keySize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - keySize)+
+    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
+    
+    BigSortedMap.printMemoryAllocationStats();
+    
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
-    int notFound = 0;
     start = System.currentTimeMillis();
     for (int i =0; i < n; i++) {
       int res = Sets.SISMEMBER(map, key.address, key.length, values.get(i).address, values.get(i).length);
       assertEquals(1, res);
-      notFound += 1 - res; 
     }
     end = System.currentTimeMillis();
-    System.out.println("not found="+ notFound + " splits="+ SetAdd.SPLITS + " Time exist="+(end -start)+"ms");
+    System.out.println("Time exist="+(end -start)+"ms");
     BigSortedMap.memoryStats();
-    //map.dumpStats();
-    //TODO 
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
  
   }
   
+  @Ignore
   @Test
   public void testAddRemove() {
     System.out.println("Test Add Remove");
@@ -112,42 +161,36 @@ public class SetsTest {
       elemSizes[0] = values.get(i).length;
       int num = Sets.SADD(map, key.address, key.length, elemPtrs, elemSizes);
       assertEquals(1, num);
-      if (i % 1000000 == 0) {
-        System.out.println(i);
-      }
     }
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + keySize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - keySize)+
+    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
+    
+    BigSortedMap.printMemoryAllocationStats();
+    
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
-    int notFound = 0;
-    start = System.currentTimeMillis();
-    for (int i =0; i < n; i++) {
-      int res = Sets.SREM(map, key.address, key.length, values.get(i).address, values.get(i).length);
-      assertEquals(1, res);
-      notFound += 1 - res; 
-    }
-    end = System.currentTimeMillis();
-    System.out.println("not found="+ notFound + " splits="+ SetAdd.SPLITS + " Time exist="+(end -start)+"ms");
-    BigSortedMap.memoryStats();
-    //map.dumpStats();
+//    start = System.currentTimeMillis();
+//    for (int i =0; i < n; i++) {
+//      int res = Sets.SREM(map, key.address, key.length, values.get(i).address, values.get(i).length);
+//      assertEquals(1, res);
+//    }
+//    end = System.currentTimeMillis();
+//    System.out.println("Time exist="+(end -start)+"ms");
+//    BigSortedMap.memoryStats();
     //TODO 
-    //Sets.DELETE(map, key.address, key.length);
+    Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
   }
   
-  @After
-  public void tearDown() {
+  private void tearDown() {
     // Dispose
     map.dispose();
     UnsafeAccess.free(key.address);
-    for (Key k: values) {
-      UnsafeAccess.free(k.address);
+    for (Value v: values) {
+      UnsafeAccess.free(v.address);
     }
-    UnsafeAccess.mallocStats.printStats();
-    BigSortedMap.memoryStats();
-
+    UnsafeAccess.free(buffer);
   }
 }

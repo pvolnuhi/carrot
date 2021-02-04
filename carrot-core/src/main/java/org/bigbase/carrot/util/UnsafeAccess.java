@@ -10,19 +10,21 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.util.RangeTree.Range;
 
 import sun.misc.Unsafe;
 //import sun.nio.ch.DirectBuffer;
 
 public final class UnsafeAccess {
+  
   public static boolean debug = false; 
+  
   public static class MallocStats {
     public AtomicLong allocEvents= new AtomicLong();
     public AtomicLong freeEvents = new AtomicLong();
     public AtomicLong allocated = new AtomicLong();
     public AtomicLong freed = new AtomicLong();
+    public AtomicLong allocatedMemory = new AtomicLong();
     private RangeTree allocMap = new RangeTree();
         
     public long getAllocEventNumber() 
@@ -36,47 +38,42 @@ public final class UnsafeAccess {
     
     
     public void allocEvent(long address, long alloced) {
-      if (!UnsafeAccess.debug) return;
+      if (!UnsafeAccess.debug) return;  
 
-      //if (alloced == 256) {
-        //*DEBUG*/ System.out.println("malloc " + address + " size=" + alloced);
-        //Thread.dumpStack();
-      //}
-      
       allocEvents.incrementAndGet();
       allocated.addAndGet(alloced);
       allocMap.delete(address);
       Range r = allocMap.add(new Range(address, (int)alloced));
       if (r != null) {
-        System.out.println("Released ["+ r.start +"," + r.size);
+        System.err.println("Allocation collision ["+ r.start +"," + r.size+"]");
+      }
+    }
+
+    @SuppressWarnings("unused")
+    private void dumpIfAlloced(String str, long address, int value, int alloced) {
+      if (alloced == value) {
+        System.out.println(str + address + " size=" + alloced);
+        Thread.dumpStack();
       }
     }
     
     public void reallocEvent(long address, long alloced) {
       if (!UnsafeAccess.debug) return;
-      //*DEBUG*/ System.out.println("realloc " + address + " size=" + alloced);
-      //Thread.dumpStack();
-      
-      //allocEvents.incrementAndGet();
       Range r = allocMap.delete(address);
       allocMap.add(new Range(address, (int)alloced));
-      allocated.addAndGet(alloced - r.size);
+      allocated.addAndGet(alloced);
+      freed.addAndGet(r.size);
     }
     
     public void freeEvent(long address) {
       if (!UnsafeAccess.debug) return;
-      //*DEBUG*/ System.out.println("free " + address);
       Range mem = allocMap.delete(address);
       if (mem == null) {
         System.out.println("FATAL: not found address "+ address);
         Thread.dumpStack();
         System.exit(-1);
       }
-//      if (mem.size > 4096) {
-//        /*DEBUG*/ System.out.println("free " + address);
-//
-//        Thread.dumpStack();
-//      }
+
       freed.addAndGet(mem.size);      
       freeEvents.incrementAndGet();
     }
@@ -99,7 +96,7 @@ public final class UnsafeAccess {
       System.out.println("allocated memory     ="+ allocated.get());
       System.out.println("deallocations        ="+ freeEvents.get());
       System.out.println("deallocated memory   ="+ freed.get());
-      System.out.println("leaked               ="+ (allocated.get() - freed.get()));
+      System.out.println("leaked (current)     ="+ (allocated.get() - freed.get()));
       System.out.println("Orphaned allocations =" + (allocMap.size()));
       if (allocMap.size() > 0) {
         System.out.println("Orphaned allocation sizes:");
@@ -646,6 +643,15 @@ public final class UnsafeAccess {
       destAddr += size;
     }
   }
+  
+  /**
+   * Returns current allocated memory size
+   * @return allocated memory size
+   */
+  public static long getAllocatedMemory() {
+    return mallocStats.allocated.get() - mallocStats.freed.get();
+  }
+  
   /**
    * Allocate native memory and copy array
    * @param arr array to copy

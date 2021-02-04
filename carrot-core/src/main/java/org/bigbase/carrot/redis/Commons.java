@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -135,5 +136,31 @@ public class Commons {
    */
   public static boolean canSplit(long valuePtr) {
     return numElementsInValue(valuePtr) > 1;
+  }
+  
+  public static boolean isFirstKey(long foundKeyAddress, int foundKeySize, int keySize) {
+    /*
+     * First key has the following format
+     * data type (1 byte)
+     * original key size (4 bytes)
+     * original key 
+     * '\0' - ZERO suffix
+     * 
+     */
+    if (foundKeySize > keySize + 2 * Utils.SIZEOF_BYTE + Utils.SIZEOF_INT) {
+      return false;
+    }
+    return UnsafeAccess.toByte(foundKeyAddress + foundKeySize -1) == 0;
+  }
+  
+  public static long countRecords(BigSortedMap map) throws IOException {
+    BigSortedMapScanner scanner = map.getScanner(null, null);
+    long count = 0;
+    while(scanner.hasNext()) {
+      count++;
+      scanner.next();
+    }
+    scanner.close();
+    return count;
   }
 }

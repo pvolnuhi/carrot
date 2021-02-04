@@ -71,14 +71,11 @@ public class DataBlockLargeKVsTest extends DataBlockTest{
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
     System.out.println("testOverwriteLargerValueSize- LargeKVs");
     for (int i = 0; i < 1000; i++) {
-      /*DEBUG*/ System.out.println(i);
       Random r = new Random();
       DataBlock b = getDataBlock();
       List<byte[]> keys = fillDataBlock(b);
-      /*DEBUG*/ System.out.println("keys="+ keys.size());
       for (byte[] key : keys) {
         int keySize = key.length;
-        /*DEBUG*/ System.out.println("key size="+ keySize);
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
         if (type == DataBlock.AllocType.EMBEDDED) {
