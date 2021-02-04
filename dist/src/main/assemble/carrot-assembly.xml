@@ -12,6 +12,7 @@
                 <include>org.carrot:carrot-common:*</include>
                 <include>org.carrot:lz4-java:*</include>
                 <include>org.carrot:carrot-core:*</include>
+                <include>org.carrot:carrot-examples:*</include>
             </includes>
             <outputDirectory>lib</outputDirectory>
         </dependencySet>

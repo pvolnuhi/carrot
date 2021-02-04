@@ -13,6 +13,7 @@
         <module>lz4-java</module>
         <module>carrot-core</module>
         <module>dist</module>
+        <module>carrot-examples</module>
     </modules>
     <build>
         <plugins>
