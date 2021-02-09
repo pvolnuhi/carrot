@@ -12,9 +12,9 @@ import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.redis.MutationOptions;
+import org.bigbase.carrot.redis.OperationFailedException;
 import org.bigbase.carrot.util.UnsafeAccess;
-import org.junit.After;
-import org.junit.Before;
+import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -52,7 +52,7 @@ public class StringsTest {
   
   //@Ignore
   @Test
-  public void runAllNoCompression() {
+  public void runAllNoCompression() throws OperationFailedException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
     for (int i = 0; i < 10; i++) {
@@ -65,7 +65,7 @@ public class StringsTest {
   
   //@Ignore
   @Test
-  public void runAllCompressionLZ4() {
+  public void runAllCompressionLZ4() throws OperationFailedException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     System.out.println();
     for (int i = 0; i < 10; i++) {
@@ -78,7 +78,7 @@ public class StringsTest {
   
   //@Ignore
   @Test
-  public void runAllCompressionLZ4HC() {
+  public void runAllCompressionLZ4HC() throws OperationFailedException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
     System.out.println();
     for (int i = 0; i < 10; i++) {
@@ -89,7 +89,13 @@ public class StringsTest {
     }
   }
   
-  private void allTests() {
+  private void allTests() throws OperationFailedException {
+    setUp();
+    testIncrementLong();
+    tearDown();
+    setUp();
+    testIncrementDouble();
+    tearDown();
     setUp();
     testSetGet();
     tearDown();
@@ -103,6 +109,79 @@ public class StringsTest {
     map = new BigSortedMap(1000000000);
     buffer = UnsafeAccess.mallocZeroed(bufferSize); 
     keyValues = getKeyValues(n);
+  }
+  
+  
+  @Ignore
+  @Test
+  public void testIncrementLong() throws OperationFailedException {
+    System.out.println("Test Increment Long ");
+    
+    KeyValue kv = keyValues.get(0);
+    
+    Strings.INCRBY(map, kv.keyPtr, kv.keySize, 0);
+    int size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    long value = Utils.strToLong(buffer, size);
+    assertEquals(0L, value);
+    
+    Strings.INCRBY(map, kv.keyPtr, kv.keySize, -11110);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToLong(buffer, size);
+    assertEquals(-11110L, value);
+    
+    Strings.INCRBY(map, kv.keyPtr, kv.keySize, 11110);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToLong(buffer, size);
+    assertEquals(0L, value);
+    
+    Strings.INCRBY(map, kv.keyPtr, kv.keySize, 10);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToLong(buffer, size);
+    assertEquals(10L, value);
+ 
+    Strings.INCRBY(map, kv.keyPtr, kv.keySize, 100);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToLong(buffer, size);
+    assertEquals(110L, value);
+
+    Strings.INCRBY(map, kv.keyPtr, kv.keySize, 1000);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToLong(buffer, size);
+    assertEquals(1110L, value);
+  }
+  
+  @Ignore
+  @Test
+  public void testIncrementDouble() throws OperationFailedException {
+    System.out.println("Test Increment Double ");
+    
+    KeyValue kv = keyValues.get(0);
+    
+    Strings.INCRBYFLOAT(map, kv.keyPtr, kv.keySize, 10d);
+    
+    int size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    double value = Utils.strToDouble(buffer, size);
+    assertEquals(10d, value);
+    
+    Strings.INCRBYFLOAT(map, kv.keyPtr, kv.keySize, 100d);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToDouble(buffer, size);
+    assertEquals(110d, value);
+    
+    Strings.INCRBYFLOAT(map, kv.keyPtr, kv.keySize, 1000d);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToDouble(buffer, size);
+    assertEquals(1110d, value);
+    
+    Strings.INCRBYFLOAT(map, kv.keyPtr, kv.keySize, 10000d);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToDouble(buffer, size);
+    assertEquals(11110d, value);
+    
+    Strings.INCRBYFLOAT(map, kv.keyPtr, kv.keySize, -11110d);
+    size = (int) Strings.GET(map, kv.keyPtr, kv.keySize, buffer, bufferSize);
+    value = Utils.strToDouble(buffer, size);
+    assertEquals(0d, value);
   }
   
   @Ignore

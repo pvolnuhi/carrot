@@ -103,11 +103,11 @@ public class TestUtils {
     Random r = new Random();
     long start = System.currentTimeMillis();
     double total = 0;
-    for(int i=0; i < 1000000; i++) {
-      double d = r.nextDouble();
+    for(int i=0; i < 100; i++) {
+      double d = r.nextDouble() - 0.5d;
       int len = Utils.doubleToStr(d, ptr, size);
       double dd = Utils.strToDouble(ptr, len);
-      //System.out.println(d+" " + dd);
+      System.out.println(d+" " + dd);
       total += dd;
     }
     long end = System.currentTimeMillis();

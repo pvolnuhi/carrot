@@ -11,11 +11,13 @@ import static org.bigbase.carrot.redis.KeysLocker.writeLock;
 import static org.bigbase.carrot.redis.KeysLocker.writeUnlock;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
+import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
@@ -244,6 +246,7 @@ public class Hashes {
   }
   
   /**
+   * TODO: OPTIMIZE for SPEED
    * Sets field in the hash stored at key to value. If key does not exist, a new key holding 
    * a hash is created. If field already exists in the hash, it is overwritten.
    * As of Redis 4.0.0, HSET is variadic and allows for multiple field/value pairs.
@@ -286,7 +289,34 @@ public class Hashes {
     }
   }
   
-  
+  public static int HSET(BigSortedMap map, long keyPtr, int keySize, List<KeyValue> kvs) {
+
+    Key k = getKey(keyPtr, keySize);
+    int count = 0;
+    try {
+      writeLock(k);
+      for(KeyValue kv: kvs) {
+        long fieldPtr = kv.keyPtr;
+        int fieldSize = kv.keySize;
+        long valuePtr = kv.valuePtr;
+        int valueSize = kv.valueSize;
+        int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
+        HashSet set = hashSet.get();
+        set.reset();
+        set.setKeyAddress(keyArena.get());
+        set.setKeySize(kSize);
+        set.setFieldValue(valuePtr, valueSize);
+        set.setOptions(MutationOptions.NONE);
+        // version?
+        if(map.execute(set)) {
+          count++;
+        }
+      }
+      return count;
+    } finally {
+      writeUnlock(k);
+    }
+  }
   /**
    * HSET for a single field-value (zero object allocation)
    * @param map sorted map storage

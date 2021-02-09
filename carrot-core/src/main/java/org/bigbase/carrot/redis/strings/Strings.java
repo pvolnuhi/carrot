@@ -335,6 +335,7 @@ public class Strings {
       if (size > INCR_ARENA_SIZE) {
         throw new NumberFormatException();
       } else if (size > 0) {
+        //TODO: NumberFormatException
         value = Utils.strToLong(incrArena.get(), (int) size);
       }
       value += incr;

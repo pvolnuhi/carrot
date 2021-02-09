@@ -303,10 +303,9 @@ public class BigSortedMap {
       /getTotalBlockDataSize());
     System.out.println("Total index size           :" + getTotalBlockIndexSize());
     System.out.println("Total compressed data size :" + getTotalCompressedDataSize());
-    System.out.println("Total external data size   :" + totalExternalDataSize.get());
-    
+    System.out.println("Total external data size   :" + totalExternalDataSize.get());   
     System.out.println("Copmpression ratio         :" + ((double)getTotalDataSize()/ 
-        UnsafeAccess.getAllocatedMemory())+"\n");
+        getTotalAllocatedMemory())+"\n");
   }
   /** 
    * Gets maximum memory limit

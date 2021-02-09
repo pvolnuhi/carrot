@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.Key;
+import org.bigbase.carrot.KeyValue;
 
 import sun.misc.Unsafe;
 
@@ -771,12 +772,17 @@ public class Utils {
     }
     long value = i;
     int index = s - 1;
-    while (value > 0) {
-      long old = value;
-      value /= 10; 
-      long rem = old - 10 * value;
-      UnsafeAccess.putByte( ptr + index--, (byte)(rem + '0'));
+    if (value == 0) {
+      UnsafeAccess.putByte(ptr, (byte)'0');
+    } else {
+      while (value > 0) {
+        long old = value;
+        value /= 10; 
+        long rem = old - 10 * value;
+        UnsafeAccess.putByte( ptr + index--, (byte)(rem + '0'));
+      }
     }
+    
     if (sign != 0) {
       UnsafeAccess.putByte(ptr, (byte)'-');
     }
@@ -853,13 +859,18 @@ public class Utils {
       return 19;
   }
   
-  
-  
-  
   /**
    * String - Double conversion
    *
    */
+  
+  static ThreadLocal<byte[]> buffer = new ThreadLocal<byte[]>() {
+
+    @Override
+    protected byte[] initialValue() {
+      return new byte[64];
+    }
+  };
   
   /**
    * Converts string representation to double
@@ -867,19 +878,15 @@ public class Utils {
    * @param size size of a string
    * @return double
    */
-  public static final double strToDouble (long ptr, int size) 
-  {
-    
-    MutableString str = MutableString.get();
-    char[] buf = str.getBuffer(size);
-    if (buf == null) {
+  
+  public static final double strToDouble (long ptr, int size) {
+    if (size > 64 || size <= 0) {
       throw new NumberFormatException();
     }
-    for (int i=0; i < size; i++) {
-      buf[i] = (char) (UnsafeAccess.toByte(ptr + i) & 0xff);
-    }
-    str.setBuffer(buf);
-    String s = str.toString();
+    byte[] buf = buffer.get();
+    UnsafeAccess.copy(ptr, buf, 0, size);
+    // Yep, we create new string instance
+    String s = new String(buf, 0, size);
     return Double.parseDouble(s);
   }
   
@@ -891,21 +898,18 @@ public class Utils {
    * @return size of a string representation, if size is greater than memory buffer
    *        size, call must be repeated
    */
+
   public final static int doubleToStr(double d, long ptr, int size) {
-    MutableString str = MutableString.get();
-    FloatingDecimal.toJavaFormatMutableString(d, str);
-    String s = str.toString();
+    String s = Double.toString(d);
     int len = s.length();
     if (len > size) {
       return len;
     }
-    for (int i=0; i < len; i++) {
-      UnsafeAccess.putByte(ptr + i, (byte)s.charAt(i));
+    for(int i =0; i < len; i++) {
+      UnsafeAccess.putByte(ptr + i, (byte) s.charAt(i));
     }
     return len;
   }
-  
-  
   /**
    * Generated random array (with possible repeats)
    * @param max max value
@@ -1151,6 +1155,14 @@ public class Utils {
       lv = exp | fraction;
       return -Double.longBitsToDouble(lv);
     }
+  }
+  
+  public static long size(List<KeyValue> list) {
+    long size = 0;
+    for (KeyValue kv :list) {
+      size += kv.keySize + kv.valueSize;
+    }
+    return size;
   }
   
   public static void main(String[] args) {

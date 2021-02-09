@@ -1,5 +1,6 @@
 package org.bigbase.carrot;
 
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 /**
@@ -48,5 +49,10 @@ public class KeyValue implements Comparable<KeyValue>{
   @Override
   public int hashCode() {
     return Utils.murmurHash(keyPtr, keySize, 0);
+  }
+  
+  public void free() {
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(valuePtr);
   }
 }
