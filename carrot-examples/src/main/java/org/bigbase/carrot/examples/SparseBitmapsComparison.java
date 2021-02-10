@@ -50,6 +50,12 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * 
  * dencity=0.1       1
  * 
+ * 
+ * Notes: COMPRESSION = sizeUncompressedBitmap/Test_consumed_RAM
+ * 
+ * sizeUncompressedBitmap - size of an uncompressed bitmap, which can hold all the bits
+ * Test_consumed_RAM - RAM consumed by test.
+ * 
  * @author vrodionov
  *
  */
@@ -65,7 +71,7 @@ public class SparseBitmapsComparison {
   static double dencity = 0.01;
   
   static double[] dencities = 
-      new double[] {/*0.000001, 0.00001,*/ 0.0001, 0.001, 0.01, 0.02, 0.03, 0.04, 0.05, 0.075, 0.1};
+      new double[] {/*0.000001, 0.00001, 0.0001, 0.001,*/ 0.01 /*, 0.02, 0.03, 0.04, 0.05, 0.075, 0.1*/};
   
   static {
     UnsafeAccess.debug = true;
@@ -94,8 +100,6 @@ public class SparseBitmapsComparison {
 
     UnsafeAccess.free(key.address);
     UnsafeAccess.free(buffer);
-    //UnsafeAccess.mallocStats.printStats();
-    //BigSortedMap.memoryStats();
   }
 
   private static void runAllNoCompression() {
@@ -105,8 +109,7 @@ public class SparseBitmapsComparison {
       dencity = dencities[i];
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL, dencity=" + dencity);
       allTests();
-      //BigSortedMap.printMemoryAllocationStats();
-      //UnsafeAccess.mallocStats.printStats();
+ 
     }
   }
   
@@ -117,8 +120,6 @@ public class SparseBitmapsComparison {
       dencity = dencities[i];
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4, dencity=" + dencity);
       allTests();
-      //BigSortedMap.printMemoryAllocationStats();
-      //UnsafeAccess.mallocStats.printStats();
     }
   }
   
@@ -130,8 +131,6 @@ public class SparseBitmapsComparison {
 
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC, dencity="+ dencity);
       allTests();
-      //BigSortedMap.printMemoryAllocationStats();
-      //UnsafeAccess.mallocStats.printStats();
     }
   }
   
@@ -172,8 +171,8 @@ public class SparseBitmapsComparison {
   }
   
   public static void main(String[] args) {
-    //runAllNoCompression();
-    //runAllCompressionLZ4();
+    runAllNoCompression();
+    runAllCompressionLZ4();
     runAllCompressionLZ4HC();
   }
 }

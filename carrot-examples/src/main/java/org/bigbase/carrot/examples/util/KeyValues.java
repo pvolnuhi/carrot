@@ -1,6 +1,7 @@
 package org.bigbase.carrot.examples.util;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -18,6 +19,14 @@ public class KeyValues {
 
   KeyValues(Properties p){
     this.props = p;
+  }
+  
+  public Map<String, String> getPropsMap() {
+    HashMap<String, String> map = new HashMap<String, String>();
+    for (Map.Entry<Object, Object> e: props.entrySet()){
+      map.put((String)e.getKey(), (String)e.getValue());
+    }
+    return map;
   }
   
   public List<KeyValue> asList() {

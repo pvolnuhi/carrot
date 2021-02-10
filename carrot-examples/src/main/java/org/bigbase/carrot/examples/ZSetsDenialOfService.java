@@ -26,34 +26,33 @@ import org.bigbase.carrot.util.UnsafeAccess;
  
  * Test description: <br>
  *  
- *  
  * 1. Load 1M {host, number_of_requests} pairs into Carrot sorted set  
  * 2. Calculate RAM usage
  * 
- * number_of_requests is random number between 1 and 100000
- * host - xx.xx.xx.xx string 
+ * number_of_requests is random number between 1 and 1000 heavily
+ * skewed towards 0
+ * host - synthetic (xx.xx.xx.xx) string or a real host name from a provided file
  * 
  * Results:
  * 0. Average data size {host, number_of_requests} = 21 bytes
- * 1. No compression. Used RAM per session object is 51 bytes (COMPRESSION= 0.41)
- * 2. LZ4 compression. Used RAM per session object is 26 bytes (COMPRESSION = 0.83)
- * 3. LZ4HC compression. Used RAM per session object is 24 bytes (COMPRESSION = 0.89)
+ * 1. No compression. Used RAM per session object is 53 bytes 
+ * 2. LZ4 compression. Used RAM per session object is 34 bytes 
+ * 3. LZ4HC compression. Used RAM per session object is 30 bytes 
  * 
- * Redis estimate per record , using ZSets is 150 
- * (see this question:
- * https://stackoverflow.com/questions/22965766/optimizing-redis-sorted-set-memory-usage) 
- * (actually it can be more, this is a low estimate based on evaluating Redis code) 
+ * Redis usage per record , using ZSets is 116
+ * 
+ * Total used Redis memory is shown by 'used_memory' in Redis CLI. 
  * 
  * RAM usage (Redis-to-Carrot)
  * 
- * 1) No compression    150/51 ~ 3x
- * 2) LZ4   compression 150/26 ~ 6.x
- * 3) LZ4HC compression 150/24 = 6.x
+ * 1) No compression    116/53 ~ 2.2x
+ * 2) LZ4   compression 116/34 ~ 3.4x
+ * 3) LZ4HC compression 116/30 = 3.9x
  * 
  * Effect of a compression:
  * 
- * LZ4  - 51/26 ~ 2x (to no compression)
- * LZ4HC - 51/24 ~ 2x (to no compression)
+ * LZ4  - 53/34 ~ 1.6x (to no compression)
+ * LZ4HC - 53/30 ~ 1.8x (to no compression)
  * 
  * @author vrodionov
  *
@@ -74,7 +73,7 @@ public class ZSetsDenialOfService {
    * to reflect the fact that majority of hosts are legitimate
    * and do not overwhelm the service wit a bogus requests.
    */
-  static double MAX= 10d;
+  static double MAX= 1000d;
   
   static long totalDataSize = 0;
   static Random rnd = new Random();
@@ -183,8 +182,10 @@ public class ZSetsDenialOfService {
   }
   
   static double getNextScore() {
-    return Math.rint(rnd.nextDouble() * MAX);
+    double d = rnd.nextDouble();
+    return Math.rint(Math.pow(d,  10) * MAX);
   }
+  
   
   static String getNextHost() {
     if (hosts.size() > 0) {

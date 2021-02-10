@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
@@ -22,28 +23,49 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * Key format: "counter:number" number = [0:100000]
  * 
  * 1. Load 100000 long and double counters
- * 2. Increment each by 1
+ * 2. Increment each by random number between 0-1000
  * 3. Calculate Memory usage
  * 
- * Results:
+ * Notes: in a real usage scenario, counter values are not random
+ * and can be compressed more
+ * 
+ * Results (Random 1..1000):
  * 
  * 1. Average counter size is 21 (13 bytes - key, 8 - value)
- * 2. Carrot No compression. 9 bytes per counter
- * 3. Carrot LZ4      - 5 bytes per counter
- * 4. Carrot LZ4HC    - 5 bytes per counter 
- * 5. Redis estimated memory usage per counter is 70 -110 bytes (say, 90)
+ * 2. Carrot No compression. 8.8 bytes per counter
+ * 3. Carrot LZ4      - 7.2 bytes per counter
+ * 4. Carrot LZ4HC    - 7.1 bytes per counter 
+ * 5. Redis memory usage per counter is 8 bytes (HINCRBY)
  * 
  * RAM usage (Redis-to-Carrot)
  * 
- * 1) No compression    90/37 ~ 2.4x
- * 2) LZ4   compression 90/6.8 ~ 13.2x
- * 3) LZ4HC compression 90/6.7 ~ 13.4x 
+ * 1) No compression    8/8.8 ~ 0.9x
+ * 2) LZ4   compression 8/7.2 ~ 1.1x
+ * 3) LZ4HC compression 90/7.1 ~ 1.3x 
  * 
  * Effect of a compression:
  * 
- * LZ4  - 37/6.8 = 5.4    (to no compression)
- * LZ4HC - 37/6.7 = 5.5  (to no compression)
+ * LZ4  - 8.8/7.2 = 1.22    (to no compression)
+ * LZ4HC - 8.8/7.1 = 1.24  (to no compression)
  * 
+ * Results (Semi - Random 1..100 - skewed to 0):
+ * 
+ * 1. Average counter size is 21 (13 bytes - key, 8 - value)
+ * 2. Carrot No compression. 7.7 bytes per counter
+ * 3. Carrot LZ4      - 6.5 bytes per counter
+ * 4. Carrot LZ4HC    - 6.4 bytes per counter 
+ * 5. Redis memory usage per counter is 7.3 bytes (HINCRBY)
+ * 
+ * RAM usage (Redis-to-Carrot)
+ * 
+ * 1) No compression    7.3/7.7 ~ 0.95x
+ * 2) LZ4   compression 7.3/6.5 ~ 1.12x
+ * 3) LZ4HC compression 7.3/6.4 ~ 1.14x 
+ * 
+ * Effect of a compression:
+ * 
+ * LZ4  - 7.7/6.5 = 1.18    (to no compression)
+ * LZ4HC - 7.7/6.4 = 1.2  (to no compression)
  * 
  * Redis
  * 
@@ -63,6 +85,8 @@ public class HashesAtomicCounters {
   static List<Key> keys = new ArrayList<Key>(); 
   static long keyTotalSize = 0;
   static long N = 1000000;
+  static int MAX_VALUE = 1000;
+  
   static {
     for (int i = 0; i < N; i++) {
       String skey = "counter:" + i;
@@ -95,11 +119,14 @@ public class HashesAtomicCounters {
 
     long startTime = System.currentTimeMillis();
     int count =0;
+    Random r = new Random();
+    
     for (Key key: keys) {
       count++;
       // We use first 8 bytes as hash key, the rest as a field name
       int keySize = Math.max(8, key.length -3);
-      Hashes.HINCRBY(map, key.address, keySize, key.address + keySize, key.length - keySize, 1);
+      Hashes.HINCRBY(map, key.address, keySize, key.address + keySize, key.length - keySize, 
+        nextScoreSkewed(r));
       if (count % 10000 == 0) {
         System.out.println("set long "+ count);
       }
@@ -135,4 +162,12 @@ public class HashesAtomicCounters {
 
   }
 
+  private static int nextScoreSkewed(Random r) {
+    double d = r.nextDouble();
+    return (int)Math.rint(d*d*d*d*d * MAX_VALUE);
+  }
+  
+  private static int nextScore(Random r) {
+    return r.nextInt(MAX_VALUE);
+  }
 }
