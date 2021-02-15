@@ -2,6 +2,8 @@ package org.bigbase.carrot;
 
 import java.io.IOException;
 
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -14,8 +16,11 @@ public class BigSortedMapPerfTest {
   @BeforeClass 
   public static void setUp() {
     System.out.println("Set up: block = 4096; Mem="+ 10000000);
+    
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    
     BigSortedMap.setMaxBlockSize(4096);
-    map = new BigSortedMap(1000000000);
+    map = new BigSortedMap(4000000000L);
     totalLoaded = 1;
     long start = System.currentTimeMillis();
     while(true) {
@@ -26,21 +31,25 @@ public class BigSortedMapPerfTest {
         totalLoaded--;
         break;
       }
-      totalLoaded++;      
+      totalLoaded++; 
+      if (totalLoaded % 100000 == 0) {
+        System.out.println("Loaded " + totalLoaded + " RAM alocated=" + BigSortedMap.getTotalAllocatedMemory());
+      }
     }
     long end = System.currentTimeMillis();
     System.out.println("Time to load="+ totalLoaded+" ="+(end -start)+"ms");
-    System.out.println("Total memory="+map.getTotalAllocatedMemory());
+    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
   }
   
   @Test
   public void testCountRecords() throws IOException {
     System.out.println("testCountRecords");
-    int n = 100;
+    int n = 10;
     long start = System.currentTimeMillis();
     for (int i=0; i < n; i++) {
+      System.out.println("Scan Run started "+ i);
       totalScanned += countRecords();
-     // System.out.println("c="+ i);
+      System.out.println("Scan Run finished "+ i);
     }
     long end = System.currentTimeMillis();
     
@@ -54,6 +63,7 @@ public class BigSortedMapPerfTest {
       counter++;
       scanner.next();
     }
+    scanner.close();
     return counter;
   }
 }
