@@ -24,7 +24,7 @@ public class BigSortedMapDirectMemoryTest {
   long MAX_ROWS = 1000000;
 
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
 
   long countRecords() throws IOException {

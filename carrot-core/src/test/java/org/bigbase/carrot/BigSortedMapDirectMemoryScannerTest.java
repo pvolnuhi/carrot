@@ -18,7 +18,7 @@ import org.junit.Test;
 public class BigSortedMapDirectMemoryScannerTest {
 
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   
   BigSortedMap map;

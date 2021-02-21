@@ -889,7 +889,7 @@ public final class DataBlock  {
       return false;
     }
     
-    if ( isCompressedDataBlock()) {
+    if (isCompressedDataBlock()) {
       setBlockSize((short) nextSize);
       return true;
     }
@@ -1020,7 +1020,7 @@ public final class DataBlock  {
     try {
       writeLock();
             
-      onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
+      //onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
 
@@ -1064,13 +1064,25 @@ public final class DataBlock  {
       // Overwrite only if there are no conflicting Tx or snapshots
       boolean overwrite = recordOverwrite /*&& (foundSeqId > mostRecentActiveTxId)*/;
 
-      if (onlyExactOverwrite && !overwrite && insert) {
-        // Failed to put - split the block
-        return false;
-      }
+//      if (onlyExactOverwrite && !overwrite && insert) {
+//        // Failed to put - split the block
+//        return false;
+//      }
 
       if (insert) {
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
+        int oldBlockSize = blockSize;
+        onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
+        if (onlyExactOverwrite) {
+          // Failed to put - split the block
+          return false;
+        }
+        blockSize = getBlockSize();
+        if (blockSize != oldBlockSize) {
+          // We did expansion - search addr again
+          addr = search(key, keyOffset, keyLength, version);
+        }
+        
         // move from offset to offset + moveDist
         UnsafeAccess.copy(addr, addr + newRecLen, dataPtr + dataSize - addr);
         UnsafeAccess.copy(key, keyOffset, addr + RECORD_PREFIX_LENGTH, keyLength);
@@ -1118,11 +1130,22 @@ public final class DataBlock  {
                 
         int toMove = foundExternal? (keyLength + valueLength + RECORD_TOTAL_OVERHEAD - existRecLen):
           (valueLength - vallen);
-        if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
-          // failed to insert, split is required
-          // Hack to avoid recompression
-          return false;
+        boolean expanded = false;
+        if (dataSize + toMove > blockSize) {
+          expanded = expand(dataSize + toMove);
+          if (!expanded) {
+            return false;
+          } else {
+            blockSize = getBlockSize();
+            // We did expansion - search addr again
+            addr = search(key, keyOffset, keyLength, version);
+          }
         }
+//        if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
+//          // failed to insert, split is required
+//          // Hack to avoid recompression
+//          return false;
+//        }
         
         deallocateIfExternalRecord(addr);
 
