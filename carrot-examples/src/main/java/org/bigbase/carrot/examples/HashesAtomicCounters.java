@@ -7,13 +7,14 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.redis.OperationFailedException;
 import org.bigbase.carrot.redis.hashes.Hashes;
-
 import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 
 /**
  * This example shows how to use Carrot Hashes.INCRBY 
@@ -78,7 +79,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
 public class HashesAtomicCounters {
   
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   
   static long buffer = UnsafeAccess.malloc(4096);
@@ -96,7 +97,11 @@ public class HashesAtomicCounters {
       keys.add(new Key(key, bkey.length));
       keyTotalSize += skey.length();
     }
-    Collections.shuffle(keys);
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("SEED1=" + seed);
+    Collections.shuffle(keys, r);
   }
   
   public static void main(String[] args) throws IOException, OperationFailedException {
@@ -110,6 +115,8 @@ public class HashesAtomicCounters {
     System.out.println("RUN compression = LZ4HC");
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
     runTest();
+    Utils.freeKeys(keys);
+    UnsafeAccess.mallocStats.printStats();
 
   }
   
@@ -120,14 +127,23 @@ public class HashesAtomicCounters {
     long startTime = System.currentTimeMillis();
     int count =0;
     Random r = new Random();
-    
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("SEED2=" + seed);
+        
     for (Key key: keys) {
       count++;
       // We use first 8 bytes as hash key, the rest as a field name
       int keySize = Math.max(8, key.length -3);
+      int val = nextScoreSkewed(r);
       Hashes.HINCRBY(map, key.address, keySize, key.address + keySize, key.length - keySize, 
-        nextScoreSkewed(r));
-      if (count % 10000 == 0) {
+        val);  
+//      int value = (int)Hashes.HGETL(map, key.address, keySize, key.address + keySize, key.length - keySize); 
+//      if (val != value) {
+//        System.err.println("FATAL");
+//        System.exit(-1);
+//      }
+      if (count % 100000 == 0) {
         System.out.println("set long "+ count);
       }
     }
@@ -135,28 +151,36 @@ public class HashesAtomicCounters {
     
     System.out.println("Loaded " + keys.size() +" long counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
       + (endTime - startTime) + "ms. RAM usage="+ (UnsafeAccess.getAllocatedMemory() - keyTotalSize));
-    
+
     BigSortedMap.printMemoryAllocationStats();
-    // Delete key - Get first Key object and extract Hash key
-    //Hashes.DELETE(map, keys.get(0).address, 8);
-    
-    
+    UnsafeAccess.mallocStats.printStats(false);
     // Now test doubles
-//    count = 0;
-//    startTime = System.currentTimeMillis();
-//    
-//    for (Key key: keys) {
-//      count++;
-//      Hashes.HINCRBYFLOAT(map, key.address, 8, key.address + 8, key.length - 8, 1d);
-//      if (count % 10000 == 0) {
-//        System.out.println("set float "+ count);
+    count = 0;
+    startTime = System.currentTimeMillis();
+    
+    for (Key key: keys) {
+      count++;
+      // We use first 8 bytes as hash key, the rest as a field name
+      int keySize = Math.max(8, key.length -3);    
+      int val = nextScoreSkewed(r);
+      //int prevValue = (int)Hashes.HGETL(map, key.address, keySize, key.address + keySize, key.length - keySize);
+      Hashes.HINCRBYFLOAT(map, key.address, keySize, key.address + keySize, key.length - keySize, 
+        val);  
+//      int value = (int)Hashes.HGETF(map, key.address, keySize, key.address + keySize, key.length - keySize);
+//      if ((val + prevValue) != value) {
+//        System.err.println("FATAL");
+//        System.exit(-1);
 //      }
-//    }
-//    
-//    endTime = System.currentTimeMillis();
-//    
-//    System.out.println("Loaded " + keys.size() +" double counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
-//        + (endTime - startTime) + "ms. RAM usage="+ (UnsafeAccess.getAllocatedMemory() - keyTotalSize));
+      if (count % 100000 == 0) {
+        System.out.println("set float "+ count);
+      }
+    }
+    endTime = System.currentTimeMillis();
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats(false);
+
+    System.out.println("Loaded " + keys.size() +" double counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
+        + (endTime - startTime) + "ms. RAM usage="+ (UnsafeAccess.getAllocatedMemory() - keyTotalSize));
     map.dispose();
     BigSortedMap.printMemoryAllocationStats();
 
@@ -165,9 +189,5 @@ public class HashesAtomicCounters {
   private static int nextScoreSkewed(Random r) {
     double d = r.nextDouble();
     return (int)Math.rint(d*d*d*d*d * MAX_VALUE);
-  }
-  
-  private static int nextScore(Random r) {
-    return r.nextInt(MAX_VALUE);
   }
 }

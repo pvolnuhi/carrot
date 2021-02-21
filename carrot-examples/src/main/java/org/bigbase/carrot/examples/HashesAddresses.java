@@ -75,8 +75,6 @@ public class HashesAddresses {
   static long totalDataSize = 0;
   static List<Address> addressList ;
   
-  
-  
   public static void main(String[] args) throws IOException, OperationFailedException {
     
     addressList = Address.loadFromFile(args[0]);
@@ -90,7 +88,6 @@ public class HashesAddresses {
     System.out.println("RUN compression = LZ4HC");
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
     runTest();
-
   }
   
   private static void runTest() throws IOException, OperationFailedException {
@@ -134,6 +131,7 @@ public class HashesAddresses {
       + " COMPRESSION=" + (((double)totalDataSize))/ UnsafeAccess.getAllocatedMemory());
     
     BigSortedMap.printMemoryAllocationStats();
+    
     map.dispose();
     
   }

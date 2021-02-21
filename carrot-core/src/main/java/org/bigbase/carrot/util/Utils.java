@@ -1165,6 +1165,25 @@ public class Utils {
     return size;
   }
   
+  public static void freeKeys(List<Key> keys) {
+    for (Key k: keys) {
+      UnsafeAccess.free(k.address);
+    }
+  }
+  
+  public static void freeKeyValues(List<KeyValue> kvs) {
+    for (KeyValue kv: kvs) {
+      UnsafeAccess.free(kv.keyPtr);
+      UnsafeAccess.free(kv.valuePtr);
+    }
+  }
+  
+  public static String toString(long ptr, int size) {
+    byte[] buf = new byte[size];
+    UnsafeAccess.copy(ptr, buf, 0, size);
+    return new String(buf);
+  }
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

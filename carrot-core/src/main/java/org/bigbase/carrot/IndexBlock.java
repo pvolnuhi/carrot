@@ -1073,8 +1073,10 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	    }
 	    long ptr = this.dataPtr;
 	    if(!isLessOrEqualsThanMin(startKeyPtr, startKeySize, version)) {
-	       ptr = search(startKeyPtr, startKeySize, version, Op.PUT);
+	      // Find first key which starts with a given key
+	      ptr = search(startKeyPtr, startKeySize, version, Op.PUT);
 	    }
+	    
       // Try to insert, split if necessary (if split is possible)
       // return false if splitting of index block is required
       dataBlock = block.get();
@@ -1083,6 +1085,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       List<Key> toDelete = null; 
       // List of blocks which requires update first key
       List<Long> toUpdate = null;
+      boolean firstBlock = true;
+
       do {
  
         dataBlock.decompressDataBlockIfNeeded();
@@ -1090,11 +1094,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
         Key key = getFirstKey(dataBlock);
         
         long del = dataBlock.deleteRange(startKeyPtr, startKeySize, endKeyPtr, endKeySize, version);
-        if (del == 0) {
+        if (del == 0 && !firstBlock) {
           UnsafeAccess.free(key.address);
           dataBlock.compressDataBlockIfNeeded();
           dataBlock = null;
           break;
+        } else {
+          firstBlock = false;
         }
         deleted += del;
         long bptr = dataBlock.getIndexPtr();
@@ -1790,7 +1796,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
   }
   
 	/**
-	 * Search position of a first key which is greater or equals to a given key
+	 * Search position of a first key which is (greater!!!) less or equals to a given key
 	 * 
 	 * @param keyPtr
 	 * @param keyLength
@@ -1847,6 +1853,33 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
   }
 
+//  /**
+//   * Search position of a first key which starts with a given key
+//   * @param keyPtr
+//   * @param keyLength
+//   * @return address to insert (or update)
+//   */
+//  private long searchFisrtStartsWith(long keyPtr, int keyLength) {
+//    long ptr = dataPtr;
+//    int count = 0;
+//    long prevPtr = NOT_FOUND;
+//    while (count++ < numDataBlocks) {
+//      int keylen = keyLength(ptr);
+//      int klen = Math.min(keyLength, keylen);
+//      int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), klen);
+//      if (res == 0) {
+//        // Found
+//        return ptr;
+//      }
+//      if (isExternalBlock(ptr)) {
+//        keylen = ADDRESS_SIZE;
+//      }
+//      ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+//    }
+//    // Not found
+//    return NOT_FOUND;
+//  }
+  
   /**
    * Search largest block which is less than a given key
    * @param keyPtr key address

@@ -223,8 +223,9 @@ public class Hashes {
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
+   * @return true on success
    */
-  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(k);
@@ -233,12 +234,11 @@ public class Hashes {
       UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
       UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
-
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);      
       long total = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
       UnsafeAccess.free(kPtr);
       UnsafeAccess.free(endKeyPtr);
-
+      return total > 0;
     } finally {
       KeysLocker.writeUnlock(k);
     }
@@ -646,6 +646,58 @@ public class Hashes {
       return get.getFoundValueSize();
     } finally {
       readUnlock(k);
+    }
+  }
+  
+  /**
+   * Get long counter value
+   * @param map ordered map
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param fieldPtr field to lookup address
+   * @param fieldSize field size
+   * @return long counter value or exception
+   */
+  public static long HGETL(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize)
+    throws OperationFailedException
+  {
+    int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, incrArena.get(), INCR_ARENA_SIZE);
+    if (size < 0 ||size > INCR_ARENA_SIZE) {
+      throw new OperationFailedException("Not a valid data type");
+    }
+    
+    String s = Utils.toString(incrArena.get(), size);
+    try {
+      long val = Long.valueOf(s);
+      return val;
+    } catch(NumberFormatException e) {
+      throw new OperationFailedException(e);
+    }
+  }
+  
+  /**
+   * Get float counter value
+   * @param map ordered map
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param fieldPtr field to lookup address
+   * @param fieldSize field size
+   * @return long counter value or exception
+   */
+  public static double HGETF(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize)
+    throws OperationFailedException
+  {
+    int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, incrArena.get(), INCR_ARENA_SIZE);
+    if (size < 0 ||size > INCR_ARENA_SIZE) {
+      throw new OperationFailedException("Not a valid data type");
+    }
+    
+    String s = Utils.toString(incrArena.get(), size);
+    try {
+      double val = Double.valueOf(s);
+      return val;
+    } catch(NumberFormatException e) {
+      throw new OperationFailedException(e);
     }
   }
   
@@ -1257,6 +1309,7 @@ public class Hashes {
     return -1; // NOT_FOUND
   }
   
+  //public static boolean DEBUG = false;
   /**
    * Finds first field which is greater or equals to a given one
    * in a Value object
@@ -1274,7 +1327,13 @@ public class Hashes {
       int skip = Utils.sizeUVInt(fSize);
       int vSize = Utils.readUVInt(valuePtr + off + skip);
       skip+= Utils.sizeUVInt(vSize);
+//      if (DEBUG) {
+//        System.out.println(Utils.toString(fieldPtr, fieldSize) + " - " + 
+//            Utils.toString(valuePtr + off + skip, fSize));
+//      }
       if (Utils.compareTo(fieldPtr, fieldSize, valuePtr + off + skip, fSize) <= 0) {
+//        if (DEBUG) System.out.println("off=" + off + " valueSize=" + valueSize + " el count=" + 
+//            UnsafeAccess.toShort(valuePtr));
         return valuePtr + off;
       }
       off+= skip + fSize + vSize;
@@ -1292,6 +1351,17 @@ public class Hashes {
     int skip = Utils.sizeUVInt(fSize);
     int vSize = Utils.readUVInt(fieldValuePtr  + skip);
     return vSize;
+  }
+  
+  
+  /**
+   * Get full value size including length prefix
+   * @param fieldValuePtr address of a record
+   * @return full size
+   */
+  public static int getFulValueSize(long fieldValuePtr) {
+    int vSize = getValueSize(fieldValuePtr);
+    return vSize + Utils.sizeUVInt(vSize);
   }
   
   /**
@@ -1391,6 +1461,10 @@ public class Hashes {
   public static int compareFields (long ptr, long fieldPtr, int fieldSize) {
     int fSize = Utils.readUVInt(ptr);
     int fSizeSize = Utils.sizeUVInt(fSize);
-    return Utils.compareTo(ptr + fSizeSize, fSize, fieldPtr, fieldSize); 
+    int vSize = Utils.readUVInt(ptr + fSizeSize);
+    int vSizeSize = Utils.sizeUVInt(vSize);
+    
+    return Utils.compareTo(ptr + fSizeSize + vSizeSize, fSize, fieldPtr, fieldSize); 
   }
+  
 }

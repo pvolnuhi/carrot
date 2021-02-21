@@ -875,7 +875,6 @@ public final class DataBlock  {
     UnsafeAccess.storeFence();
   }
   
-
   /**
    * Expands block
    * @return true if success
@@ -1367,6 +1366,7 @@ public final class DataBlock  {
    * @return true if only exact overwrite, false - otherwise
    */
   private boolean compactExpandIfNecessary(int kvLength) {
+    if (kvLength <=0) return false;
     int dataSize = getDataInBlockSize();
     int blockSize = getBlockSize();
     if (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize) {
@@ -1725,7 +1725,7 @@ public final class DataBlock  {
     try {
       writeLock();
       
-      onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
+      //onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
 
@@ -1769,12 +1769,24 @@ public final class DataBlock  {
       // Overwrite only if there are no conflicting Tx or snapshots
       boolean overwrite = recordOverwrite /*&& (foundSeqId > mostRecentActiveTxId)*/;
 
-      if (onlyExactOverwrite && !overwrite && insert) {
-        // Failed to put - split the block
-        return false;
-      }
+//      if (onlyExactOverwrite && !overwrite && insert) {
+//        // Failed to put - split the block
+//        return false;
+//      }
             
       if (insert) {
+        int oldBlockSize = blockSize;
+        onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
+        if (onlyExactOverwrite) {
+          // Failed to put - split the block
+          return false;
+        }
+        blockSize = getBlockSize();
+        if (blockSize != oldBlockSize) {
+          // We did expansion - search addr again
+          addr = search(keyPtr, keyLength, version);
+
+        }
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
         UnsafeAccess.copy(addr, addr + newRecLen, dataPtr + dataSize - addr);
@@ -1823,10 +1835,23 @@ public final class DataBlock  {
                 
         int toMove = foundExternal? (keyLength + valueLength + RECORD_TOTAL_OVERHEAD - existRecLen):
           (valueLength - vallen);
-        if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
-          // failed to insert, split is required
-          return false;
+        
+        boolean expanded = false;
+        if (dataSize + toMove > blockSize) {
+          expanded = expand(dataSize + toMove);
+          if (!expanded) {
+            return false;
+          } else {
+            blockSize = getBlockSize();
+            // We did expansion - search addr again
+            addr = search(keyPtr, keyLength, version);
+          }
         }
+        
+//        if (onlyExactOverwrite /*&& (dataSize + toMove > blockSize)*/) {
+//          // failed to insert, split is required
+//          return false;
+//        }
         
         deallocateIfExternalRecord(addr);
 
@@ -2160,7 +2185,7 @@ public final class DataBlock  {
   final long search(long keyPtr, int keyLength, long version) {
     return search(keyPtr, keyLength, version, false);
   }
-  
+    
   /**
    * WARNING: Public API
    * Search position of a first key which is greater or equals to a given key
@@ -2179,6 +2204,7 @@ public final class DataBlock  {
       int keylen = keyLength(ptr);     
       int vallen = blockValueLength(ptr);
       int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
+      long pptr = keyAddress(ptr);
       if (res < 0 || (res == 0 /*&& version == NO_VERSION*/)) {
         return ptr;
       } 
@@ -2392,8 +2418,9 @@ public final class DataBlock  {
     int numRecords = getNumberOfRecords();
     int dataSize = getDataInBlockSize();
     
+    // Search first position which is greater or equals to a start key
     long ptr = search(startKeyPtr, startKeySize, 0);
-    
+    long startRange = ptr;
     while (ptr < this.dataPtr + dataSize) {
       long kPtr = keyAddress(ptr);
       int keylen = keyLength(ptr);
@@ -2406,9 +2433,11 @@ public final class DataBlock  {
       deleted++;
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
-    
     if (deleted > 0) {
-      setDataInBlockSize((short)(ptr - this.dataPtr));
+      deletedSize = ptr - startRange;
+      // copy data first
+      UnsafeAccess.copy(ptr, startRange, this.dataPtr + dataSize - ptr);
+      incrDataSize((short)(-deletedSize));
       setNumberOfRecords((short)(numRecords - deleted));
     }
     return deleted;
@@ -2418,12 +2447,13 @@ public final class DataBlock  {
    * WARNING: Public API
    * Deletes range of Key Values. The range is not necessary
    * inside this data block, so one should check all possible
-   * situations. 
-   * @param startKeyPtr
-   * @param startKeySize
-   * @param endKeyPtr
-   * @param endKeySize
-   * @param version
+   * situations. Deletes all keys which are greater or equals start key
+   * and less than end key
+   * @param startKeyPtr start key address
+   * @param startKeySize start key size
+   * @param endKeyPtr end key address
+   * @param endKeySize end key size
+   * @param version - not used
    * @return number of records deleted
    */
   public long deleteRange(long startKeyPtr, int startKeySize, long endKeyPtr, int endKeySize, 
@@ -2439,19 +2469,19 @@ public final class DataBlock  {
     }
     
     
-    startInside = compareTo(startKeyPtr, startKeySize, version, Op.PUT) >=0;
-    endInside = !isLargerThanMax(endKeyPtr, endKeySize, version);
-    
-    if (!startInside  && !endInside) {
-      // Block is completely covered by range - delete all
-      return deleteTo(endKeyPtr, endKeySize);
-    } else if (startInside && !endInside) {
-      return deleteFrom(startKeyPtr, startKeySize);
-    } else if (!startInside && endInside) {
-      return deleteTo(endKeyPtr, endKeySize);
-    } else {
+//    startInside = compareTo(startKeyPtr, startKeySize, version, Op.PUT) >=0;
+//    endInside = !isLargerThanMax(endKeyPtr, endKeySize, version);
+//    
+//    if (!startInside  && !endInside) {
+//      // Block is completely covered by range - delete all
+//      return deleteTo(endKeyPtr, endKeySize);
+//    } else if (startInside && !endInside) {
+//      return deleteFrom(startKeyPtr, startKeySize);
+//    } else if (!startInside && endInside) {
+//      return deleteTo(endKeyPtr, endKeySize);
+//    } else {
       return deleteFromTo(startKeyPtr, startKeySize, endKeyPtr, endKeySize);
-    }
+//    }
   }
   
   /**

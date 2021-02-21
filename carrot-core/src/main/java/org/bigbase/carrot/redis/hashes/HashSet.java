@@ -125,6 +125,7 @@ public class HashSet extends Operation{
     long foundKeyAddress = foundRecordAddress > 0? DataBlock.keyAddress(foundRecordAddress): 0;
     long fieldPtr = elementAddressFromKey(keyAddress);
     int fieldSize = elementSizeFromKey(keyAddress, keySize);
+        
     // Prefix keys must be equals if set exists, otherwise insert new set KV
     if ((foundKeySize <= setKeySize) || 
         Utils.compareTo(keyAddress, setKeySize, foundKeyAddress, 
@@ -149,7 +150,8 @@ public class HashSet extends Operation{
     // found
     int fieldSizeSize = Utils.sizeUVInt(fieldSize);
     int fieldValueSizeSize = Utils.sizeUVInt(fieldValueSize);
-    int toAdd = fieldSizeSize + fieldSize + fieldValueSize + fieldValueSizeSize;
+    int toAdd = !exists? fieldSizeSize + fieldSize + fieldValueSize + fieldValueSizeSize:
+      fieldValueSize + fieldValueSizeSize - Hashes.getFulValueSize(addr);
 
     int newValueSize = valueSize + toAdd;
     
@@ -295,7 +297,22 @@ public class HashSet extends Operation{
    */
   private void insertFieldValue(long valueAddress, int valueSize, long addr, long fieldPtr, int fieldSize) {
     // increment number of elements in this value
-    addNumElements(valueAddress, 1);
+    boolean update = false;
+    int existRecLen = 0;
+    if (addr < valueAddress + valueSize) {
+      int fSize = Utils.readUVInt(addr);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = Utils.readUVInt(addr + fSizeSize);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      update = Utils.compareTo(fieldPtr, fieldSize, addr + fSizeSize + vSizeSize, fSize) == 0;
+      if (update) {
+        existRecLen = fSize + vSize + fSizeSize + vSizeSize;
+      }
+    }
+    
+    if (!update) {
+      addNumElements(valueAddress, 1);
+    }
     long ptr = Hashes.valueArena.get();
     // Copy everything before addr
     UnsafeAccess.copy(valueAddress, ptr, addr - valueAddress);
@@ -313,7 +330,7 @@ public class HashSet extends Operation{
     ptr += fieldValueSize;
     // copy rest elements
 
-    UnsafeAccess.copy(addr, ptr, valueSize - (addr - valueAddress));
+    UnsafeAccess.copy(addr + existRecLen, ptr, valueSize - (addr - valueAddress) - existRecLen);
   }
   
 

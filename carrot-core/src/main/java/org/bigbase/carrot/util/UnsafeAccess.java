@@ -39,7 +39,6 @@ public final class UnsafeAccess {
     
     public void allocEvent(long address, long alloced) {
       if (!UnsafeAccess.debug) return;  
-
       allocEvents.incrementAndGet();
       allocated.addAndGet(alloced);
       allocMap.delete(address);
@@ -50,7 +49,7 @@ public final class UnsafeAccess {
     }
 
     @SuppressWarnings("unused")
-    private void dumpIfAlloced(String str, long address, int value, int alloced) {
+    private void dumpIfAlloced(String str, long address, int value, long alloced) {
       if (alloced == value) {
         System.out.println(str + address + " size=" + alloced);
         Thread.dumpStack();
@@ -89,6 +88,10 @@ public final class UnsafeAccess {
     }
     
     public void printStats() {
+      printStats(true);
+    }
+    
+    public void printStats(boolean printOrphans) {
       if (!UnsafeAccess.debug) return;
 
       System.out.println("\nMalloc stats:");
@@ -98,7 +101,7 @@ public final class UnsafeAccess {
       System.out.println("deallocated memory   ="+ freed.get());
       System.out.println("leaked (current)     ="+ (allocated.get() - freed.get()));
       System.out.println("Orphaned allocations =" + (allocMap.size()));
-      if (allocMap.size() > 0) {
+      if (allocMap.size() > 0 && printOrphans) {
         System.out.println("Orphaned allocation sizes:");
         for(Map.Entry<Range, Range> entry: allocMap.entrySet()) {
           System.out.println(entry.getKey().start +" size="+ entry.getValue().size);
@@ -106,7 +109,9 @@ public final class UnsafeAccess {
       }
       System.out.println();
     }
+    
   }
+  
   
   public static MallocStats mallocStats = new MallocStats();
   

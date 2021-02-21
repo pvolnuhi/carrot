@@ -812,17 +812,21 @@ public class BigSortedMap {
         lock(b); // to prevent
         
         if (b.hasRecentUnsafeModification(loopStartTime)) {
+          //TODO: what happens after index block split?
           IndexBlock bbb = firstBlock? map.floorKey(kvBlock): map.higherKey(prev);
           if (b != bbb) {
             continue;
           }
         }
         prev = b;
-        firstBlock = false;
         long del = b.deleteRange(startKeyPtr, startKeyLength, endKeyPtr, endKeyLength, version);
-        if (del == 0) {
+        if (del == 0 && !firstBlock) {
           break;
+        } else if (del == 0){
+          firstBlock = false;
+          continue;
         }
+        firstBlock = false;
         deleted += del; 
         if (toDelete != null) {
           map.remove(toDelete);
@@ -1418,6 +1422,11 @@ public class BigSortedMap {
     
     BigSortedMapDirectMemoryScanner scanner =
         getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
+    //TODO: if this right?
+    if (scanner == null) {
+      UnsafeAccess.free(endRowPtr);
+      return null;
+    }
     scanner.setPrefixScanner(true);
     return scanner;
   }
@@ -1439,6 +1448,11 @@ public class BigSortedMap {
     
     BigSortedMapDirectMemoryScanner scanner =
         getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
+    //TODO: is this right?
+    if (scanner == null) {
+      UnsafeAccess.free(endRowPtr);
+      return null;
+    }
     scanner.setPrefixScanner(true);
     return scanner;
   }
