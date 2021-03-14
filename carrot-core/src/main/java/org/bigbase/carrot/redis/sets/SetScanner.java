@@ -67,6 +67,7 @@ public class SetScanner extends BiScanner{
    */
   boolean reverse;
   
+  boolean disposeKeysOnClose;
   /**
    * Constructor
    * @param scanner base scanner
@@ -120,6 +121,10 @@ public class SetScanner extends BiScanner{
     this.stopMemberPtr = stop;
     this.stopMemberSize = stopSize;
     init();
+  }
+  
+  public void setDisposeKeysOnClose(boolean b) {
+    this.disposeKeysOnClose = b;
   }
   
   private void init() {
@@ -333,8 +338,9 @@ public class SetScanner extends BiScanner{
   
   @Override
   public void close() throws IOException {
-    mapScanner.close(true);
+    mapScanner.close(disposeKeysOnClose);
   }
+  
   /**
    * Delete current Element
    * @return true if success, false - otherwise

@@ -1445,7 +1445,8 @@ public class BigSortedMap {
     if (endRowPtr == -1) {
       return null;
     }
-    
+    /*DEBUG*/ System.out.println("start key=" + Utils.toString(startRowPtr, startRowLength));
+    /*DEBUG*/ System.out.println("stop  key=" + Utils.toString(endRowPtr, startRowLength));
     BigSortedMapDirectMemoryScanner scanner =
         getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
     //TODO: is this right?

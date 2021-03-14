@@ -1,4 +1,4 @@
-package org.bigbase.carrot.examples;
+package org.bigbase.carrot.examples.basic;
 
 import java.io.DataInputStream;
 import java.io.File;
@@ -9,8 +9,8 @@ import redis.clients.jedis.Jedis;
 
 
 /**
- * This example shows how to use Redis Hashes to keep
- * list of all English words using multiple hashes with ziplist encoding
+ * This example shows how to use Redis Set to keep
+ * list of all English words 
  * 
  * File: words_alpha.txt.s.
  * 
@@ -24,25 +24,19 @@ import redis.clients.jedis.Jedis;
  * LZ4 compression relative to NoCompression = 1.22/0.81 = 1.5
  * LZ4HC compression  relative to NoCompression = 1.34/0.81 = 1.65
  * 
- * Redis SET  RAM usage is 24.3MB ( ~ 66 bytes per word)
+ * Redis SET RAM usage is 24.3MB (~ 66 bytes per word)
  * 
  * RAM usage (Redis-to-Carrot)
  * 
- * 1) No compression    24.3M/3.5M ~ 6.9x
+ * 1) No compression    24.3M/4.3M ~ 5.7x
  * 2) LZ4   compression 24.3M/2.8M ~ 8.4x
  * 3) LZ4HC compression 24.3M/2.6M ~ 9.0x 
  * 
  * 
- * Redis Hashes RAM usage is 5.1M
- * 
- *  1) No compression    5.1M/3.5M ~ 1.5x
- * 2) LZ4   compression  5.1M/2.8M ~ 1.8x
- * 3) LZ4HC compression  5.1M/2.6M ~ 2.0x 
- * 
  * @author vrodionov
  *
  */
-public class RedisHashesAllEnglishWords {
+public class RedisSetsAllEnglishWords {
   
   
   public static void main(String[] args) throws IOException {
@@ -65,39 +59,31 @@ public class RedisHashesAllEnglishWords {
     long totalLength = 0;
     int count = 0;
     
-    String baseKey = "key";
+    String key = "key";
     
     long startTime = System.currentTimeMillis();
     while((line = dis.readLine()) != null) {
       totalLength += line.length();
       count++;
-      int hash = Math.abs(line.hashCode());
-      int rem = hash % 300;
-      String key = baseKey + rem;
-      client.hset(key, line, "1");
+      client.sadd(key, line);
       if ((count % 10000) == 0 && count > 0) {
         System.out.println("Loaded " + count);
       }
     }
     long endTime = System.currentTimeMillis();
     
-    System.out.println("Loaded " + count + " records, total size="+ totalLength + 
+    System.out.println("Loaded " + count  +" records, total size="+ totalLength + 
         " in " + (endTime - startTime) + "ms."); 
     dis.close();
     
     System.out.println("Press any key ...");
     System.in.read();
-    
-    for (int i=0; i < 300; i++) {
-      String key = baseKey + i;
-      client.del(key);
-    }
-    
+    client.del(key);
     client.close();
   }
 
   private static void usage() {
-    System.out.println("usage: java org.bigbase.carrot.examples.RedisHashesAllEnglishWords domain_list_file");
+    System.out.println("usage: java org.bigbase.carrot.examples.RedisSetsAllEnglishWords word_list_file");
     System.exit(-1);
   } 
 }

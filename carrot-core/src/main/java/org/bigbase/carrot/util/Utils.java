@@ -1184,6 +1184,20 @@ public class Utils {
     return new String(buf);
   }
   
+  public static byte[] numericStrToBytes(String value) {
+    // value is numeric 
+    long v = Long.parseLong(value);
+    if (v < Byte.MAX_VALUE && v > Byte.MIN_VALUE) {
+      return Bytes.toBytes((byte) v);
+    } else if ( v < Short.MAX_VALUE && v > Short.MIN_VALUE) {
+      return Bytes.toBytes((short) v);
+    } else if ( v < Integer.MAX_VALUE && v > Integer.MIN_VALUE) {
+      return Bytes.toBytes((int) v);
+    } else {
+      return Bytes.toBytes(v);
+    }
+  }
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

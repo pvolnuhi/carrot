@@ -1,4 +1,4 @@
-package org.bigbase.carrot.examples;
+package org.bigbase.carrot.examples.basic;
 
 import java.io.DataInputStream;
 import java.io.File;

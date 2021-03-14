@@ -63,4 +63,10 @@ public class Address extends KeyValues{
   public static String getUserId(int n) {
     return "address:user:" + n;
   }
+
+  @Override
+  public String getKey() {
+    // TODO Auto-generated method stub
+    return null;
+  }
 }

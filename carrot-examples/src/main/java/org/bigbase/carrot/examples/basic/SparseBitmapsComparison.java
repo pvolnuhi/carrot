@@ -1,4 +1,4 @@
-package org.bigbase.carrot.examples;
+package org.bigbase.carrot.examples.basic;
 
 import static org.junit.Assert.assertEquals;
 

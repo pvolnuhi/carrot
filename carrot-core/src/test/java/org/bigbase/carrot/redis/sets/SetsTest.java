@@ -64,7 +64,7 @@ public class SetsTest {
     values = getValues(n);
   }
   
-  @Ignore
+  //@Ignore
   @Test
   public void runAllNoCompression() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));

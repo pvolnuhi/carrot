@@ -151,5 +151,11 @@ public class UserSession extends KeyValues{
   public int size() {
     return props.size();
   }
+
+  @Override
+  public String getKey() {
+    // TODO Auto-generated method stub
+    return null;
+  }
   
 }

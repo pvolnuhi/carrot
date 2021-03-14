@@ -222,6 +222,27 @@ public class Sets {
   }
   
   /**
+   * For testing only
+   */
+  public static int SADD(BigSortedMap map, String key, String member) {
+    return SADD(map, key.getBytes(), member.getBytes());
+  }
+  
+  /**
+   * For testing only
+   */
+  public static int SADD(BigSortedMap map, byte[] key, byte[] member) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length);
+    int keySize = key.length;
+    long memberPtr = UnsafeAccess.allocAndCopy(member, 0, member.length);
+    int memberSize = member.length;   
+    int result = SADD(map, keyPtr, keySize, memberPtr, memberSize);
+    UnsafeAccess.free(memberPtr);
+    UnsafeAccess.free(keyPtr);
+    return result;
+  }
+  
+  /**
    * Available since 1.0.0.
    * Time complexity: O(N) where N is the total number of elements in all given sets.
    * Returns the members of the set resulting from the difference between the first set and all the successive sets.
@@ -910,19 +931,28 @@ public class Sets {
    * @return set scanner
    */
   public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe, boolean reverse) {
-    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
     UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
     UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-    //TODO do not use thread local in scanners - check it
-    //TODO: FIXME when no data it should return null
+    UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE,(byte) 0);
+    
+    keySize += KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
+    
+    long endPtr = Utils.prefixKeyEnd(kPtr, keySize - 1);
+    int endKeySize = keySize - 1; 
+        
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse):
-          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse);
+        map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
+          map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
     if (scanner == null) {
+      UnsafeAccess.free(endPtr);
+      UnsafeAccess.free(kPtr);
       return null;
     }
     SetScanner sc = new SetScanner(scanner, reverse);
+    sc.setDisposeKeysOnClose(true);
+
     return sc;
   }
   /**
@@ -967,18 +997,18 @@ public class Sets {
     int startPtrSize = buildKey(keyPtr, keySize, memberStartPtr, memberStartSize, startPtr);
     long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStopSize);
     int stopPtrSize = buildKey(keyPtr, keySize, memberStopPtr, memberStopSize, stopPtr);
-    long ptr = Utils.prefixKeyEndNoAlloc(memberStopPtr, memberStopSize);
-    if (ptr < 0) {
-      //TODO
-    }
+    
     //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
         map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse):
           map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     if (scanner == null) {
+      UnsafeAccess.free(startPtr);
+      UnsafeAccess.free(stopPtr);
       return null;
     }
     SetScanner sc = new SetScanner(scanner, startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
+    sc.setDisposeKeysOnClose(true);
     return sc;
   }
   

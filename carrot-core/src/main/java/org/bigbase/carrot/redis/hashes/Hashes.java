@@ -317,6 +317,18 @@ public class Hashes {
       writeUnlock(k);
     }
   }
+  
+  /** 
+   * For testing only
+   */
+  public static int HSET(BigSortedMap map, String key, List<KeyValue> kvs) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key.getBytes(), 0, key.length());
+    int keySize = key.length();
+    int result = HSET(map, keyPtr, keySize, kvs);
+    UnsafeAccess.free(keyPtr);
+    return result;
+  }
+  
   /**
    * HSET for a single field-value (zero object allocation)
    * @param map sorted map storage
@@ -351,6 +363,31 @@ public class Hashes {
       writeUnlock(k);
     }
   }
+  
+  /**
+   * For testing only
+   * @param map sorted map store
+   * @param key key
+   * @param member member
+   * @param value value
+   * @return 1 or 0
+   */
+  public static int HSET (BigSortedMap map, byte[] key, byte[] member, byte[] value) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length);
+    int keySize = key.length;
+    long memberPtr = UnsafeAccess.allocAndCopy(member, 0, member.length);
+    int memberSize = member.length;
+    long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+    int valueSize = value.length;
+    
+    int result = HSET(map, keyPtr, keySize, memberPtr, memberSize, valuePtr, valueSize);
+    
+    UnsafeAccess.free(valuePtr);
+    UnsafeAccess.free(memberPtr);
+    UnsafeAccess.free(keyPtr);
+    return result;
+  }
+  
   /**
    * HMSET - obsolete
    * @param map sorted map
@@ -1008,7 +1045,7 @@ public class Hashes {
     HashScanner scanner = null;
     try {
       KeysLocker.readLock(key);
-      scanner = Hashes.getHashScanner(map, keyPtr, keySize, false);
+      scanner = getHashScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
@@ -1018,6 +1055,7 @@ public class Hashes {
       while(scanner.hasNext()) {
         long fPtr = scanner.fieldAddress();
         int fSize = scanner.fieldSize();
+        //*DEBUG*/ System.out.println("ptr="+fPtr + " " + Utils.toString(fPtr, fSize));
         int fSizeSize = Utils.sizeUVInt(fSize);
         long vPtr = scanner.valueAddress();
         int vSize = scanner.valueSize();
@@ -1029,16 +1067,21 @@ public class Hashes {
           UnsafeAccess.copy(fPtr, ptr + fSizeSize + vSizeSize, fSize);
           UnsafeAccess.copy(vPtr, ptr + fSizeSize + vSizeSize + fSize, vSize);
           UnsafeAccess.putInt(buffer,  c);
-
         }
         ptr += fSize + fSizeSize + vSize + vSizeSize;
         scanner.next();
       }
-      UnsafeAccess.putInt(bufferSize,  c);
+      UnsafeAccess.putInt(buffer,  c);
       return ptr - buffer - Utils.SIZEOF_INT;
     } catch (IOException e) {
 
    } finally {
+      try {
+        if (scanner != null) {
+          scanner.close();
+        }
+      } catch (IOException e) {
+      }
       KeysLocker.readUnlock(key);
     }
     return 0; 
@@ -1209,14 +1252,24 @@ public class Hashes {
    */
   public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, 
       boolean safe, boolean reverse) {
-    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
+    
+    long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
     UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
     UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+    UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE,(byte) 0);
+    
+    keySize += KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
+    
+    long endPtr = Utils.prefixKeyEnd(kPtr, keySize - 1);
+    int endKeySize = keySize - 1; 
+        
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafePrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse): 
-          map.getPrefixScanner(kPtr, keySize + KEY_SIZE + Utils.SIZEOF_BYTE, reverse);
+        map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
+          map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
     if (scanner == null) {
+      UnsafeAccess.free(endPtr);
+      UnsafeAccess.free(kPtr);
       return null;
     }
     HashScanner hs = null;

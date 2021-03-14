@@ -7,6 +7,7 @@ import java.io.IOException;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.redis.OperationFailedException;
 import org.bigbase.carrot.util.BiScanner;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 /**
  * 
@@ -114,8 +115,6 @@ public class HashScanner extends BiScanner{
     this.disposeKeysOnClose = b;
   }
   
-
-  
   /**
    * Sets start and stop field for the scanner
    * @param startPtr start field address
@@ -128,13 +127,15 @@ public class HashScanner extends BiScanner{
       throws OperationFailedException {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
+    //*DEBUG*/ System.out.println("value address=" + valueAddress + " valueSize="+ valueSize);
     this.offset = NUM_ELEM_SIZE;
+        
     this.startFieldPtr = startPtr;
     this.startFieldSize = startSize;
     this.stopFieldPtr = stopPtr;
     this.stopFieldSize = stopSize;
     boolean result = false;
-    if (!reverse && this.startFieldPtr > 0) {
+    if (!reverse && this.startFieldPtr >= 0) {
       result = searchFirstMember();
     } else if (reverse) {
       result = searchLastMember();
@@ -147,6 +148,20 @@ public class HashScanner extends BiScanner{
       throw new OperationFailedException();
     }
     updateFields();
+  }
+  
+  private void debugValue(long ptr, int size) {
+    System.out.println("size="+ UnsafeAccess.toShort(ptr));
+    long off = NUM_ELEM_SIZE;
+    
+    while(off < size) {
+      int fSize = Utils.readUVInt(ptr + off);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = Utils.readUVInt(ptr + off + fSizeSize);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      System.out.println("->"+ Utils.toString(ptr + off + fSizeSize + vSizeSize, fSize));
+      off += fSize + vSize + fSizeSize + vSizeSize;
+    }
   }
   
   private boolean searchFirstMember() {
@@ -190,6 +205,7 @@ public class HashScanner extends BiScanner{
     if (reverse) {
       throw new UnsupportedOperationException("hasNext");
     }
+    //*DEBUG*/ System.out.println("has next; off="+ offset + " valueSize="+ valueSize);
     if (offset < valueSize && offset >= NUM_ELEM_SIZE) {
       if (this.stopFieldPtr > 0) {
         if (Utils.compareTo(this.stopFieldPtr, this.stopFieldSize, fieldAddress, fieldSize) <= 0) {
@@ -201,7 +217,10 @@ public class HashScanner extends BiScanner{
         return true;
       }
     } else {
-      return false;
+      boolean result = mapScanner.next();
+      if (!result) return false;
+      updateFields();
+      return true;
     }
   }
   
@@ -230,28 +249,29 @@ public class HashScanner extends BiScanner{
     // TODO next K-V can not have 0 elements - it must be deleted
     // but first element can, so we has to check what next() call return
     // the best way is to use do
-    while(mapScanner.hasNext()) {
-      mapScanner.next();
-      this.valueAddress = mapScanner.valueAddress();
-      this.valueSize = mapScanner.valueSize();
-      // check if it it is not empty
-      this.offset = NUM_ELEM_SIZE;
-      if (valueSize <= NUM_ELEM_SIZE) {
-        // empty set in K-V? Must be deleted
-        continue;
-      } else {
-        updateFields();
-        if (this.stopFieldPtr > 0) {
-          if (Utils.compareTo(this.fieldAddress, this.fieldSize, this.stopFieldPtr, this.stopFieldSize) >=0) {
-            this.offset = 0;
-            return false;
-          } else {
-            return true;
-          }
-        }
-        return true;
-      }
-    }
+//    do {
+//      boolean result = mapScanner.next();
+//      if (!result) return false;
+//      this.valueAddress = mapScanner.valueAddress();
+//      this.valueSize = mapScanner.valueSize();
+//      // check if it it is not empty
+//      this.offset = NUM_ELEM_SIZE;
+//      if (valueSize <= NUM_ELEM_SIZE) {
+//        // empty set in K-V? Must be deleted
+//        continue;
+//      } else {
+//        updateFields();
+//        if (this.stopFieldPtr > 0) {
+//          if (Utils.compareTo(this.fieldAddress, this.fieldSize, this.stopFieldPtr, this.stopFieldSize) >=0) {
+//            this.offset = 0;
+//            return false;
+//          } else {
+//            return true;
+//          }
+//        }
+//        return true;
+//      }
+//    } while(mapScanner.hasNext());
     this.offset = 0;
     return false;
   }
@@ -463,7 +483,7 @@ public class HashScanner extends BiScanner{
       }
       return true;
     } else {
-      return false;
+      return mapScanner.hasPrevious();
     }
   }
 }

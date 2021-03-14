@@ -1795,6 +1795,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
   }
   
+  
+  public static boolean DEBUG = false;
 	/**
 	 * Search position of a first key which is (greater!!!) less or equals to a given key
 	 * 
@@ -1806,10 +1808,18 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     long ptr = dataPtr;
     long prevPtr = NOT_FOUND;
     int count = 0;
-    long recentTxId = BigSortedMap.getMostRecentActiveTxSeqId();
+//    long recentTxId = BigSortedMap.getMostRecentActiveTxSeqId();
+//    if (DEBUG)
+//    /*DEBUG*/ System.out.println("IndexBlock search=" + Utils.toString(keyPtr, keyLength) + 
+//      " l=" + keyLength);
+    
     while (count++ < numDataBlocks) {
       int keylen = keyLength(ptr);
       int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
+//      if (DEBUG)
+//      /*DEBUG*/ System.out.println("IB =" + Utils.toString(keyAddress(ptr), keylen) + 
+//        " res=" + res + " l=" + keylen) ;
+
       if (res < 0) {
         if (prevPtr == NOT_FOUND) {
           // It is possible situation (race condition when first key in
@@ -1820,7 +1830,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
         }
       } else if (res == 0) {
         // compare versions
-        long ver = version(ptr);
+        /*long ver = version(ptr);
         if (ver < recentTxId) {
           if (ver < version) {
             if (prevPtr == NOT_FOUND && count > 1) {
@@ -1838,9 +1848,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
               return count > 1 ? prevPtr : ptr;
             }
           }
-        } else {
+        } else {*/
           return ptr;
-        }
+        //}
       }
       prevPtr = ptr;
       if (isExternalBlock(ptr)) {
@@ -1979,6 +1989,11 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 				return null;
 			} else {
 				DataBlock b = block.get();
+				b.set(this, ptr - dataPtr);
+				
+//				/*DEBUG*/ System.out.println("BLOCK first="+ new String(b.getFirstKey()) + 
+//				  " Block next first=" + new String(nextBlock(b).getFirstKey()));
+				
 				b.set(this, ptr - dataPtr);
 				return b;
 			}

@@ -191,9 +191,12 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
   void search(long key, int keyLength, long snapshotId, Op type) {
     long ptr = this.ptr;
     int count = 0;
+    //*DEBUG*/ System.out.println("Search: "+Utils.toString(key, keyLength));
     while (count++ < numRecords) {
       int keylen = DataBlock.keyLength(ptr);
       int vallen = DataBlock.valueLength(ptr);
+      //*DEBUG*/ System.out.println(Utils.toString(DataBlock.keyAddress(ptr), keylen));
+
       int res =
           Utils.compareTo(key, keyLength, DataBlock.keyAddress(ptr), keylen);
       if (res < 0) {
@@ -218,6 +221,7 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
       ptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
 
     }
+    System.out.println("At the end");
     // after the last record
     this.curPtr = this.ptr + dataSize;
   }

@@ -28,8 +28,11 @@ public enum CodecType {
   /** LZ4 */
   LZ4(1),
   /** LZ4-HC */
-  LZ4HC(2);
-
+  LZ4HC(2),
+  /** Bitmap codec*/
+  BITMAP(3),
+  /** ZSTD */
+  ZSTD(4);
   /** The id. */
   private int id;
 
