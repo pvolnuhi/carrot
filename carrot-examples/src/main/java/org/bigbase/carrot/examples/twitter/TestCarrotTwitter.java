@@ -71,12 +71,11 @@ public class TestCarrotTwitter {
     IndexBlock.DEBUG = true;
     
     for(User u: users) {
-      //System.out.println("Verify " + u.getKey());
       if (!u.verify(map)) {
         System.exit(-1);
       }
-      if (++count  % 10000 == 0) {
-        System.out.println("Verified " + (++count)+ " users");
+      if (count++  % 10000 == 0) {
+        System.out.println("Verified " + (count)+ " users");
       }
     }
     long memory = BigSortedMap.getTotalAllocatedMemory();
@@ -100,10 +99,8 @@ public class TestCarrotTwitter {
       try {
         scanner.close();
       } catch(IOException e) {
-        
       }
     }
-    
     return count;
   }
   

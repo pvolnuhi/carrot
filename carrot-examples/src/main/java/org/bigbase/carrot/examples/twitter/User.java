@@ -58,7 +58,7 @@ public class User extends KeyValues{
   static Random rnd = new Random();
   
   static {
-    long seed = -5865079581617067091L;//rnd.nextLong();
+    long seed = rnd.nextLong();
     rnd.setSeed(seed);
     System.out.println("SEED=" + seed);
   }

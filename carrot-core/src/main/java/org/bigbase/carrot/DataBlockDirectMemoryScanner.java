@@ -221,7 +221,6 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
       ptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
 
     }
-    System.out.println("At the end");
     // after the last record
     this.curPtr = this.ptr + dataSize;
   }

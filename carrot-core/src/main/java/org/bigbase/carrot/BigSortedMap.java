@@ -136,6 +136,25 @@ public class BigSortedMap {
     }
   };
   
+  public static long countRecords(BigSortedMap map) {
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    long count = 0;
+    try {
+      while (scanner.hasNext()) {
+        count++;
+        scanner.next();
+      }
+    } catch (IOException e) {
+      return -1;
+    } finally {
+      try {
+        scanner.close();
+      } catch (IOException e) {
+      }
+    }
+    return count;
+  }
+
   public static void memoryStats() {
     System.out.println("            Total : " + getTotalAllocatedMemory());
     System.out.println(" Data Blocks Size : " + getTotalBlockDataSize());
