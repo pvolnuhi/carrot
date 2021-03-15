@@ -68,7 +68,7 @@ public class HashesTest {
   }
   
 
-  @Ignore
+  //@Ignore
   @Test
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
@@ -108,6 +108,10 @@ public class HashesTest {
   }
   
   private void allTests() throws IOException {
+    
+    setUp();
+    testNullValues();
+    tearDown();
     setUp();
     testSetExists();
     tearDown();
@@ -148,6 +152,60 @@ public class HashesTest {
     end = System.currentTimeMillis();
     System.out.println("Time exist="+(end -start)+"ms");
     System.out.println("Map.size =" + Commons.countRecords(map));
+    Hashes.DELETE(map, key.address, key.length);
+    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
+  }
+  
+  @Ignore
+  @Test
+  public void testNullValues() {
+    System.out.println("\nTest Set - Null values");
+    Key key = getKey();
+    long NULL = UnsafeAccess.malloc(1);
+    String[] fields = new String[] {"f1", "f2", "f3", "f4"};
+    String[] values = new String[] {"v1", null, "v3", null};
+    
+    for(int i=0; i < fields.length; i++) {
+      String f = fields[i];
+      String v = values[i];
+      long fPtr = UnsafeAccess.allocAndCopy(f, 0, f.length());
+      int fSize = f.length();
+      long vPtr = v == null? NULL: UnsafeAccess.allocAndCopy(v, 0, v.length());
+      int vSize = v == null? 0: v.length();
+      Hashes.HSET(map, key.address, key.length, fPtr, fSize, vPtr, vSize);
+    }
+    
+    long buffer = UnsafeAccess.malloc(8);
+    
+    for(int i=0; i < fields.length; i++) {
+      String f = fields[i];
+      String v = values[i];
+      long fPtr = UnsafeAccess.allocAndCopy(f, 0, f.length());
+      int fSize = f.length();
+      long vPtr = v == null? NULL: UnsafeAccess.allocAndCopy(v, 0, v.length());
+      int vSize = v == null? 0: v.length();
+      int size = Hashes.HGET(map, key.address, key.length, fPtr, fSize, buffer, 8);
+      
+      if (size < 0) {// does not exists
+        System.err.println("field not found "+ f);
+        System.exit(-1);
+      }
+      
+      if (vPtr == NULL && size != 0) {
+        System.err.println("Expected NULL for "+ f);
+        System.exit(-1);
+      }
+      
+      if (vPtr == NULL) {
+        System.out.println("Found NULL for " + f + " size="+ size);
+      }
+      
+      if (Utils.compareTo(vPtr, vSize, buffer, size) != 0) {
+        System.err.println("Failed for "+ f);
+        System.exit(-1);
+      }
+    }
+    
     Hashes.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
   }

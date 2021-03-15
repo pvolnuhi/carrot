@@ -666,8 +666,19 @@ public final class UnsafeAccess {
    */
   public static long allocAndCopy(byte[] arr, int off, int len) {
     long ptr = malloc(len);
-    copy(arr, 0, ptr, len);
+    copy(arr, off, ptr, len);
     return ptr;
+  }
+  
+  /**
+   * Allocate native memory and copy string 
+   * @param s string
+   * @param off offset
+   * @param len length
+   * @return address
+   */
+  public static long allocAndCopy(String s, int off, int len) {
+    return allocAndCopy(s.getBytes(), off, len);
   }
   
   /**
