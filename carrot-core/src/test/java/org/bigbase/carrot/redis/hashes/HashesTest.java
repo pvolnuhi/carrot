@@ -253,7 +253,6 @@ public class HashesTest {
     UnsafeAccess.free(buffer);
   }
   
-  
   @Ignore
   @Test
   public void testAddRemove() throws IOException {
