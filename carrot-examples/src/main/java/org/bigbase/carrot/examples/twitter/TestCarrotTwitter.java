@@ -9,6 +9,95 @@ import org.bigbase.carrot.IndexBlock;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 
+/**
+ * Redis Book. Simple social network application. See description here:
+ * https://redislabs.com/ebook/part-2-core-concepts/chapter-8-building-a-simple-social-network/ 
+ * 
+ * We implemented the following data types from the above book: user, user statuses, timelines, followers,
+ * following) in Carrot and Redis and compared memory usage per average user.
+ * 
+ * Some assumptions have been made, based on available information on the Internet:
+ * 
+ * 1. We tried to use followers distribution which is as close to the real (Twitter) as possible.
+ *    The majority of users have pretty small number of followers (median is less than 100) but some 
+ *    influential can have 100's of thousands and even millions.
+ * 2. Number of following is pretty small and does not vary as much as the number of followers
+ * 3. On average, user makes 2 posts (status updates) per day.
+ * 4. User registration date is a random date between 2010 and now.  So If user registered in 2010 he (she)
+ *    made 2 * 365 * 10 = 7300 status updates. 
+ * 
+ * Every User has the following data sets:
+ * 
+ * User - user's personal data
+ * User status - list of all messages posted by user (without order)
+ * Profile Timeline - all messages posted by a user in a reverse chronological order.
+ * Followers - list of user's followers
+ * Following - list of other user's this user is following to.
+ * 
+ * We measure the overall memory usage per one average social network user.
+ * 
+ * CARROT RESULTS:
+ * 
+ * -- User average memory size (bytes):
+ * 
+ * No compression    - 151 
+ * LZ4 compression   - 89
+ * LZ4HC compression - 88
+ * 
+ * -- User statuses average memory size (bytes):
+ *
+ * No compression    - 456470 
+ * LZ4 compression   - 211431
+ * LZ4HC compression - 204365
+ *   
+ * -- User Timeline average memory size (bytes):
+ *
+ * No compression    - 76780 
+ * LZ4 compression   - 57075
+ * LZ4HC compression - 53794
+ *   
+ * -- User Followers average memory size (bytes):
+ * 
+ * No compression    - 6624
+ * LZ4 compression   - 5191
+ * LZ4HC compression - 5053
+ * 
+ * -- User Following average memory size (bytes):
+ * 
+ * No compression    - 10259
+ * LZ4 compression   - 7886
+ * LZ4HC compression - 7948
+ * 
+ * 
+ * TOTAL size (user, user statuses, profile timeline, followers, following):
+ * 
+ * No compression    - 550,284
+ * LZ4 compression   - 281,592
+ * LZ4HC compression - 271,248
+ * 
+ * 
+ * REDIS RESULTS:
+ * 
+ * -- User average memory size (bytes):          219
+ * -- User statuses average memory size (bytes): 718,183
+ * -- User Timeline average memory size (bytes): 420,739
+ * -- User Followers average memory size (bytes): 33,700
+ * -- User Following average memory size (bytes): 56,790
+ * 
+ * TOTAL size (user, user statuses, profile timeline, followers, following): 1,229,631
+ * 
+ * 
+ * OVERALL RESULTS:
+ * 
+ * Redis 6.0.10              - 1,229,631
+ * Carrot (no compression)   - 550,284
+ * Carrot (LZ4)              - 281,592
+ * Carrot (LZ4HC)            - 271,248
+ *  
+ * @author vrodionov
+ *
+ */
+
 public class TestCarrotTwitter {
   
   static {
@@ -74,7 +163,7 @@ public class TestCarrotTwitter {
       if (!u.verify(map)) {
         System.exit(-1);
       }
-      if (count++  % 10000 == 0) {
+      if (++count  % 10000 == 0) {
         System.out.println("Verified " + (count)+ " users");
       }
     }
@@ -143,7 +232,7 @@ public class TestCarrotTwitter {
       if (!u.verify(map)) {
         System.exit(-1);
       }
-      if (count++  % 10000 == 0) {
+      if (++count  % 10000 == 0) {
         System.out.println("Verified " + count+ " users");
       }
     }
@@ -152,8 +241,6 @@ public class TestCarrotTwitter {
     map.dispose();
     System.out.println("avg_user_status_size="+ avg_user_status_size + " bytes");
   }
-  
-  
   
   private static void runUserStatusNoCompression() {
     System.out.println("\nTest User Status, compression=None");

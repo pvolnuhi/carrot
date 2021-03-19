@@ -10,6 +10,30 @@ import org.bigbase.carrot.util.UnsafeAccess;
 
 /**
  * Test Carrot GeoIp
+ * GeoIP application as described in Redis Book chapter 5.3 "IP-to-city and country lookup":
+ * https://redislabs.com/ebook/part-2-core-concepts/chapter-5-using-redis-for-application-support/5-3-ip-to-city-and-country-lookup/
+ * 
+ * We implemented application in both: Carrot and Redis. 
+ * 
+ * Carrot implementation details:
+ * 
+ * Carrot uses SET data type to store combined NetworkAddress, City ID pair. Carrot's SETs are ordered, 
+ * so they can be used to  answer the following questions:
+ * 
+ * Give me the greatest member which is less or equals to a given search key, therefore it can be used 
+ * to locate network which a given IP address belongs to. 
+ * 
+ * Carrot uses STRING data type (plain key-value) to keep association between CityID and City location, 
+ * name etc.
+ * 
+ * key = CityId
+ * value = {comma separated string of a city data} 
+ * 
+ * We used Ip-Geo database free version from www.maxmind.com
+ * 
+ * Redis implementation details:
+ * 
+ * Redis uses ZSET (ordered set) to keep NetworkAddress -> city ID  association. 
  * 
  * Memory usage:
  * 

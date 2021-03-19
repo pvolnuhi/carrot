@@ -5,7 +5,7 @@ import java.util.Calendar;
 import java.util.Date;
 
 /**
- * Class Followers - represents some user's followers
+ * Class Followers - represents user's followers
  * @author vrodionov
  *
  */
@@ -13,7 +13,6 @@ public class Followers extends Users {
 
   Followers(User user) {
     super(user);
-    //*DEBUG*/System.out.println("followers=" + user.getFollowers() + " size="+ users.size());
   }
 
   @Override
@@ -31,7 +30,7 @@ public class Followers extends Users {
     users = new ArrayList<GenuineUser>();
 
     long registered = Long.valueOf(user.getSignup());
-    int numFollowers = user.getFollowers();
+    int numFollowers = user.getTotalFollowers();
     if (numFollowers == 0) return;
     
     Calendar cal = Calendar.getInstance();

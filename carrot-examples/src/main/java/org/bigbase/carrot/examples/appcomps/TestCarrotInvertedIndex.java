@@ -12,6 +12,26 @@ import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
+/**
+ * Inverted index implemented accordingly to the Redis Book:
+ * https://redislabs.com/ebook/part-2-core-concepts/chapter-7-search-based-applications/7-1-searching-in-redis/7-1-1-basic-search-theory/
+ * 
+ * We emulate 1000 words and some set of docs. Maximum occurrence of a single word is 5000 docs 
+ * (random number between 1 and 5000). Each doc is coded by 4-byte integer. Each word is a random 8 byte string.
+ * 
+ * Format of an inverted index:
+ * 
+ * word -> {id1, id2, ..idk}, idn - 4 - byte integer
+ * 
+ * Redis takes 64.5 bytes per one doc id (which is 4 byte long)
+ * Carrot takes 5.8 bytes
+ * 
+ * Redis - to - Carrot memory usage = 64.5/5.8 = 11.1
+ * Because the data is poorly compressible we tested only Carrot w/o compression.
+ * 
+ * 
+ */
+
 public class TestCarrotInvertedIndex {
   static int numWords = 1000;
   static int maxDocs = 5000;

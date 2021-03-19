@@ -88,7 +88,7 @@ public class User extends KeyValues{
     return props.getProperty(NAME);
   }
   
-  int getFollowers () {
+  int getTotalFollowers () {
     return Integer.valueOf(props.getProperty(FOLLOWERS));
   }
   
@@ -129,7 +129,7 @@ public class User extends KeyValues{
     list.add(KeyValues.fromKeyAndNumericValue(key, value));
 
     key = FOLLOWERS;
-    value = Integer.toString(getFollowers());
+    value = Integer.toString(getTotalFollowers());
     list.add(KeyValues.fromKeyAndNumericValue(key, value));
     
     key = FOLLOWING;
@@ -163,7 +163,7 @@ public class User extends KeyValues{
     map.put(key.getBytes(), Utils.numericStrToBytes(value));
 
     key = FOLLOWERS;
-    value = Integer.toString(getFollowers());
+    value = Integer.toString(getTotalFollowers());
     map.put(key.getBytes(), Utils.numericStrToBytes(value));
     
     key = FOLLOWING;

@@ -12,7 +12,7 @@ public class TestRedisTwitter {
   
   
   public static void main(String[] args) throws IOException {
-    //runUsers();
+    runUsers();
     runUserStatuses();
     runUserTimelines();
     runUserFollowers();
