@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.redis.hashes.Hashes;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -27,6 +28,17 @@ public abstract class KeyValues {
   }
   
   public abstract String getKey(); 
+  
+  public Key getKeyNative() {
+    String key = getKey();
+    long ptr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    return new Key(ptr, key.length());
+  }
+  
+  public byte[] getKeyBytes() {
+    return null;
+  }
+    
   
   public static KeyValue fromKeyValue(String key, String value) {
     long keyPtr = UnsafeAccess.allocAndCopy(key.getBytes(), 0, key.length());
@@ -117,6 +129,14 @@ public abstract class KeyValues {
     Utils.freeKeyValues(list);
   }
   
+  public void saveToCarrotNative(BigSortedMap map) {
+    List<KeyValue> list = asList();
+    Key key = getKeyNative();
+    Hashes.HSET(map, key, asList());
+    Utils.freeKeyValues(list);
+    UnsafeAccess.free(key.address);
+  }
+  
   public boolean verify(BigSortedMap map) {
     long buffer = UnsafeAccess.malloc(4096);
     String key = getKey();
@@ -144,6 +164,10 @@ public abstract class KeyValues {
   
   public void saveToRedis(Jedis client) {
     client.hset (getKey().getBytes(), asMap());
+  }
+  
+  public void saveToRedisNative(Jedis client) {
+    client.hset (getKeyBytes(), asMap());
   }
   
   @Override

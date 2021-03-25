@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.sets.Sets;
+import org.bigbase.carrot.redis.zsets.ZSets;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -70,17 +71,12 @@ class GenuineUser {
   
   void saveToCarrot(BigSortedMap map, String key) {
     
-    long memberPtr = UnsafeAccess.malloc(16); // 8 bytes for posted, 8 bytes for userId
+    long memberPtr = UnsafeAccess.allocAndCopy(userId, 0, userId.length());
     long keyPtr = UnsafeAccess.allocAndCopy(key.getBytes(), 0, key.length());
     int keySize = key.length();
-    int memberSize = 16;
-    UnsafeAccess.putLong(memberPtr, Long.MAX_VALUE - time);
-    // We convert userId to long value to save space
-    UnsafeAccess.putLong(memberPtr + Utils.SIZEOF_LONG,Long.valueOf(userId));
-    // We use Set b/c it is ordered by member in Carrot
-    // Because each member starts with a time (reversed) -> all members 
-    // are ordered by time in reverse order - this is what we need
-    Sets.SADD(map, keyPtr, keySize, memberPtr, memberSize);
+    int memberSize = userId.length();
+    ZSets.ZADD(map, keyPtr, keySize, new double[]{time},
+      new long[] {memberPtr}, new int[] {memberSize}, true);
     UnsafeAccess.free(memberPtr);
     UnsafeAccess.free(keyPtr);
   }

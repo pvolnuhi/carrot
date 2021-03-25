@@ -14,7 +14,7 @@ import org.bigbase.carrot.compression.CodecType;
  * https://redislabs.com/ebook/part-2-core-concepts/chapter-8-building-a-simple-social-network/ 
  * 
  * We implemented the following data types from the above book: user, user statuses, timelines, followers,
- * following) in Carrot and Redis and compared memory usage per average user.
+ * following in Carrot and Redis and compared memory usage per average user.
  * 
  * Some assumptions have been made, based on available information on the Internet:
  * 
@@ -58,22 +58,22 @@ import org.bigbase.carrot.compression.CodecType;
  *   
  * -- User Followers average memory size (bytes):
  * 
- * No compression    - 6624
- * LZ4 compression   - 5191
- * LZ4HC compression - 5053
+ * No compression    - 18,620
+ * LZ4 compression   - 15,362
+ * LZ4HC compression - 15,432
  * 
  * -- User Following average memory size (bytes):
  * 
- * No compression    - 10259
- * LZ4 compression   - 7886
- * LZ4HC compression - 7948
+ * No compression    - 29,760
+ * LZ4 compression   - 26,576
+ * LZ4HC compression - 26,528
  * 
  * 
  * TOTAL size (user, user statuses, profile timeline, followers, following):
  * 
- * No compression    - 550,284
- * LZ4 compression   - 281,592
- * LZ4HC compression - 271,248
+ * No compression    ~ 580,000
+ * LZ4 compression   ~ 311,000
+ * LZ4HC compression ~ 301,000
  * 
  * 
  * REDIS RESULTS:
@@ -89,10 +89,21 @@ import org.bigbase.carrot.compression.CodecType;
  * 
  * OVERALL RESULTS:
  * 
- * Redis 6.0.10              - 1,229,631
- * Carrot (no compression)   - 550,284
- * Carrot (LZ4)              - 281,592
- * Carrot (LZ4HC)            - 271,248
+ * Redis 6.0.10              ~ 1,300,000
+ * Carrot (no compression)   ~ 580,000
+ * Carrot (LZ4)              ~ 311,000
+ * Carrot (LZ4HC)            ~ 301,000
+ *  
+ *  
+ * Redis - to -Carrot RAM usage:
+ * 
+ * Redis/ Carrot no compression    = 2.24
+ * Redis/ Carrot LZ4 compression   = 4.18
+ * Redis/ Carrot LZ4HC compression = 4.32
+ * 
+ *     
+ *     
+ *     
  *  
  * @author vrodionov
  *

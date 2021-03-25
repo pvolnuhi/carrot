@@ -47,8 +47,8 @@ public class TestRedisInvertedIndex {
     
     long start = System.currentTimeMillis();
     for (int i = 0; i < numWords; i++) {
-      // all words are size of 8;
-      byte[] key = new byte[8];
+      // all words are size of 4;
+      byte[] key = new byte[4];
       r.nextBytes(key);
       keys.add(key);
       int max = r.nextInt(maxDocs) + 1;

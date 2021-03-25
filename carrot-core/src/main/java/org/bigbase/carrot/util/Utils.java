@@ -1198,6 +1198,17 @@ public class Utils {
     }
   }
   
+  public static String getRandomStr(Random r, int size) {
+    int start = 'A';
+    int stop = 'z';
+    StringBuffer sb = new StringBuffer(size);
+    for (int i=0; i < size; i++) {
+      int v = r.nextInt(stop - start) + start;
+      sb.append((char)v);
+    }
+    return sb.toString();
+  }
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

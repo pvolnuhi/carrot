@@ -329,6 +329,16 @@ public class Hashes {
     return result;
   }
   
+  /** 
+   * For testing only
+   */
+  public static int HSET(BigSortedMap map, Key key, List<KeyValue> kvs) {
+    long keyPtr = key.address;
+    int keySize = key.length;
+    int result = HSET(map, keyPtr, keySize, kvs);
+    return result;
+  }
+  
   /**
    * HSET for a single field-value (zero object allocation)
    * @param map sorted map storage

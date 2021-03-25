@@ -51,7 +51,6 @@ public class Address extends KeyValues{
       list.add(new Address(p));
       if ((list.size() % 10000) == 0) {
         System.out.println("Loaded " + list.size());
-        /*DEBUG*/System.out.println(p);
       }
     }
     dis.close();

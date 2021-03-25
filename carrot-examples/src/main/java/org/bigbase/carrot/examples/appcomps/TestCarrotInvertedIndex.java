@@ -38,7 +38,7 @@ public class TestCarrotInvertedIndex {
   
   public static void main(String[] args) {
     runTestNoCompression();
-    runTestCompressionLZ4();
+    //runTestCompressionLZ4();
     //runTestCompressionLZ4HC();
   }
   
@@ -66,8 +66,8 @@ public class TestCarrotInvertedIndex {
     BigSortedMap map = new BigSortedMap(1000000000);
     Random r = new Random();
     int kSize = 8;
-    long vPtr = UnsafeAccess.malloc(8);
-    int vSize = 8;
+    long vPtr = UnsafeAccess.malloc(4);
+    int vSize = 4;
     byte[] buf = new byte[kSize];
     long totalSize = 0;
     List<Key> keys = new ArrayList<Key>();
@@ -81,8 +81,8 @@ public class TestCarrotInvertedIndex {
       keys.add(new Key(kPtr, kSize));
       int max = r.nextInt(maxDocs) + 1;
       for (int j =0; j < max; j++) {
-        long v = r.nextLong();
-        UnsafeAccess.putLong(vPtr, v);
+        int v = Math.abs(r.nextInt());
+        UnsafeAccess.putInt(vPtr, v);
         Sets.SADD(map, kPtr, kSize, vPtr, vSize);
         totalSize++;
       }
@@ -111,16 +111,18 @@ public class TestCarrotInvertedIndex {
     
     if (totalKeys != numWords) {
       System.err.println("total keys=" + totalKeys + " expected="+ numWords);
-      System.exit(-1);
+      //System.exit(-1);
     }
     
     if (total != totalSize) {
       System.err.println("total set=" + total + " expected="+ totalSize);
-      System.exit(-1);
+      //System.exit(-1);
     }
     
     long allocced = BigSortedMap.getTotalAllocatedMemory();
     System.out.println("Memory usage per (4-bytes) doc ID: " + ((double)allocced)/totalSize);
+    System.out.println("Memory usage: " + allocced);
+
     map.dispose();
     UnsafeAccess.free(vPtr);
     Utils.freeKeys(keys);

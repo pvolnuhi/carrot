@@ -24,7 +24,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * to locate network which a given IP address belongs to. 
  * 
  * Carrot uses STRING data type (plain key-value) to keep association between CityID and City location, 
- * name etc.
+ * name and other data.
  * 
  * key = CityId
  * value = {comma separated string of a city data} 
