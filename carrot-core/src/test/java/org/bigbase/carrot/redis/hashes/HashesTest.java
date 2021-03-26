@@ -9,11 +9,12 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.Value;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
-import org.bigbase.carrot.redis.Commons;
+//import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
@@ -26,7 +27,7 @@ public class HashesTest {
   int bufferSize = 64;
   int keySize = 8;
   int valSize = 8;
-  long n = 200000;
+  long n = 2000000;
   List<Value> values;
   
   static {
@@ -35,13 +36,16 @@ public class HashesTest {
   
   private List<Value> getValues(long n) {
     List<Value> values = new ArrayList<Value>();
-    Random r = new Random();
-    long seed = r.nextLong();
-    r.setSeed(seed);
-    System.out.println("VALUES SEED=" + seed);
-    byte[] buf = new byte[valSize];
-    for (int i=0; i < n; i++) {
-      r.nextBytes(buf);
+    //Random r = new Random();
+    //long seed = r.nextLong();
+    //r.setSeed(seed);
+    //System.out.println("VALUES SEED=" + seed);
+    //byte[] buf = new byte[valSize];
+    for (int i = 0; i < n; i++) {
+      String s = Integer.toString(i);
+      valSize = s.length();
+      //r.nextBytes(buf);
+      byte[] buf = s.getBytes();
       long ptr = UnsafeAccess.malloc(valSize);
       UnsafeAccess.copy(buf, 0, ptr, valSize);
       values.add(new Value(ptr, valSize));
@@ -50,13 +54,15 @@ public class HashesTest {
   }
   
   private Key getKey() {
+    String s = "abcdefhg";
+    keySize = s.length();
     long ptr = UnsafeAccess.malloc(keySize);
-    byte[] buf = new byte[keySize];
-    Random r = new Random();
-    long seed = r.nextLong();
-    r.setSeed(seed);
-    System.out.println("KEY SEED=" + seed);
-    r.nextBytes(buf);
+    byte[] buf = s.getBytes();// byte[keySize];
+    //Random r = new Random();
+    //long seed = r.nextLong();
+    //r.setSeed(seed);
+    //System.out.println("KEY SEED=" + seed);
+    //r.nextBytes(buf);
     UnsafeAccess.copy(buf, 0, ptr, keySize);
     return key = new Key(ptr, keySize);
   }
@@ -81,7 +87,7 @@ public class HashesTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
@@ -94,7 +100,7 @@ public class HashesTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
@@ -121,6 +127,20 @@ public class HashesTest {
     setUp();
     testSetGet();
     tearDown();
+  }
+  
+  long countRecords(BigSortedMap map) throws IOException {
+    BigSortedMapScanner scanner = map.getScanner(null, null);
+    long count = 0;
+    while(scanner.hasNext()) {
+      long ptr = scanner.keyAddress();
+      int size = scanner.keySize();
+      System.out.println("count records found key="+ Utils.toString(ptr, size));
+      count++;
+      scanner.next();
+    }
+    scanner.close();
+    return count;
   }
   
   @Ignore
@@ -151,8 +171,10 @@ public class HashesTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time exist="+(end -start)+"ms");
-    System.out.println("Map.size =" + Commons.countRecords(map));
+    //System.out.println("Map.size =" + countRecords(map));
     Hashes.DELETE(map, key.address, key.length);
+    assertEquals(0, (int) countRecords(map));
+    
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
   }
   
@@ -246,9 +268,10 @@ public class HashesTest {
     System.out.println("Time get="+(end -start)+"ms");
 
     BigSortedMap.printMemoryAllocationStats();
-    System.out.println("Map.size =" + Commons.countRecords(map));
+   // System.out.println("Map.size =" + countRecords(map));
 
     Hashes.DELETE(map, key.address, key.length);
+    assertEquals(0, (int)countRecords(map));
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
     UnsafeAccess.free(buffer);
   }
@@ -276,19 +299,18 @@ public class HashesTest {
 
     BigSortedMap.printMemoryAllocationStats();
     
-//    start = System.currentTimeMillis();
-//    for (int i =0; i < n; i++) {
-//      int res = Hashes.HDEL(map, key.address, key.length, values.get(i).address, values.get(i).length);
-//      assertEquals(1, res);
-//    }
-//    end = System.currentTimeMillis();
-//    System.out.println("Time to delete="+(end -start)+"ms");
-//
-//    System.out.println("Map.size =" + Commons.countRecords(map));
-
-//    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
+    start = System.currentTimeMillis();
+    for (int i =0; i < n; i++) {
+      int res = Hashes.HDEL(map, key.address, key.length, values.get(i).address, values.get(i).length);
+      assertEquals(1, res);
+    }
+    end = System.currentTimeMillis();
+    System.out.println("Time to delete="+(end -start)+"ms");
+    System.out.println("Map.size =" + countRecords(map));
+    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
 
     Hashes.DELETE(map, key.address, key.length);
+    
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
  
   }

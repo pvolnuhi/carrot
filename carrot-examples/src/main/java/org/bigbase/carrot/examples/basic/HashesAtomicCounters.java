@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
@@ -79,7 +78,7 @@ import org.bigbase.carrot.util.Utils;
 public class HashesAtomicCounters {
   
   static {
-    //UnsafeAccess.debug = true;
+   // UnsafeAccess.debug = true;
   }
   
   static long buffer = UnsafeAccess.malloc(4096);
@@ -134,15 +133,10 @@ public class HashesAtomicCounters {
     for (Key key: keys) {
       count++;
       // We use first 8 bytes as hash key, the rest as a field name
-      int keySize = Math.max(8, key.length -3);
+      int keySize = Math.max(8, key.length - 3);
       int val = nextScoreSkewed(r);
       Hashes.HINCRBY(map, key.address, keySize, key.address + keySize, key.length - keySize, 
         val);  
-//      int value = (int)Hashes.HGETL(map, key.address, keySize, key.address + keySize, key.length - keySize); 
-//      if (val != value) {
-//        System.err.println("FATAL");
-//        System.exit(-1);
-//      }
       if (count % 100000 == 0) {
         System.out.println("set long "+ count);
       }
@@ -150,42 +144,69 @@ public class HashesAtomicCounters {
     long endTime = System.currentTimeMillis();
     
     System.out.println("Loaded " + keys.size() +" long counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
-      + (endTime - startTime) + "ms. RAM usage="+ (UnsafeAccess.getAllocatedMemory() - keyTotalSize));
+      + (endTime - startTime) + "ms.");
 
     BigSortedMap.printMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats(false);
-    // Now test doubles
+        
     count = 0;
     startTime = System.currentTimeMillis();
-    
     for (Key key: keys) {
       count++;
       // We use first 8 bytes as hash key, the rest as a field name
-      int keySize = Math.max(8, key.length -3);    
+      int keySize = Math.max(8, key.length - 3);
       int val = nextScoreSkewed(r);
-      //int prevValue = (int)Hashes.HGETL(map, key.address, keySize, key.address + keySize, key.length - keySize);
       Hashes.HINCRBYFLOAT(map, key.address, keySize, key.address + keySize, key.length - keySize, 
         val);  
-//      int value = (int)Hashes.HGETF(map, key.address, keySize, key.address + keySize, key.length - keySize);
-//      if ((val + prevValue) != value) {
-//        System.err.println("FATAL");
-//        System.exit(-1);
-//      }
       if (count % 100000 == 0) {
         System.out.println("set float "+ count);
       }
     }
     endTime = System.currentTimeMillis();
-    BigSortedMap.printMemoryAllocationStats();
-    UnsafeAccess.mallocStats.printStats(false);
-
-    System.out.println("Loaded " + keys.size() +" double counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
-        + (endTime - startTime) + "ms. RAM usage="+ (UnsafeAccess.getAllocatedMemory() - keyTotalSize));
+    System.out.println("Loaded " + keys.size() +" float counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
+        + (endTime - startTime) + "ms.");
+    // Delete keys
+    count = 0;
+    System.out.println("Deleting keys ...");
+    for (Key key: keys) {
+      int keySize = Math.max(8, key.length - 3);    
+      Hashes.DELETE(map, key.address, keySize);
+      if (++count % 100000 == 0) {
+        System.out.println("Deleted key "+ count);
+      }
+    }
+    
     map.dispose();
     BigSortedMap.printMemoryAllocationStats();
 
   }
 
+  private static void verify (BigSortedMap map) {
+    long buf = UnsafeAccess.malloc(64);
+    long count = 0;
+    int bufSize = 64;
+    for (Key key: keys) {
+      count++;
+      // We use first 8 bytes as hash key, the rest as a field name
+      int keySize = Math.max(8, key.length - 3);
+      int val = 10;//nextScoreSkewed(r);
+      int size = Hashes.HGET(map, key.address, keySize, key.address + keySize, key.length - keySize, 
+        buf, bufSize);  
+      if (size < 0) {
+        System.err.println("FAILED count=" + count + " keySize=" + keySize + " keyLength=" + key.length);
+        System.exit(-1);
+      }
+      String s = Utils.toString(buf, size);
+      if (Integer.parseInt(s) != val) {
+        System.err.println("Failed with s=" + s);
+        System.exit(-1);
+      }
+      if (count % 100000 == 0) {
+        System.out.println("verified "+ count);
+      }
+    }
+
+  }
   private static int nextScoreSkewed(Random r) {
     double d = r.nextDouble();
     return (int)Math.rint(d*d*d*d*d * MAX_VALUE);

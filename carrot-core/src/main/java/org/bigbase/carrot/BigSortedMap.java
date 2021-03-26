@@ -338,7 +338,7 @@ public class BigSortedMap {
     long totalRows = 0;
     for(IndexBlock b: map.keySet()) {
       totalRows += b.getNumberOfDataBlock();
-      b.dumpIndexBlockExt();
+      b.dumpIndexBlock();
     }
     System.out.println("Total blocks="+ (totalRows) + " index blocks=" + map.size());
   }
@@ -830,6 +830,17 @@ public class BigSortedMap {
         }
         lock(b); // to prevent
         
+        if (b.isEmpty()) {
+          // toDelete
+          if (toDelete != null) {
+            map.remove(toDelete);
+            toDelete.free();
+            toDelete = null;
+          } else if (!b.isFirstIndexBlock()){
+            toDelete = b;
+          }
+          break;
+        }
         if (b.hasRecentUnsafeModification(loopStartTime)) {
           //TODO: what happens after index block split?
           IndexBlock bbb = firstBlock? map.floorKey(kvBlock): map.higherKey(prev);
@@ -837,7 +848,7 @@ public class BigSortedMap {
             continue;
           }
         }
-        prev = b;
+        prev = b;        
         long del = b.deleteRange(startKeyPtr, startKeyLength, endKeyPtr, endKeyLength, version);
         if (del == 0 && !firstBlock) {
           break;

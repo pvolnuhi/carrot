@@ -869,8 +869,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       byte[] buf = new byte[klen];
       UnsafeAccess.copy(keyAddress, buf, 0, klen);
       String key = Bytes.toString(buf);
-      key = key.substring(0, Math.min(16, key.length()));
-      System.out.println(count +" : key="+ key);
+      //key = key.substring(0, Math.min(16, key.length()));
+      System.out.println(count +" : HEX="+ Bytes.toHex(buf)+ " key="+ key+" len=" + klen);
       ptr += DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(ptr);
       
     }
@@ -897,7 +897,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     while(count++ < numDataBlocks) {
       DataBlock b = block.get();
       b.set(this,  ptr - dataPtr);
-      /*DEBUG*/System.out.println("COMPRESSED=" + b.isCompressed());
       b.decompressDataBlockIfNeeded();
       b.dump();
       b.compressDataBlockIfNeeded();
@@ -905,7 +904,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       
     }
     if (ptr - dataPtr != blockDataSize) {
-      System.out.println("FATAL: (ptr - dataPtr -dataSize)="+ (ptr - dataPtr - blockDataSize));
+      System.out.println("FATAL: (ptr - dataPtr - dataSize)="+ (ptr - dataPtr - blockDataSize));
     }
   }
   

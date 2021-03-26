@@ -229,13 +229,16 @@ public class Hashes {
     Key k = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(k);
-      int newKeySize = keySize + KEY_SIZE + Utils.SIZEOF_BYTE;
+      int newKeySize = keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
       long kPtr = UnsafeAccess.malloc(newKeySize);
       UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
       UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);      
-      long total = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
+      UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE, (byte)0);
+      
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1);      
+      
+      long total = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
       UnsafeAccess.free(kPtr);
       UnsafeAccess.free(endKeyPtr);
       return total > 0;
