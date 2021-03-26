@@ -79,7 +79,7 @@ public class HashesTest {
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -92,7 +92,7 @@ public class HashesTest {
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -105,7 +105,7 @@ public class HashesTest {
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -126,6 +126,9 @@ public class HashesTest {
     tearDown();
     setUp();
     testSetGet();
+    tearDown();
+    setUp();
+    testAddRemoveMulti();
     tearDown();
   }
   
@@ -315,11 +318,50 @@ public class HashesTest {
  
   }
   
+  @Ignore
+  @Test
+  public void testAddRemoveMulti() throws IOException {
+    System.out.println("Test Add - Remove Multi keys");
+   
+    long elemPtr;
+    int elemSize;
+    long start = System.currentTimeMillis();
+    for (int i =0; i < n; i++) {
+      elemPtr = values.get(i).address;
+      elemSize = values.get(i).length;
+      int num = Hashes.HSET(map, elemPtr, elemSize, elemPtr, elemSize,  elemPtr, elemSize);
+      assertEquals(1, num);
+    }
+    long end = System.currentTimeMillis();
+    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    + " for "+ n + " " + (keySize + valSize) + " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (keySize + valSize))+
+    " bytes per value. Time to load: "+(end -start)+"ms");
+
+    BigSortedMap.printMemoryAllocationStats();
+    
+    start = System.currentTimeMillis();
+    
+    for (int i =0; i < n; i++) {
+      boolean res = Hashes.DELETE(map, values.get(i).address, values.get(i).length);
+      assertEquals(true, res);
+    }
+    
+    end = System.currentTimeMillis();
+    System.out.println("Time to delete="+(end -start)+"ms");
+    long recc = countRecords(map);
+    System.out.println("Map.size =" + recc);
+    assertEquals(0, (int) recc);
+ 
+  }
   
   private void tearDown() {
     // Dispose
     map.dispose();
-    UnsafeAccess.free(key.address);
+    if (key != null) {
+      UnsafeAccess.free(key.address);
+      key = null;
+    }
     for (Value v: values) {
       UnsafeAccess.free(v.address);
     }
