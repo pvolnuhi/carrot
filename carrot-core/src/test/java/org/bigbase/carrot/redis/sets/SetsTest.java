@@ -236,17 +236,22 @@ public class SetsTest {
     BigSortedMap.printMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
-//    start = System.currentTimeMillis();
-//    for (int i =0; i < n; i++) {
-//      int res = Sets.SREM(map, key.address, key.length, values.get(i).address, values.get(i).length);
-//      assertEquals(1, res);
-//    }
-//    end = System.currentTimeMillis();
-//    System.out.println("Time exist="+(end -start)+"ms");
-//    BigSortedMap.memoryStats();
+    start = System.currentTimeMillis();
+    for (int i =0; i < n; i++) {
+      int res = Sets.SREM(map, key.address, key.length, values.get(i).address, values.get(i).length);
+      assertEquals(1, res);
+    }
+    end = System.currentTimeMillis();
+    System.out.println("Time exist="+(end -start)+"ms");
+    BigSortedMap.printMemoryAllocationStats();
+    
+    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     //TODO 
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
+    BigSortedMap.printMemoryAllocationStats();
+
   }
   
   private void tearDown() {

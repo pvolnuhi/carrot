@@ -139,6 +139,9 @@ public class BigSortedMap {
   public static long countRecords(BigSortedMap map) {
     BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
     long count = 0;
+    if (scanner == null) {
+      return 0;
+    }
     try {
       while (scanner.hasNext()) {
         count++;

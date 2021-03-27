@@ -4,6 +4,8 @@ import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
 import static org.bigbase.carrot.redis.Commons.ZERO;
 import static org.bigbase.carrot.redis.Commons.numElementsInValue;
+import static org.bigbase.carrot.redis.KeysLocker.readLock;
+import static org.bigbase.carrot.redis.KeysLocker.readUnlock;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -401,15 +403,23 @@ public class Sets {
   public static boolean isEmpty(BigSortedMap map, long keyPtr, int keySize) {
 
     Key k = getKey(keyPtr, keySize);
-    long total = 0;
+    long kPtr = 0, endKeyPtr = 0;
     try {
-      KeysLocker.readLock(k);
-      int kSize = buildKey(keyPtr, keySize, 0, 0);
-      long ptr = keyArena.get();
-      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      readLock(k);
+      int newKeySize = keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
+      kPtr = UnsafeAccess.malloc(newKeySize);
+      UnsafeAccess.putByte(kPtr, (byte) DataType.SET.ordinal());
+      UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+      UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+      UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE, (byte)0);
+      
+      endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
+      
+      BigSortedMapDirectMemoryScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
       if (scanner == null) {
         return true; // empty or does not exists
       }
+      long total = 0;
       while (scanner.hasNext()) {
         long valuePtr = scanner.valueAddress();
         total += numElementsInValue(valuePtr);
@@ -423,10 +433,17 @@ public class Sets {
     } catch (IOException e) {
       // should never be thrown
     } finally {
-      KeysLocker.readUnlock(k);
+      readUnlock(k);
+      if (endKeyPtr > 0) {
+        UnsafeAccess.free(endKeyPtr);
+      }
+      if (kPtr > 0) {
+        UnsafeAccess.free(kPtr);
+      }
     }
     return true;
   }
+  
   
   /**
    * Returns total size (in bytes) of elements in this set, defined by key
