@@ -4,11 +4,13 @@ import static org.bigbase.carrot.redis.Commons.addNumElements;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
 import static org.bigbase.carrot.redis.Commons.isFirstKey;
+import static org.bigbase.carrot.redis.Commons.keySize;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -40,6 +42,8 @@ public class HashDelete extends Operation{
    */
   int valueSize = 0;
 
+  
+  boolean checkForEmpty = false;
   /**
    * Constructor
    */
@@ -56,6 +60,11 @@ public class HashDelete extends Operation{
     this.buffer = 0;
     this.bufferSize = 0;
     this.valueSize = 0;
+    this.checkForEmpty = false;
+  }
+  
+  public boolean checkForEmpty() {
+    return this.checkForEmpty;
   }
   
   /**
@@ -98,14 +107,13 @@ public class HashDelete extends Operation{
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
-    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, keySize); 
+    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, keySize(keyAddress)); 
     // Prefix keys must be equals
     if (Utils.compareTo(keyAddress, setKeySize , foundKeyAddress, 
       setKeySize) != 0) {
       // Hash does not exists
       return false;
-    }
-    
+    }    
     long fieldPtr = elementAddressFromKey(keyAddress);
     int fieldSize = elementSizeFromKey(keyAddress, keySize);
     // First two bytes are number of elements in a value
@@ -133,6 +141,9 @@ public class HashDelete extends Operation{
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
     // decrement number of elements in this value
     int numElements = addNumElements(valueAddress, -1);
+    if (numElements == 0) {
+      this.checkForEmpty = true;
+    } 
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     int newValueSize = valueSize - toCut;
     Hashes.checkValueArena(newValueSize);
@@ -152,25 +163,8 @@ public class HashDelete extends Operation{
       // Delete Key, b/c its empty
       //TODO: we postpone deleting empty first key
       this.updateTypes[0] = true;
-    }
+    } 
     return true;
   }
-  
-
-//  /**
-//   * We can delete K-V only when it is empty, not a first key (ends with '\0' 
-//   * or (TODO) first and the only K-V for the set)
-//   * @param foundKeyAddress
-//   * @return true if can be deleted, false -otherwise
-//   * @throws IOException 
-//   */
-//  private boolean canDelete(long foundKeyAddress, int foundKeySize) {
-//    if (!firstKVinType(foundKeyAddress, foundKeySize)) {
-//      return true;
-//    }
-//    // this first KV in set, we can delete it if it is the only one in the set
-//    return !nextKVisInType(map, foundKeyAddress);
-//  }
-
 
 }

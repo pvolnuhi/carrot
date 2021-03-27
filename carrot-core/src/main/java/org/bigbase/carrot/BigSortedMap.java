@@ -312,7 +312,6 @@ public class BigSortedMap {
     return totalDataInIndexBlocksSize.get();
   }
   
-  
   public static void printMemoryAllocationStats() {
     System.out.println("\nCarrot memory allocation statistics:");
     System.out.println("Total memory               :" + getTotalAllocatedMemory());
@@ -326,6 +325,7 @@ public class BigSortedMap {
     System.out.println("Copmpression ratio         :" + ((double)getTotalDataSize()/ 
         getTotalAllocatedMemory())+"\n");
   }
+  
   /** 
    * Gets maximum memory limit
    */
@@ -338,7 +338,7 @@ public class BigSortedMap {
     long totalRows = 0;
     for(IndexBlock b: map.keySet()) {
       totalRows += b.getNumberOfDataBlock();
-      b.dumpIndexBlock();
+      b.dumpIndexBlockExt();
     }
     System.out.println("Total blocks="+ (totalRows) + " index blocks=" + map.size());
   }
@@ -358,10 +358,13 @@ public class BigSortedMap {
    * Lock on index block
    * @param b index block to lock on
    */
-  private void lock(IndexBlock b) {
+  private void lock(IndexBlock b) throws RetryOperationException {
     int i = (int) (b.hashCode() % locks.length);
     ReentrantLock lock = locks[i];
     lock.lock();
+    if (!b.isValid()) {
+      throw new RetryOperationException();
+    }
   }
   /**
    * Unlock lock
@@ -411,7 +414,7 @@ public class BigSortedMap {
    * Returns native map
    * @return map
    */
-  ConcurrentSkipListMap<IndexBlock, IndexBlock> getMap() {
+  public ConcurrentSkipListMap<IndexBlock, IndexBlock> getMap() {
     return map;
   }
   
@@ -593,6 +596,17 @@ public class BigSortedMap {
           // So DELETE will always succeed (true or false)
           // This call compress data block in b
           OpResult res = b.delete(keyPtr, keyLength, version);
+          if (res == OpResult.OK) {
+            if (b.isEmpty() && !firstBlock) {
+              map.remove(b);
+              b.free();
+              b.invalidate();
+            }
+          } else {
+            System.err.println("PANIC! ");
+            Thread.dumpStack();
+            System.exit(-1);
+          }
           // We do not check result? Should always be OK?
           if (updatesCount < 2) {
             return true;
@@ -776,19 +790,10 @@ public class BigSortedMap {
         }
         OpResult result = b.delete(key, keyOffset, keyLength, version);
         if (result == OpResult.OK) {
-          if (b.isEmpty()) {
-            IndexBlock removed = map.remove(b);
-            if (removed == null) {
-              IndexBlock fk = map.floorKey(b);
-              IndexBlock ck = map.ceilingKey(b);
-              boolean contains = map.containsKey(b);
-              /* DEBUG */ System.err.println(
-                "FATAL Removed IndexBlock " + removed + " firstKey=" + b.getFirstKey().length);
-              System.out.println(
-                "b=" + b.getAddress() + "ck=" + ck + "fk=" + fk + "contains =" + contains);
-              System.exit(-1);
-            }
+          if (b.isEmpty() && !b.isFirstIndexBlock()) {
+            map.remove(b);
             b.free();
+            b.invalidate();
           }
           return true;
         } else if (result == OpResult.NOT_FOUND) {
@@ -826,15 +831,15 @@ public class BigSortedMap {
         long loopStartTime = System.currentTimeMillis();
         b = firstBlock? map.floorKey(kvBlock): map.higherKey(b);
         if (b == null) {
-          return deleted;
+          break;
         }
-        lock(b); // to prevent
-        
+        lock(b); 
         if (b.isEmpty()) {
           // toDelete
           if (toDelete != null) {
             map.remove(toDelete);
             toDelete.free();
+            toDelete.invalidate();
             toDelete = null;
           } else if (!b.isFirstIndexBlock()){
             toDelete = b;
@@ -861,6 +866,7 @@ public class BigSortedMap {
         if (toDelete != null) {
           map.remove(toDelete);
           toDelete.free();
+          toDelete.invalidate();
           toDelete = null;
         }
         if (b.isEmpty() && !b.isFirstIndexBlock()) {
@@ -876,6 +882,7 @@ public class BigSortedMap {
     if (toDelete != null) {
       map.remove(toDelete);
       toDelete.free();
+      toDelete.invalidate();
       toDelete = null;
     }
     return deleted;
@@ -904,18 +911,9 @@ public class BigSortedMap {
         OpResult result = b.delete(keyPtr, keyLength, version);
         if (result == OpResult.OK) {
           if (b.isEmpty()) {
-            IndexBlock removed = map.remove(b);
-            if (removed == null) {
-              IndexBlock fk = map.floorKey(b);
-              IndexBlock ck = map.ceilingKey(b);
-              boolean contains = map.containsKey(b);
-              /* DEBUG */ System.err.println(
-                "FATAL Removed IndexBlock " + removed + " firstKey=" + b.getFirstKey().length);
-              System.out.println(
-                "b=" + b.getAddress() + "ck=" + ck + "fk=" + fk + "contains =" + contains);
-              System.exit(-1);
-            }
+            map.remove(b);
             b.free();
+            b.invalidate();
           }
           return true;
         } else if (result == OpResult.NOT_FOUND) {

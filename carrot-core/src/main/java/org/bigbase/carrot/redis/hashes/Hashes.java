@@ -18,6 +18,7 @@ import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
@@ -235,9 +236,7 @@ public class Hashes {
       UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE, (byte)0);
-      
-      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1);      
-      
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1);            
       long total = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
       UnsafeAccess.free(kPtr);
       UnsafeAccess.free(endKeyPtr);
@@ -245,7 +244,6 @@ public class Hashes {
     } finally {
       KeysLocker.writeUnlock(k);
     }
-
   }
   
   /**
@@ -482,6 +480,56 @@ public class Hashes {
       readUnlock(k);
     }
   }
+  /**
+   * Checks if the Hash is empty
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @return true - yes, false - otherwise
+   */
+  public static boolean isEmpty(BigSortedMap map, long keyPtr, int keySize) {
+
+    Key k = getKey(keyPtr, keySize);
+    long kPtr = 0, endKeyPtr = 0;
+    try {
+      readLock(k);
+      int newKeySize = keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
+      kPtr = UnsafeAccess.malloc(newKeySize);
+      UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
+      UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+      UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+      UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE, (byte)0);
+      
+      endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
+      
+      BigSortedMapDirectMemoryScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
+      if (scanner == null) {
+        return true; // empty or does not exists
+      }
+      long total = 0;
+      while (scanner.hasNext()) {
+        long valuePtr = scanner.valueAddress();
+        total += numElementsInValue(valuePtr);
+        if (total > 0) {
+          scanner.close();
+          return false;
+        }
+        scanner.next();
+      }
+      scanner.close();
+    } catch (IOException e) {
+      // should never be thrown
+    } finally {
+      readUnlock(k);
+      if (endKeyPtr > 0) {
+        UnsafeAccess.free(endKeyPtr);
+      }
+      if (kPtr > 0) {
+        UnsafeAccess.free(kPtr);
+      }
+    }
+    return true;
+  }
   
   /**
    * Return serialized hash size
@@ -562,6 +610,10 @@ public class Hashes {
         if (map.execute(update)) {
           deleted++;
         }
+        if (update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
+          DELETE(map, keyPtr, keySize);
+          break;
+        }
       }
       return deleted;
     } finally {
@@ -593,6 +645,9 @@ public class Hashes {
       // version?
       if (map.execute(update)) {
         deleted++;
+      }
+      if (update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
+        DELETE(map, keyPtr, keySize);
       }
       return deleted;
     } finally {
@@ -626,6 +681,9 @@ public class Hashes {
       update.setBuffer(buffer, bufferSize);
       // version?
       map.execute(update);
+      if (update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
+        DELETE(map, keyPtr, keySize);
+      }
       return update.getValueSize();
     } finally {
       writeUnlock(k);

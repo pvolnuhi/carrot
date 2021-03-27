@@ -365,15 +365,18 @@ public class Sets {
    * @return number of elements
    * @throws IOException 
    */
-  public static long SCARD(BigSortedMap map, long keyPtr, int keySize){
-    int kSize = buildKey(keyPtr, keySize, 0, 0);
-    long ptr = keyArena.get();
-    BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
-    if (scanner == null) {
-      return 0; // empty or does not exists
-    }
+  public static long SCARD(BigSortedMap map, long keyPtr, int keySize) {
+
+    Key k = getKey(keyPtr, keySize);
     long total = 0;
     try {
+      KeysLocker.readLock(k);
+      int kSize = buildKey(keyPtr, keySize, 0, 0);
+      long ptr = keyArena.get();
+      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      if (scanner == null) {
+        return 0; // empty or does not exists
+      }
       while (scanner.hasNext()) {
         long valuePtr = scanner.valueAddress();
         total += numElementsInValue(valuePtr);
@@ -382,8 +385,47 @@ public class Sets {
       scanner.close();
     } catch (IOException e) {
       // should never be thrown
+    } finally {
+      KeysLocker.readUnlock(k);
     }
     return total;
+  }
+  
+  /**
+   * Checks if the set is empty
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @return true - yes, false - otherwise
+   */
+  public static boolean isEmpty(BigSortedMap map, long keyPtr, int keySize) {
+
+    Key k = getKey(keyPtr, keySize);
+    long total = 0;
+    try {
+      KeysLocker.readLock(k);
+      int kSize = buildKey(keyPtr, keySize, 0, 0);
+      long ptr = keyArena.get();
+      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      if (scanner == null) {
+        return true; // empty or does not exists
+      }
+      while (scanner.hasNext()) {
+        long valuePtr = scanner.valueAddress();
+        total += numElementsInValue(valuePtr);
+        if (total > 0) {
+          scanner.close();
+          return false;
+        }
+        scanner.next();
+      }
+      scanner.close();
+    } catch (IOException e) {
+      // should never be thrown
+    } finally {
+      KeysLocker.readUnlock(k);
+    }
+    return true;
   }
   
   /**
@@ -498,6 +540,9 @@ public class Sets {
           removed++;
         }
       }
+      if (isEmpty(map, keyPtr, keySize)) {
+        DELETE(map, keyPtr, keySize);
+      }
       return removed;
     } finally {
       KeysLocker.writeUnlock(k);
@@ -527,6 +572,9 @@ public class Sets {
       // version?
       if (map.execute(remove)) {
         removed++;
+      }
+      if (isEmpty(map, keyPtr, keySize)) {
+        DELETE(map, keyPtr, keySize);
       }
       return removed;
     } finally {

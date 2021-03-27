@@ -36,16 +36,13 @@ public class HashesTest {
   
   private List<Value> getValues(long n) {
     List<Value> values = new ArrayList<Value>();
-    //Random r = new Random();
-    //long seed = r.nextLong();
-    //r.setSeed(seed);
-    //System.out.println("VALUES SEED=" + seed);
-    //byte[] buf = new byte[valSize];
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("VALUES SEED=" + seed);
+    byte[] buf = new byte[valSize];
     for (int i = 0; i < n; i++) {
-      String s = Integer.toString(i);
-      valSize = s.length();
-      //r.nextBytes(buf);
-      byte[] buf = s.getBytes();
+      r.nextBytes(buf);
       long ptr = UnsafeAccess.malloc(valSize);
       UnsafeAccess.copy(buf, 0, ptr, valSize);
       values.add(new Value(ptr, valSize));
@@ -54,15 +51,13 @@ public class HashesTest {
   }
   
   private Key getKey() {
-    String s = "abcdefhg";
-    keySize = s.length();
     long ptr = UnsafeAccess.malloc(keySize);
-    byte[] buf = s.getBytes();// byte[keySize];
-    //Random r = new Random();
-    //long seed = r.nextLong();
-    //r.setSeed(seed);
-    //System.out.println("KEY SEED=" + seed);
-    //r.nextBytes(buf);
+    byte[] buf = new byte[keySize];
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("KEY SEED=" + seed);
+    r.nextBytes(buf);
     UnsafeAccess.copy(buf, 0, ptr, keySize);
     return key = new Key(ptr, keySize);
   }
@@ -87,7 +82,7 @@ public class HashesTest {
     }
   }
   
-  @Ignore
+  //@Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
@@ -100,7 +95,7 @@ public class HashesTest {
     }
   }
   
-  @Ignore
+  //@Ignore
   @Test
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
@@ -113,8 +108,7 @@ public class HashesTest {
     }
   }
   
-  private void allTests() throws IOException {
-    
+  private void allTests() throws IOException { 
     setUp();
     testNullValues();
     tearDown();
@@ -136,9 +130,9 @@ public class HashesTest {
     BigSortedMapScanner scanner = map.getScanner(null, null);
     long count = 0;
     while(scanner.hasNext()) {
-      long ptr = scanner.keyAddress();
-      int size = scanner.keySize();
-      System.out.println("count records found key="+ Utils.toString(ptr, size));
+      //long ptr = scanner.keyAddress();
+      //int size = scanner.keySize();
+      //System.out.println("count records found key="+ Utils.toString(ptr, size) + " size=" + size);
       count++;
       scanner.next();
     }
@@ -174,10 +168,8 @@ public class HashesTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time exist="+(end -start)+"ms");
-    //System.out.println("Map.size =" + countRecords(map));
     Hashes.DELETE(map, key.address, key.length);
-    assertEquals(0, (int) countRecords(map));
-    
+    assertEquals(0, (int) countRecords(map)); 
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
   }
   
@@ -271,7 +263,6 @@ public class HashesTest {
     System.out.println("Time get="+(end -start)+"ms");
 
     BigSortedMap.printMemoryAllocationStats();
-   // System.out.println("Map.size =" + countRecords(map));
 
     Hashes.DELETE(map, key.address, key.length);
     assertEquals(0, (int)countRecords(map));
@@ -301,21 +292,19 @@ public class HashesTest {
     assertEquals(n, Hashes.HLEN(map, key.address, key.length));
 
     BigSortedMap.printMemoryAllocationStats();
-    
+        
     start = System.currentTimeMillis();
-    for (int i =0; i < n; i++) {
+    for (int i = 0; i < n; i++) {
       int res = Hashes.HDEL(map, key.address, key.length, values.get(i).address, values.get(i).length);
       assertEquals(1, res);
     }
     end = System.currentTimeMillis();
     System.out.println("Time to delete="+(end -start)+"ms");
-    System.out.println("Map.size =" + countRecords(map));
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
+    BigSortedMap.printMemoryAllocationStats();
+    long recc = countRecords(map);
+    assertEquals(0, (int)recc);
 
-    Hashes.DELETE(map, key.address, key.length);
-    
-    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
- 
   }
   
   @Ignore

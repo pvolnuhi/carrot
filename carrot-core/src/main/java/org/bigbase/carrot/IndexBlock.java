@@ -892,7 +892,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     int count =0;
     long ptr = dataPtr;
     System.out.println("Dump index block: numDataBlocks="+ numDataBlocks + 
-      " dataInIndexSize=" + blockDataSize + " block="+ blockSize);
+      " dataInIndexSize=" + blockDataSize + " address=" + dataPtr);
     
     while(count++ < numDataBlocks) {
       DataBlock b = block.get();

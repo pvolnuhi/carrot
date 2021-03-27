@@ -24,7 +24,10 @@ public class Commons {
    */
   public final static int KEY_SIZE = Utils.SIZEOF_INT;
   
-  
+  /*
+   * Key prefix size (5 bytes)
+   */
+  public final static int KEY_PREFIX_SIZE = KEY_SIZE + Utils.SIZEOF_BYTE;
   /** 
    * Length  (size) of a Key
    * @param key address
@@ -95,7 +98,7 @@ public class Commons {
    */
   public static int addNumElements(long valuePtr, int v) {
     int value = UnsafeAccess.toShort(valuePtr);
-    if (value + v < 0) return value;
+    //if (value + v < 0) return value;
     UnsafeAccess.putShort(valuePtr, (short)(value + v));
     return value + v;
   }
