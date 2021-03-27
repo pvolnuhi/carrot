@@ -3,7 +3,6 @@ package org.bigbase.carrot;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -91,7 +90,7 @@ public class BigSortedMap {
   // For k-v versioning
   static AtomicLong sequenceID = new AtomicLong(0);
 
-  private ReentrantLock[] locks = new ReentrantLock[11113];
+  //private ReentrantLock[] locks = new ReentrantLock[11113];
   private long maxMemory; 
   /*
    * Keeps ordered list of active snapshots (future Tx)
@@ -350,9 +349,9 @@ public class BigSortedMap {
     IndexBlock b = new IndexBlock(maxIndexBlockSize);
     b.setFirstIndexBlock();
     map.put(b, b);
-    for(int i =0; i < locks.length; i++) {
-      locks[i] = new ReentrantLock();
-    }
+//    for(int i =0; i < locks.length; i++) {
+//      locks[i] = new ReentrantLock();
+//    }
   }
   
   /**
@@ -361,31 +360,31 @@ public class BigSortedMap {
    * Lock on index block
    * @param b index block to lock on
    */
-  private void lock(IndexBlock b) throws RetryOperationException {
-    int i = (int) (b.hashCode() % locks.length);
-    ReentrantLock lock = locks[i];
-    lock.lock();
-    if (!b.isValid()) {
-      throw new RetryOperationException();
-    }
-  }
-  /**
-   * Unlock lock
-   * @param b index block
-   */
-  private void unlock(IndexBlock b) {
-    if (b == null) return;
-    int i = (int) (b.hashCode() % locks.length);
-    ReentrantLock lock = locks[i];
-    if (lock.isHeldByCurrentThread()) {
-      lock.unlock();
-    } else {
-    	System.out.println("Unexpected unlock attempt");
-    	//TODO
-    	Thread.dumpStack();
-    	System.exit(-1);
-    }
-  }
+//  private void lock(IndexBlock b) throws RetryOperationException {
+//    int i = (int) (b.hashCode() % locks.length);
+//    ReentrantLock lock = locks[i];
+//    lock.lock();
+//    if (!b.isValid()) {
+//      throw new RetryOperationException();
+//    }
+//  }
+//  /**
+//   * Unlock lock
+//   * @param b index block
+//   */
+//  private void unlock(IndexBlock b) {
+//    if (b == null) return;
+//    int i = (int) (b.hashCode() % locks.length);
+//    ReentrantLock lock = locks[i];
+//    if (lock.isHeldByCurrentThread()) {
+//      lock.unlock();
+//    } else {
+//    	System.out.println("Unexpected unlock attempt");
+//    	//TODO
+//    	Thread.dumpStack();
+//    	System.exit(-1);
+//    }
+//  }
 
   private void ensureBlock() {
     if (keyBlock.get() != null) {
@@ -474,7 +473,10 @@ public class BigSortedMap {
       try {
         b = map.floorKey(kvBlock);
         // TODO: we do a lot of locking
-        lock(b); // to prevent locking from another thread
+        //lock(b); // to prevent locking from another thread
+        
+        b.writeLock();
+        
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
@@ -501,7 +503,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
 
@@ -543,7 +546,8 @@ public class BigSortedMap {
         }
         boolean firstBlock = b.isFirstIndexBlock();
 
-        lock(b); // to prevent locking from another thread
+        //lock(b); // to prevent locking from another thread
+        b.writeLock(); // execute can be both read and write but we do not know in advance
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
           IndexBlock bbb = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
@@ -695,7 +699,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
   }
@@ -735,7 +740,8 @@ public class BigSortedMap {
       try {
         b = map.floorKey(kvBlock);
         // TODO: we do a lot of locking
-        lock(b); // to prevent locking from another thread
+        //lock(b); // to prevent locking from another thread
+        b.writeLock();
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
@@ -760,7 +766,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
   }
@@ -784,7 +791,8 @@ public class BigSortedMap {
       IndexBlock b = null;
       try {
         b = map.floorKey(kvBlock);
-        lock(b); // to prevent
+        //lock(b); // to prevent
+        b.writeLock();
         if (b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
           if (b != bbb) {
@@ -809,7 +817,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
   }
@@ -836,7 +845,8 @@ public class BigSortedMap {
         if (b == null) {
           break;
         }
-        lock(b); 
+        //lock(b);
+        b.writeLock();
         if (b.isEmpty()) {
           // toDelete
           if (toDelete != null) {
@@ -879,7 +889,10 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) {
+          b.writeUnlock();
+        }
       }
     }
     if (toDelete != null) {
@@ -904,7 +917,8 @@ public class BigSortedMap {
       IndexBlock b = null;
       try {
         b = map.floorKey(kvBlock);
-        lock(b); // to prevent
+        //lock(b); // to prevent
+        b.writeLock();
         if (b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
           if (b != bbb) {
@@ -929,7 +943,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
   }
@@ -963,11 +978,13 @@ public class BigSortedMap {
           IndexBlock bb = null;
           while (true) {
             b = map.floorKey(kvBlock);
-            lock(b);
+            //lock(b);
+            b.readLock();
             locked = true;
             bb = map.floorKey(kvBlock);
             if (bb != b) {
-              unlock(b);
+              //unlock(b);
+              b.readUnlock();
               locked = false;
               continue;
             } else {
@@ -982,8 +999,9 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        if (locked) {
-          unlock(b);
+        if (locked && b != null) {
+          //unlock(b);
+          b.readUnlock();
         }
       }
     }
@@ -1015,11 +1033,13 @@ public class BigSortedMap {
           IndexBlock bb = null;
           while (true) {
             b = map.floorKey(kvBlock);
-            lock(b);
+            //lock(b);
+            b.readLock();
             locked = true;
             bb = map.floorKey(kvBlock);
             if (bb != b) {
-              unlock(b);
+              //unlock(b);
+              b.readUnlock();
               locked = false;
               continue;
             } else {
@@ -1034,8 +1054,9 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        if (locked) {
-          unlock(b);
+        if (locked && b != null) {
+          //unlock(b);
+          b.readUnlock();
         }
       }
     }
@@ -1057,7 +1078,8 @@ public class BigSortedMap {
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        lock(b);
+        //lock(b);
+        b.writeLock();
         if (b.hasRecentUnsafeModification()) {
           // check one more time with lock
           // - we caught split in flight
@@ -1088,10 +1110,10 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
-
   }
   
   /**
@@ -1109,7 +1131,8 @@ public class BigSortedMap {
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        lock(b);
+        //lock(b);
+        b.writeLock();
         if (b.hasRecentUnsafeModification()) {
           // check one more time with lock
           // - we caught split in flight
@@ -1119,11 +1142,9 @@ public class BigSortedMap {
             continue;
           } 
         }
-        
         long valueBuf = incrBuffer.get();
         int valueSize = Utils.SIZEOF_INT;
-        long size = b.get(keyPtr, keyLength, valueBuf, valueSize,  version);
-        
+        long size = b.get(keyPtr, keyLength, valueBuf, valueSize,  version);        
         if (size < 0) {
           // insert new
           UnsafeAccess.putInt(valueBuf, incr);
@@ -1140,7 +1161,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
   }
@@ -1159,7 +1181,8 @@ public class BigSortedMap {
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        lock(b);
+        //lock(b);
+        b.writeLock();
         if (b.hasRecentUnsafeModification()) {
           // check one more time with lock
           // - we caught split in flight
@@ -1169,11 +1192,9 @@ public class BigSortedMap {
             continue;
           } 
         }
-        
         long valueBuf = incrBuffer.get();
         int valueSize = Utils.SIZEOF_FLOAT;
         long size = b.get(keyPtr, keyLength, valueBuf, valueSize,  version);
-        
         if (size < 0) {
           // insert new
           UnsafeAccess.putLong(valueBuf, Float.floatToIntBits(incr));
@@ -1191,7 +1212,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
   }
@@ -1210,7 +1232,8 @@ public class BigSortedMap {
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        lock(b);
+        //lock(b);
+        b.writeLock();
         if (b.hasRecentUnsafeModification()) {
           // check one more time with lock
           // - we caught split in flight
@@ -1220,7 +1243,6 @@ public class BigSortedMap {
             continue;
           } 
         }
-        
         long valueBuf = incrBuffer.get();
         int valueSize = Utils.SIZEOF_LONG;
         long size = b.get(keyPtr, keyLength, valueBuf, valueSize,  version);
@@ -1243,7 +1265,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        unlock(b);
+        //unlock(b);
+        if (b != null) b.writeUnlock();
       }
     }
   }
