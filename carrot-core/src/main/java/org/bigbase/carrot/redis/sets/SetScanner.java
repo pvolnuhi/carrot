@@ -144,8 +144,8 @@ public class SetScanner extends BiScanner{
     this.offset = NUM_ELEM_SIZE;
     this.memberSize = Utils.readUVInt(valueAddress + offset);
     this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
-    if (this.startMemberPtr != 0) {
-      try {
+    try {
+      if (this.startMemberPtr != 0) {
         while (hasNext()) {
           int size = Utils.readUVInt(valueAddress + offset);
           long ptr = valueAddress + offset + Utils.sizeUVInt(size);
@@ -155,9 +155,11 @@ public class SetScanner extends BiScanner{
           }
           next();
         }
-      } catch (IOException e) {
-        // should never be thrown
+      } else if (this.valueSize == NUM_ELEM_SIZE) { // skip possible empty K-V (first one)
+        next();
       }
+    } catch (IOException e) {
+      // should never be thrown
     }
     return false;
   }
@@ -221,9 +223,10 @@ public class SetScanner extends BiScanner{
         }
       }
     } else {
+      // First K-V in a set can be empty, we need to scan to the next one
+      mapScanner.next();
       if (mapScanner.hasNext()) {
-        mapScanner.next();
-        this.valueAddress = mapScanner.valueAddress();
+        //mapScanner.next();
         this.valueSize = mapScanner.valueSize();
         this.offset = NUM_ELEM_SIZE;
         this.memberSize = Utils.readUVInt(valueAddress + offset);

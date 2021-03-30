@@ -605,14 +605,13 @@ public class Hashes {
         update.reset();
         update.setMap(map);
         update.setKeyAddress(keyArena.get());
-        update.setKeySize(kSize);
-        // version?
+        update.setKeySize(kSize);        
         if (map.execute(update)) {
           deleted++;
-        }
-        if (update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
-          DELETE(map, keyPtr, keySize);
-          break;
+          if (update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
+            DELETE(map, keyPtr, keySize);
+            break;
+          }
         }
       }
       return deleted;
@@ -643,10 +642,11 @@ public class Hashes {
       update.setKeyAddress(keyArena.get());
       update.setKeySize(kSize);
       // version?
-      if (map.execute(update)) {
+      boolean result = map.execute(update);
+      if (result) {
         deleted++;
       }
-      if (update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
+      if (result && update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
         DELETE(map, keyPtr, keySize);
       }
       return deleted;
@@ -680,8 +680,8 @@ public class Hashes {
       update.setKeySize(kSize);
       update.setBuffer(buffer, bufferSize);
       // version?
-      map.execute(update);
-      if (update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
+      boolean result = map.execute(update);
+      if (result && update.checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
         DELETE(map, keyPtr, keySize);
       }
       return update.getValueSize();

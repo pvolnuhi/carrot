@@ -11,12 +11,10 @@ import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.RedisConf;
-import org.bigbase.carrot.redis.hashes.HashGet;
 import org.bigbase.carrot.redis.hashes.HashScanner;
 import org.bigbase.carrot.redis.hashes.HashSet;
 import org.bigbase.carrot.redis.hashes.Hashes;
 import org.bigbase.carrot.redis.sets.SetAdd;
-import org.bigbase.carrot.redis.sets.SetDelete;
 import org.bigbase.carrot.redis.sets.SetScanner;
 import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -105,32 +103,12 @@ public class ZSets {
   };
   
   /**
-   * Thread local updates Hash Get
-   */
-  private static ThreadLocal<HashGet> hashGet = new ThreadLocal<HashGet>() {
-    @Override
-    protected HashGet initialValue() {
-      return new HashGet();
-    } 
-  };
-  
-  /**
    * Thread local updates Set Add
    */
   private static ThreadLocal<SetAdd> setAdd = new ThreadLocal<SetAdd>() {
     @Override
     protected SetAdd initialValue() {
       return new SetAdd();
-    } 
-  };
-  
-  /**
-   * Thread local updates Set Delete
-   */
-  private static ThreadLocal<SetDelete> setDelete = new ThreadLocal<SetDelete>() {
-    @Override
-    protected SetDelete initialValue() {
-      return new SetDelete();
     } 
   };
   
@@ -1686,23 +1664,25 @@ public class ZSets {
         for (int i = 0; i < memberPtrs.length; i++) {
           long memberPtr = memberPtrs[i];
           int memberSize = memberSizes[i];
+          checkValueArena(memberSize + Utils.SIZEOF_DOUBLE + Utils.SIZEOF_BYTE);
           long buffer = valueArena.get();
           int bufferSize = valueArenaSize.get();
+          // minimum bufferSize = 512, value size is 8 (DOUBLE)
           int result = Hashes.HDEL(map, keyPtr, keySize, memberPtr, memberSize, buffer, bufferSize);
           if (result == 0) {
             // Not found
             continue;
-          } else if (result > bufferSize) {
-            checkValueArena(result);
-            buffer = valueArena.get();
-            bufferSize = valueArenaSize.get();
-            Hashes.HDEL(map, keyPtr, keySize, memberPtr, memberSize, buffer, bufferSize);
           }
-          checkValueArena(memberSize + Utils.SIZEOF_DOUBLE);
-          buffer = valueArena.get();
-          // copy member to buffer
-          UnsafeAccess.copy(memberPtr, buffer + Utils.SIZEOF_DOUBLE, memberSize);
-          Sets.SREM(map, keyPtr, keySize, buffer, memberSize + Utils.SIZEOF_DOUBLE);
+          HASH_DELETED++;
+          // copy member to buffer + 1 (first byte is length of the value, which is 8)
+          UnsafeAccess.copy(memberPtr, buffer + Utils.SIZEOF_DOUBLE + Utils.SIZEOF_BYTE, memberSize);
+          int res = Sets.SREM(map, keyPtr, keySize, buffer + Utils.SIZEOF_BYTE, 
+            memberSize + Utils.SIZEOF_DOUBLE);
+          if (res == 0) {
+            /*DEBUG*/ System.out.println("missing SET");
+          } else {
+            SET_DELETED++;
+          }
           deleted++;
         }
         
@@ -1711,14 +1691,15 @@ public class ZSets {
           convertToCompactMode(map, keyPtr, keySize);
         }
       } else {
-        // Compact mode
+        //long card = ZCARD(map, keyPtr, keySize);
+        ///*DEBUG*/ System.out.println("compact " + card);
+        // Compact mode 
+        //TODO: Optimize for multiple members
         for (int i = 0; i < memberPtrs.length; i++) {
 
           scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
           while (scanner.hasNext()) {
-            if (deleted == memberPtrs.length) {
-              return deleted;
-            }
+
             long mPtr = scanner.memberAddress();
             int mSize = scanner.memberSize();
             if(Utils.compareTo(mPtr + Utils.SIZEOF_DOUBLE, mSize - Utils.SIZEOF_DOUBLE, 
@@ -1730,6 +1711,12 @@ public class ZSets {
               long buffer = valueArena.get();
               UnsafeAccess.copy(mPtr, buffer, mSize);
               int res = Sets.SREM(map, keyPtr, keySize, buffer, mSize);
+              // assertions not enabled by default
+              if (res == 0) {
+                /*DEBUG*/ System.out.println("missing SET in compact");
+              } else {
+                SET_DELETED++;
+              }
               assert(res == 1);
               deleted++;
               break;
@@ -1741,6 +1728,10 @@ public class ZSets {
       // Update count
       if (deleted > 0) {
         ZINCRCARD(map, keyPtr, keySize, -deleted);
+        if (cardinality - deleted == 0) {
+          // empty zset must be deleted
+          DELETE(map, keyPtr, keySize);
+        }
       }
     } catch (IOException e) {
     } finally {
@@ -1754,6 +1745,12 @@ public class ZSets {
     }
     return deleted;
   }
+  
+  /**
+   * DEBUG only
+   */
+  public static int SET_DELETED = 0;
+  public static int HASH_DELETED = 0;
   
   /**
    * 

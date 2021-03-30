@@ -23,12 +23,13 @@ public class ZSetsTest {
   long buffer;
   int bufferSize = 64;
   int fieldSize = 16;
-  long n = 10000;
+  long n = 1000000;
   List<Value> fields;
   List<Double> scores;
+  int maxScore = 100000;
   
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   
   private List<Value> getFields(long n) {
@@ -48,9 +49,7 @@ public class ZSetsTest {
     }
     return keys;
   }
-  
-  int maxScore = 10000;
-  
+    
   private List<Double> getScores(long n) {
     List<Double> scores = new ArrayList<Double>();
     Random r = new Random(1);
@@ -129,12 +128,15 @@ public class ZSetsTest {
   }
   
   private void allTests() {
-    setUp();
-    testAddGetScore();
-    tearDown();
+//    setUp();
+//    testAddGetScore();
+//    tearDown();
     setUp();
     testAddRemove();
     tearDown();
+//    setUp();
+//    testAddDeleteMulti();
+//    tearDown();
   }
   
   @Ignore
@@ -153,7 +155,7 @@ public class ZSetsTest {
       scores[0] = this.scores.get(i);
       long num = ZSets.ZADD(map, key.address, key.length, scores, elemPtrs, elemSizes, true);
       assertEquals(1, (int)num);
-      if ((i+1) % 10000 == 0) {
+      if ((i+1) % 100000 == 0) {
         System.out.println(i+1);
       }
     }
@@ -171,6 +173,9 @@ public class ZSetsTest {
     for (int i =0; i < n; i++) {
       Double res = ZSets.ZSCORE(map, key.address, key.length, fields.get(i).address, fields.get(i).length);
       assertEquals(this.scores.get(i), res);
+      if ((i+1) % 100000 == 0) {
+        System.out.println(i+1);
+      }
     }
     end = System.currentTimeMillis();
     System.out.println(" Time for " + n+ " ZSCORE="+(end -start)+"ms");
@@ -183,7 +188,7 @@ public class ZSetsTest {
   @Ignore
   @Test
   public void testAddRemove() {
-    System.out.println("Test ZSet Add Get Score");
+    System.out.println("Test ZSet Add Remove");
     Key key = getKey();
     long[] elemPtrs = new long[1];
     int[] elemSizes = new int[1];
@@ -195,7 +200,60 @@ public class ZSetsTest {
       scores[0] = this.scores.get(i);
       long num = ZSets.ZADD(map, key.address, key.length, scores, elemPtrs, elemSizes, true);
       assertEquals(1, (int)num);
-      if ((i+1) % 10000 == 0) {
+      if ((i+1) % 100000 == 0) {
+        System.out.println(i+1);
+      }
+    }
+    long end = System.currentTimeMillis();
+    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    + " for "+ n + " " + (fieldSize + Utils.SIZEOF_DOUBLE) + " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (fieldSize + Utils.SIZEOF_DOUBLE))+
+    " bytes per value. Time to load: "+(end -start)+"ms");
+    
+    BigSortedMap.printMemoryAllocationStats();
+
+    //*DEBUG*/map.dumpStats();
+
+    assertEquals(n, ZSets.ZCARD(map, key.address, key.length));
+    start = System.currentTimeMillis();
+    for (int i =0; i < n; i++) {
+      elemPtrs[0] = fields.get(i).address;
+      elemSizes[0] = fields.get(i).length;
+      long n = ZSets.ZREM(map, key.address, key.length, elemPtrs, elemSizes);
+      if (n != 1) {
+        System.out.println("i="+i);
+      }
+      assertEquals(1, (int) n);
+      if ((i+1) % 100000 == 0) {
+        System.out.println(i+1);
+      }
+    }
+    end = System.currentTimeMillis();
+    System.out.println("Time for " + n + " ZREM="+(end -start)+"ms");
+    //*DEBUG*/map.dumpStats();
+    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)ZSets.ZCARD(map, key.address, key.length));
+    ZSets.DELETE(map, key.address, key.length);
+    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)ZSets.ZCARD(map, key.address, key.length));
+
+  }
+  
+  @Ignore
+  @Test
+  public void testAddDeleteMulti() {
+    System.out.println("Test ZSet Add Delete Multi");
+    long[] elemPtrs = new long[1];
+    int[] elemSizes = new int[1];
+    double[] scores = new double[1];
+    long start = System.currentTimeMillis();
+    for (int i = 0; i < n; i++) {
+      elemPtrs[0] = fields.get(i).address;
+      elemSizes[0] = fields.get(i).length;
+      scores[0] = this.scores.get(i);
+      long num = ZSets.ZADD(map, elemPtrs[0], elemSizes[0], scores, elemPtrs, elemSizes, true);
+      assertEquals(1, (int)num);
+      if ((i+1) % 100000 == 0) {
         System.out.println(i+1);
       }
     }
@@ -207,30 +265,34 @@ public class ZSetsTest {
     
     BigSortedMap.printMemoryAllocationStats();
     
-    assertEquals(n, ZSets.ZCARD(map, key.address, key.length));
-//    start = System.currentTimeMillis();
-//    for (int i =0; i < n; i++) {
-//      elemPtrs[0] = values.get(i).address;
-//      elemSizes[0] = values.get(i).length;
-//      long n = ZSets.ZREM(map, key.address, key.length, elemPtrs, elemSizes);
-//      assertEquals(1, (int) n);
-//    }
-//    end = System.currentTimeMillis();
-//    System.out.println("Time for " + n+ " ZREM="+(end -start)+"ms");
-    ZSets.DELETE(map, key.address, key.length);
-    assertEquals(0, (int)ZSets.ZCARD(map, key.address, key.length));
- 
+    start = System.currentTimeMillis();
+    for (int i =0; i < n; i++) {
+      elemPtrs[0] = fields.get(i).address;
+      elemSizes[0] = fields.get(i).length;
+      boolean res  = ZSets.DELETE(map, elemPtrs[0], elemSizes[0]);
+      assertEquals(true, res);
+      if ((i+1) % 100000 == 0) {
+        System.out.println(i+1);
+      }
+    }
+    end = System.currentTimeMillis();
+    System.out.println("Time for " + n + " DELETE="+(end -start)+"ms");
+    assertEquals(0, (int)BigSortedMap.countRecords(map));
+
   }
   
   private void tearDown() {
     // Dispose
     map.dispose();
-    UnsafeAccess.free(key.address);
+    if (key != null) {
+      UnsafeAccess.free(key.address);
+      key = null;
+    }
     for (Key k: fields) {
       UnsafeAccess.free(k.address);
     }
     UnsafeAccess.free(buffer);
     UnsafeAccess.mallocStats.printStats();
-    BigSortedMap.memoryStats();
+    BigSortedMap.printMemoryAllocationStats();
   }
 }

@@ -589,9 +589,9 @@ public class Sets {
       // version?
       if (map.execute(remove)) {
         removed++;
-      }
-      if (isEmpty(map, keyPtr, keySize)) {
-        DELETE(map, keyPtr, keySize);
+        if (isEmpty(map, keyPtr, keySize)) {
+          DELETE(map, keyPtr, keySize);
+        }
       }
       return removed;
     } finally {
