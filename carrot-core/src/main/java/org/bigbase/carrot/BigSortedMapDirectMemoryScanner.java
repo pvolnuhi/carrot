@@ -3,7 +3,7 @@ package org.bigbase.carrot;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-import org.bigbase.carrot.util.BiScanner;
+import org.bigbase.carrot.util.BidirectionalScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -14,7 +14,7 @@ import org.bigbase.carrot.util.Utils;
  * @author jenium65
  *
  */
-public class BigSortedMapDirectMemoryScanner extends BiScanner{
+public class BigSortedMapDirectMemoryScanner extends BidirectionalScanner{
 
   private BigSortedMap map;
   private long startRowPtr;
@@ -84,6 +84,11 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
     init();
   }
   
+  public DataBlockDirectMemoryScanner getBlockScanner()
+  {
+    return this.blockScanner;
+  }
+  
   public boolean isPrefixScanner() {
     return this.isPrefixScanner;
   }
@@ -128,12 +133,13 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
           if(currentIndexBlock.hasRecentUnsafeModification()) {
             IndexBlock tmp =  key != null? reverse? cmap.lowerKey(key):
               cmap.floorKey(key):cmap.lastKey();
-            
               if (tmp != currentIndexBlock) {
               continue;
             }
           }
         }
+        
+        //*DEBUG*/ this.currentIndexBlock.dumpStartEndKeys();
         
         if (!isMultiSafe) {
           indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
@@ -218,9 +224,9 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
   }
   
   public boolean hasNext() throws IOException {
-    if (reverse) {
+    /*if (reverse) {
       throw new UnsupportedOperationException("hasNext");
-    }
+    }*/
     if (blockScanner == null) {
       return false;
     }
@@ -236,9 +242,9 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
   }
     
   public boolean next() {
-    if (reverse) {
+    /*if (reverse) {
       throw new UnsupportedOperationException("next");
-    }  
+    } */ 
     if (blockScanner == null) {
       return false;
     }
@@ -543,9 +549,9 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
   
   @Override
   public boolean previous() throws IOException {
-    if (!reverse) {
+   /* if (!reverse) {
       throw new UnsupportedOperationException("previous");
-    }
+    }*/
     boolean result = blockScanner.previous();
     if (result) {
       return result;
@@ -561,9 +567,9 @@ public class BigSortedMapDirectMemoryScanner extends BiScanner{
   
   @Override
   public boolean hasPrevious() throws IOException {
-    if (!reverse) {
+   /* if (!reverse) {
       throw new UnsupportedOperationException("previous");
-    }    
+    }*/    
 
     boolean result = blockScanner.hasPrevious();
     if (result) {

@@ -23,16 +23,22 @@ public class SetDelete extends Operation{
   // TODO: use own keyArena
 
   BigSortedMap map;
-    
+  boolean checkForEmpty;
+  
   public SetDelete() {
     setFloorKey(true);
+  }
+  
+  public boolean checkForEmpty() {
+    return this.checkForEmpty;
   }
   
   @Override
   public void reset() {
     super.reset();
     setFloorKey(true);
-    map = null;
+    this.map = null;
+    this.checkForEmpty = false;
   }
   
   public void setMap(BigSortedMap map) {
@@ -72,6 +78,9 @@ public class SetDelete extends Operation{
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
     // decrement number of elements in this value
     int numElements = addNumElements(valueAddress, -1);
+    if (numElements == 0) {
+      this.checkForEmpty = true;
+    }
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     int newValueSize = valueSize - toCut;
     Sets.checkValueArena(newValueSize);

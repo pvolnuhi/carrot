@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.Value;
 import org.bigbase.carrot.compression.CodecFactory;
@@ -128,15 +129,15 @@ public class ZSetsTest {
   }
   
   private void allTests() {
-//    setUp();
-//    testAddGetScore();
-//    tearDown();
+    setUp();
+    testAddGetScore();
+    tearDown();
     setUp();
     testAddRemove();
     tearDown();
-//    setUp();
-//    testAddDeleteMulti();
-//    tearDown();
+    setUp();
+    testAddDeleteMulti();
+    tearDown();
   }
   
   @Ignore
@@ -161,8 +162,8 @@ public class ZSetsTest {
     }
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + (fieldSize + Utils.SIZEOF_DOUBLE) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (fieldSize + Utils.SIZEOF_DOUBLE))+
+    + " for "+ n + " " + (2 * (fieldSize + Utils.SIZEOF_DOUBLE) + 3) + " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (2 * (fieldSize + Utils.SIZEOF_DOUBLE) + 3)) +
     " bytes per value. Time to load: "+(end -start)+"ms");
     
     BigSortedMap.printMemoryAllocationStats();
@@ -206,13 +207,11 @@ public class ZSetsTest {
     }
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + (fieldSize + Utils.SIZEOF_DOUBLE) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (fieldSize + Utils.SIZEOF_DOUBLE))+
-    " bytes per value. Time to load: "+(end -start)+"ms");
+      + " for "+ n + " " + (2 * (fieldSize + Utils.SIZEOF_DOUBLE) + 3) + " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (2 * (fieldSize + Utils.SIZEOF_DOUBLE)+ 3)) 
+      + " bytes per value. Time to load: "+(end -start)+"ms");
     
     BigSortedMap.printMemoryAllocationStats();
-
-    //*DEBUG*/map.dumpStats();
 
     assertEquals(n, ZSets.ZCARD(map, key.address, key.length));
     start = System.currentTimeMillis();
@@ -220,9 +219,6 @@ public class ZSetsTest {
       elemPtrs[0] = fields.get(i).address;
       elemSizes[0] = fields.get(i).length;
       long n = ZSets.ZREM(map, key.address, key.length, elemPtrs, elemSizes);
-      if (n != 1) {
-        System.out.println("i="+i);
-      }
       assertEquals(1, (int) n);
       if ((i+1) % 100000 == 0) {
         System.out.println(i+1);
@@ -230,7 +226,6 @@ public class ZSetsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time for " + n + " ZREM="+(end -start)+"ms");
-    //*DEBUG*/map.dumpStats();
     assertEquals(0, (int)BigSortedMap.countRecords(map));
     assertEquals(0, (int)ZSets.ZCARD(map, key.address, key.length));
     ZSets.DELETE(map, key.address, key.length);
@@ -257,10 +252,13 @@ public class ZSetsTest {
         System.out.println(i+1);
       }
     }
+    int setSize = DataBlock.RECORD_TOTAL_OVERHEAD + fieldSize /*part of a key*/ + 
+        6/*4 + 1 + 1 - additional key overhead */ + Utils.SIZEOF_DOUBLE + fieldSize + 3;
+        
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + (fieldSize + Utils.SIZEOF_DOUBLE) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (fieldSize + Utils.SIZEOF_DOUBLE))+
+    + " for "+ n + " " + setSize + " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - setSize) +
     " bytes per value. Time to load: "+(end -start)+"ms");
     
     BigSortedMap.printMemoryAllocationStats();

@@ -5,7 +5,10 @@ import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
-import org.bigbase.carrot.util.BiScanner;
+import org.bigbase.carrot.redis.Commons;
+import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 /**
@@ -13,7 +16,8 @@ import org.bigbase.carrot.util.Utils;
  * @author Vladimir Rodionov
  *
  */
-public class SetScanner extends BiScanner{
+public class SetScanner extends BidirectionalScanner{
+  
   
   /*
    * Base Map scanner
@@ -97,11 +101,35 @@ public class SetScanner extends BiScanner{
   public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
       long stop, int stopSize) {
     this.mapScanner = scanner;
-    this.startMemberPtr = start;
-    this.startMemberSize = startSize;
-    this.stopMemberPtr = stop;
-    this.stopMemberSize = stopSize;
+    this.startMemberPtr = start > 0? getMemberAddress(start): 0;
+    this.startMemberSize = startSize > 0? getMemberSize(start, startSize): 0;
+    this.stopMemberPtr = stop > 0? getMemberAddress(stop): 0;
+    this.stopMemberSize = stopSize > 0? getMemberSize(stop, stopSize): 0;
     init();
+  }
+  
+//  private void dumpLimits() {
+//   System.out.println("start=" + (startMemberPtr > 0? Bytes.toHex(startMemberPtr, startMemberSize): "0") 
+//     + " end="+(stopMemberPtr > 0? Bytes.toHex(stopMemberPtr, stopMemberSize): "0") );
+//  }
+//  
+//  
+//  private void dumpKey() {
+//    long ptr = this.mapScanner.keyAddress();
+//    int size = this.mapScanner.keySize();
+//
+//    //long mptr = getMemberAddress(ptr);
+//    //size = getMemberSize(ptr, size);
+//    System.out.println("KEY="+ Bytes.toHex(ptr, size));
+//  }
+  
+  private long getMemberAddress(long ptr) {
+    int keySize = UnsafeAccess.toInt(ptr + Utils.SIZEOF_BYTE);
+    return ptr + keySize + Utils.SIZEOF_BYTE + Commons.KEY_SIZE;
+  }
+  
+  private int getMemberSize(long ptr, int size) {
+    return (int)(ptr + size - getMemberAddress(ptr));
   }
   
   /**
@@ -116,10 +144,10 @@ public class SetScanner extends BiScanner{
   public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
       long stop, int stopSize, boolean reverse) {
     this.mapScanner = scanner;
-    this.startMemberPtr = start;
-    this.startMemberSize = startSize;
-    this.stopMemberPtr = stop;
-    this.stopMemberSize = stopSize;
+    this.startMemberPtr = start > 0? getMemberAddress(start): 0;
+    this.startMemberSize = startSize > 0? getMemberSize(start, startSize): 0;
+    this.stopMemberPtr = stop > 0? getMemberAddress(stop): 0;
+    this.stopMemberSize = stopSize > 0? getMemberSize(stop, stopSize): 0;
     init();
   }
   
@@ -128,9 +156,31 @@ public class SetScanner extends BiScanner{
   }
   
   private void init() {
-    // TODO Auto-generated method stub
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
+    if (this.valueAddress == -1) {
+      // Hack, rewind block scanner by one record back
+      // This hack works, b/c when scanner seeks first record
+      // which is  *always* greater or equals to a startRow, but
+      // we need the previous one, which is the largest row which is less
+      // to a startRow. 
+      //TODO: Reverse scanner?
+      mapScanner.getBlockScanner().prev();
+      this.valueAddress = mapScanner.valueAddress();
+      this.valueSize = mapScanner.valueSize();
+
+    } else if (this.startMemberPtr > 0){
+      // Check if current key in a mapScanner is equals to start
+      long ptr = mapScanner.keyAddress();
+      int size = mapScanner.keySize();
+      size = getMemberSize(ptr, size);
+      ptr = getMemberAddress(ptr);
+      if (Utils.compareTo(this.startMemberPtr, this.startMemberSize, ptr, size) != 0) {
+        mapScanner.getBlockScanner().prev();
+        this.valueAddress = mapScanner.valueAddress();
+        this.valueSize = mapScanner.valueSize();
+      }
+    }
     if (reverse) {
       searchLastMember();
     } else {
@@ -139,16 +189,18 @@ public class SetScanner extends BiScanner{
   }
   
   private boolean searchFirstMember() {
-    if (this.valueAddress <= 0) return false;
-
+    
+    if(this.valueAddress <= 0) {
+      return false;
+    }
     this.offset = NUM_ELEM_SIZE;
-    this.memberSize = Utils.readUVInt(valueAddress + offset);
-    this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
+    this.memberSize = Utils.readUVInt(this.valueAddress + this.offset);
+    this.memberAddress = this.valueAddress + this.offset + Utils.sizeUVInt(this.memberSize);
     try {
       if (this.startMemberPtr != 0) {
         while (hasNext()) {
-          int size = Utils.readUVInt(valueAddress + offset);
-          long ptr = valueAddress + offset + Utils.sizeUVInt(size);
+          int size = Utils.readUVInt(this.valueAddress + this.offset);
+          long ptr = this.valueAddress + this.offset + Utils.sizeUVInt(size);
           int res = Utils.compareTo(ptr, size, this.startMemberPtr, this.startMemberSize);
           if (res >= 0) {
             return true;
@@ -215,6 +267,7 @@ public class SetScanner extends BiScanner{
       if (stopMemberPtr == 0) {
         return true;
       } else {
+
         if (Utils.compareTo(this.memberAddress, this.memberSize, this.stopMemberPtr,
           this.stopMemberSize) >= 0) {
           return false;

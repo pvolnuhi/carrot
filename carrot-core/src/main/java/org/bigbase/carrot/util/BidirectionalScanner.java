@@ -5,7 +5,7 @@ import java.io.IOException;
 
 import org.bigbase.carrot.redis.Filter;
 
-public abstract class BiScanner implements Closeable{
+public abstract class BidirectionalScanner implements Closeable{
 
   Filter filter;
   

@@ -2,14 +2,15 @@ package org.bigbase.carrot;
 
 import java.io.IOException;
 
-import org.bigbase.carrot.util.BiScanner;
+import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 /**
  * Thread unsafe implementation
  */
-public final class DataBlockDirectMemoryScanner extends BiScanner{
+public final class DataBlockDirectMemoryScanner extends BidirectionalScanner{
 
   /*
    * Start Row pointer
@@ -191,12 +192,11 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
   void search(long key, int keyLength, long snapshotId, Op type) {
     long ptr = this.ptr;
     int count = 0;
-    //*DEBUG*/ System.out.println("Search: "+Utils.toString(key, keyLength));
+    //*DEBUG*/ System.out.println("Search   ="+Bytes.toHex(key, keyLength)+ " numRecords=" + numRecords);
     while (count++ < numRecords) {
       int keylen = DataBlock.keyLength(ptr);
       int vallen = DataBlock.valueLength(ptr);
-      //*DEBUG*/ System.out.println(Utils.toString(DataBlock.keyAddress(ptr), keylen));
-
+      //*DEBUG*/ System.out.println("Search   =" + Bytes.toHex(DataBlock.keyAddress(ptr), keylen));
       int res =
           Utils.compareTo(key, keyLength, DataBlock.keyAddress(ptr), keylen);
       if (res < 0) {
@@ -701,7 +701,30 @@ public final class DataBlockDirectMemoryScanner extends BiScanner{
 
     return true;
   }
-
+  
+  /**
+   * For hackers (does not check startRow)
+   */
+  
+  public boolean prev() {
+    long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 : this.ptr;
+    long pptr = limit;
+    if (pptr == this.curPtr) {
+      return false;
+    }
+    while (pptr < this.curPtr) {
+      int keylen = DataBlock.blockKeyLength(pptr);
+      int vallen = DataBlock.blockValueLength(pptr);
+      if (pptr + keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD == this.curPtr) {
+        break;
+      } else {
+        pptr += keylen + vallen + DataBlock.RECORD_TOTAL_OVERHEAD;
+      }
+    }
+    this.curPtr = pptr;
+    return true;
+  }
+  
   @Override
   public boolean hasPrevious() {
     long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 : this.ptr;

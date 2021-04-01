@@ -506,7 +506,7 @@ public class Sets {
    * @param arena memory buffer
    * @return size of a key
    */
-  private static int buildKey( long keyPtr, int keySize, long elPtr, int elSize, long arena) {
+  public static int buildKey( long keyPtr, int keySize, long elPtr, int elSize, long arena) {
 
     int kSize = KEY_SIZE + keySize + Utils.SIZEOF_BYTE;
     UnsafeAccess.putByte(arena, (byte)DataType.SET.ordinal());
@@ -557,7 +557,7 @@ public class Sets {
           removed++;
         }
       }
-      if (isEmpty(map, keyPtr, keySize)) {
+      if (setDelete.get().checkForEmpty() && isEmpty(map, keyPtr, keySize)) {
         DELETE(map, keyPtr, keySize);
       }
       return removed;
@@ -589,7 +589,7 @@ public class Sets {
       // version?
       if (map.execute(remove)) {
         removed++;
-        if (isEmpty(map, keyPtr, keySize)) {
+        if (remove.checkForEmpty && isEmpty(map, keyPtr, keySize)) {
           DELETE(map, keyPtr, keySize);
         }
       }
@@ -1058,6 +1058,8 @@ public class Sets {
   public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, 
       long memberStartPtr, int memberStartSize, long memberStopPtr, int memberStopSize, boolean safe, boolean reverse) {
     //TODO Check start stop 0
+    //TODO: for public API - primary key locking? 
+    // Primary key (keyPtr, keySize) must be under lock
     long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStartSize);
     int startPtrSize = buildKey(keyPtr, keySize, memberStartPtr, memberStartSize, startPtr);
     long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStopSize);
@@ -1210,6 +1212,26 @@ public class Sets {
   public static int getTotalElementSize(long addr) {
     int size = Utils.readUVInt(addr);
     return size + Utils.sizeUVInt(size);
+  }
+  
+  
+  public static boolean checkCorruptedValue(long ptr, int expSize) {
+    int total = UnsafeAccess.toShort(ptr);
+
+    int off = NUM_ELEM_SIZE;
+    int count = 0;
+    while(count++ < total) {
+      int eSize = Utils.readUVInt(ptr + off);
+      int eSizeSize = Utils.sizeUVInt(eSize);
+
+      if (eSize != expSize) {
+        System.out.println("Dump value , elements="+ total);
+        System.out.println("CORRUPT eSize="+ eSize + " index (+1)="+ count);
+        return true;
+      }
+      off += eSize + eSizeSize;
+    }
+    return false;
   }
   
 }

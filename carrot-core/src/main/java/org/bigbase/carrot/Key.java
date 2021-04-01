@@ -20,4 +20,13 @@ public class Key implements Comparable<Key>{
   public int compareTo(Key o) {
     return Utils.compareTo(address, length, o.address, o.length);
   }
+  
+  @Override 
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Key)) {
+      return false;
+    }
+    return compareTo((Key)o) == 0;
+  }
 }

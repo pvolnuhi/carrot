@@ -6,7 +6,7 @@ import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.redis.OperationFailedException;
-import org.bigbase.carrot.util.BiScanner;
+import org.bigbase.carrot.util.BidirectionalScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 /**
@@ -16,7 +16,7 @@ import org.bigbase.carrot.util.Utils;
  * @author Vladimir Rodionov
  *
  */
-public class HashScanner extends BiScanner{
+public class HashScanner extends BidirectionalScanner{
   
   /**
    * Base scanner

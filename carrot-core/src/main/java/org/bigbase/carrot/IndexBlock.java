@@ -2585,7 +2585,14 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
   }
   
-  
+  /*DEBUG*/ void dumpStartEndKeys() {
+    byte[] first = getFirstKey();
+    long lastRecordAddress = lastRecordAddress();
+    long lastPtr = DataBlock.keyAddress(lastRecordAddress);
+    int lastSize = DataBlock.keyLength(lastRecordAddress);
+    System.out.println("First key=" + Bytes.toHex(first)+
+      "\nLast key =" + Bytes.toHex(lastPtr, lastSize));
+  }
   /**
    * Get last K-V record address in this index
    * @return address or NOT_FOUND if index is empty
