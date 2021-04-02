@@ -1,4 +1,4 @@
-package org.bigbase.carrot.redis.sets;
+package org.bigbase.carrot.redis.hashes;
 
 import static org.junit.Assert.assertEquals;
 
@@ -9,7 +9,7 @@ import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
-import org.bigbase.carrot.Value;
+import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -17,28 +17,31 @@ import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class SetScannerTest {
+public class HashScannerTest {
   BigSortedMap map;
-  int valSize = 16;
-  
+  int valSize = 8;
+  int fieldSize = 8;
   static {
     //UnsafeAccess.debug = true;
   }
   
-  private List<Value> getValues(long n) {
-    List<Value> values = new ArrayList<Value>();
+  private List<KeyValue> getKeyValues(long n) {
+    List<KeyValue> values = new ArrayList<KeyValue>();
     
     Random r = new Random();
     long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println("VALUES SEED=" + seed);
-    byte[] buf = new byte[valSize/2];
+    byte[] vbuf = new byte[valSize];
+    byte[] fbuf = new byte[fieldSize];
     for (int i=0; i < n; i++) {
-      r.nextBytes(buf);
-      long ptr = UnsafeAccess.malloc(valSize);
-      UnsafeAccess.copy(buf, 0, ptr, buf.length);
-      UnsafeAccess.copy(buf, 0, ptr + buf.length, buf.length);
-      values.add(new Value(ptr, valSize));
+      r.nextBytes(fbuf);
+      r.nextBytes(vbuf);
+      long vptr = UnsafeAccess.malloc(valSize);
+      long fptr = UnsafeAccess.malloc(fieldSize);
+      UnsafeAccess.copy(vbuf, 0, vptr, vbuf.length);
+      UnsafeAccess.copy(fbuf, 0, fptr, fbuf.length);
+      values.add(new KeyValue(fptr, fieldSize, vptr, valSize));
     }
     return values;
   }
@@ -86,7 +89,7 @@ public class SetScannerTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
@@ -112,20 +115,9 @@ public class SetScannerTest {
     
   } 
 
-  private void loadData(Key key, List<Value> values) {
-    long[] elemPtrs = new long[1];
-    int[] elemSizes = new int[1];
-    long count = 0;
-    int n = values.size();
-    for (int i =0; i < n; i++) {
-      elemPtrs[0] = values.get(i).address;
-      elemSizes[0] = values.get(i).length;
-      int num = Sets.SADD(map, key.address, key.length, elemPtrs, elemSizes);
-      assertEquals(1, num);
-      if (++count % 100000 == 0) {
-        System.out.println("add " + count);
-      }
-    }
+  private void loadData(Key key, List<KeyValue> values) {
+    int loaded = Hashes.HSET(map, key, values);
+    assertEquals(values.size(), loaded);
   }
   
   @Ignore
@@ -135,21 +127,21 @@ public class SetScannerTest {
 
     System.out.println("Test single full scanner - one key "+ n + " elements");
     Key key = getKey();
-    List<Value> values = getValues(n);
-    List<Value> copy = copy(values);    
+    List<KeyValue> values = getKeyValues(n);
+    List<KeyValue> copy = copy(values);    
     long start = System.currentTimeMillis();
     
     loadData(key, values);
     
     long end = System.currentTimeMillis();
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+    + " for "+ n + " " + (fieldSize + valSize) + " byte field-values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - fieldSize - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
     BigSortedMap.printMemoryAllocationStats();
     
-    assertEquals(n, Sets.SCARD(map, key.address, key.length));
+    assertEquals(n, Hashes.HLEN(map, key.address, key.length));
     
     Random r = new Random();
     long seed = r.nextLong();
@@ -157,11 +149,11 @@ public class SetScannerTest {
     System.out.println("Test seed=" + seed);
     
     long card = 0;
-    while ((card = Sets.SCARD(map, key.address, key.length)) > 0) {      
+    while ((card = Hashes.HLEN(map, key.address, key.length)) > 0) {      
       assertEquals(copy.size(), (int) card);
       /*DEBUG*/ System.out.println("Set size=" + copy.size());
       deleteRandom(map, key.address, key.length, copy, r);
-      SetScanner scanner = Sets.getSetScanner(map, key.address, key.length, false);
+      HashScanner scanner = Hashes.getHashScanner(map, key.address, key.length, 0,0,0,0, false, false);
       int expected = copy.size();
       int cc = 0;
       while(scanner.hasNext()) {
@@ -173,14 +165,13 @@ public class SetScannerTest {
     }
 
     assertEquals(0, (int)BigSortedMap.countRecords(map));
-    assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    Sets.DELETE(map, key.address, key.length);
-    assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
+    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
+    Hashes.DELETE(map, key.address, key.length);
+    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
     BigSortedMap.printMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
-    values.stream().forEach(x -> UnsafeAccess.free(x.address));
-
+    values.stream().forEach(x -> { UnsafeAccess.free(x.keyPtr); UnsafeAccess.free(x.valuePtr);});
   }
   
   @Ignore
@@ -190,21 +181,21 @@ public class SetScannerTest {
 
     System.out.println("Test single partial scanner - one key "+ n + " elements");
     Key key = getKey();
-    List<Value> values = getValues(n);
+    List<KeyValue> values = getKeyValues(n);
     long start = System.currentTimeMillis();
     loadData(key, values);
     long end = System.currentTimeMillis();
-    Utils.sortKeys(values);
-    List<Value> copy = copy(values);    
+    Utils.sortKeyValues(values);
+    List<KeyValue> copy = copy(values);    
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+    + " for "+ n + " " + (fieldSize + valSize) + " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - fieldSize - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
     BigSortedMap.printMemoryAllocationStats();
     
-    assertEquals(n, Sets.SCARD(map, key.address, key.length));
+    assertEquals(n, Hashes.HLEN(map, key.address, key.length));
     
     Random r = new Random();
     long seed = r.nextLong();
@@ -212,22 +203,22 @@ public class SetScannerTest {
     System.out.println("Test seed=" + seed);
     
     long card = 0;
-    while ((card = Sets.SCARD(map, key.address, key.length)) > 0) {      
+    while ((card = Hashes.HLEN(map, key.address, key.length)) > 0) {      
       assertEquals(copy.size(), (int) card);
-      /*DEBUG*/ System.out.println("Set size=" + copy.size());
+      /*DEBUG*/ System.out.println("Hash size=" + copy.size());
       deleteRandom(map, key.address, key.length, copy, r);
       if (copy.size() == 0) break;
       int startIndex = r.nextInt(copy.size());
       int endIndex = r.nextInt(copy.size() - startIndex) + startIndex;
       
-      long startPtr = copy.get(startIndex).address;
-      int startSize = copy.get(startIndex).length;
-      long endPtr = copy.get(endIndex).address;
-      int endSize = copy.get(endIndex).length;
+      long startPtr = copy.get(startIndex).keyPtr;
+      int startSize = copy.get(startIndex).keySize;
+      long endPtr = copy.get(endIndex).keyPtr;
+      int endSize = copy.get(endIndex).keySize;
 
       int expected = (int)(endIndex - startIndex);
-      SetScanner scanner = Sets.getSetScanner(map, key.address, key.length,
-        startPtr, startSize, endPtr, endSize, false);
+      HashScanner scanner = Hashes.getHashScanner(map, key.address, key.length,
+        startPtr, startSize, endPtr, endSize, false, false);
       if (scanner == null) {
         continue;
       }
@@ -241,13 +232,13 @@ public class SetScannerTest {
     }
 
     assertEquals(0, (int)BigSortedMap.countRecords(map));
-    assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    Sets.DELETE(map, key.address, key.length);
-    assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
+    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
+    Hashes.DELETE(map, key.address, key.length);
+    assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
     BigSortedMap.printMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
-    values.stream().forEach(x -> UnsafeAccess.free(x.address));
+    values.stream().forEach(x -> {UnsafeAccess.free(x.keyPtr); UnsafeAccess.free(x.valuePtr);});
 
   }
   
@@ -259,12 +250,12 @@ public class SetScannerTest {
     return copy;
   }
   
-  private void deleteRandom(BigSortedMap map, long keyPtr, int keySize, List<Value> copy, Random r) {
+  private void deleteRandom(BigSortedMap map, long keyPtr, int keySize, List<KeyValue> copy, Random r) {
     int toDelete = copy.size() < 10? copy.size(): r.nextInt( (int) copy.size() / 2);
     for (int i= 0; i < toDelete; i++) {
       int n = r.nextInt(copy.size());
-      Value v = copy.remove(n);
-      int count = Sets.SREM(map, keyPtr, keySize, v.address, v.length);
+      KeyValue v = copy.remove(n);
+      int count = Hashes.HDEL(map, keyPtr, keySize, v.keyPtr, v.keySize);
       assertEquals(1, count);
     }
   }

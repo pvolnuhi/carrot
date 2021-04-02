@@ -459,6 +459,15 @@ public class Utils {
     });
   }
   
+  public static void sortKeyValues(List<? extends KeyValue> list) {
+    Collections.sort(list, new Comparator<KeyValue> () {
+      @Override
+      public int compare(KeyValue k1, KeyValue k2) {
+        return Utils.compareTo(k1.keyPtr, k1.keySize, k2.keyPtr, k2.keySize);
+      }
+    });
+  }
+  
   /**
    * TODO: handle all 0xff key
    * Calculates end key for prefix scanner

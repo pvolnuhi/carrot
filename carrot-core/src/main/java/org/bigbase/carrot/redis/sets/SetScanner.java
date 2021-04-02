@@ -14,11 +14,9 @@ import org.bigbase.carrot.util.Utils;
 /**
  * Scanner to iterate through set members
  * @author Vladimir Rodionov
- *
  */
-public class SetScanner extends BidirectionalScanner{
-  
-  
+public class SetScanner extends BidirectionalScanner {
+
   /*
    * Base Map scanner
    */
@@ -32,14 +30,14 @@ public class SetScanner extends BidirectionalScanner{
    */
   int startMemberSize;
   /*
-   * Maximum member (exclusive) 
+   * Maximum member (exclusive)
    */
   long stopMemberPtr;
   /*
    * Maximum member size
    */
   int stopMemberSize;
-  
+
   /*
    * Current value address
    */
@@ -52,7 +50,7 @@ public class SetScanner extends BidirectionalScanner{
    * Current offset in the value
    */
   int offset;
-  
+
   /*
    * Current member size
    */
@@ -65,13 +63,14 @@ public class SetScanner extends BidirectionalScanner{
    * Current position (index)
    */
   long pos = 1;
-  
+
   /*
    * Reverse scanner
    */
   boolean reverse;
-  
+
   boolean disposeKeysOnClose;
+
   /**
    * Constructor
    * @param scanner base scanner
@@ -79,8 +78,7 @@ public class SetScanner extends BidirectionalScanner{
   public SetScanner(BigSortedMapDirectMemoryScanner scanner) {
     this(scanner, 0, 0, 0, 0);
   }
-  
-  
+
   /**
    * Constructor
    * @param scanner base scanner
@@ -89,87 +87,102 @@ public class SetScanner extends BidirectionalScanner{
   public SetScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) {
     this(scanner, 0, 0, 0, 0, reverse);
   }
-  
+
   /**
    * Constructor for a range scanner
    * @param scanner base scanner
-   * @param start start member address 
+   * @param start start member address
    * @param startSize start member size
    * @param stop stop member address
    * @param stopSize stop member size
    */
-  public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
-      long stop, int stopSize) {
+  public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, long stop,
+      int stopSize) {
     this.mapScanner = scanner;
-    this.startMemberPtr = start > 0? getMemberAddress(start): 0;
-    this.startMemberSize = startSize > 0? getMemberSize(start, startSize): 0;
-    this.stopMemberPtr = stop > 0? getMemberAddress(stop): 0;
-    this.stopMemberSize = stopSize > 0? getMemberSize(stop, stopSize): 0;
+    this.startMemberPtr = start > 0 ? getMemberAddress(start) : 0;
+    this.startMemberSize = startSize > 0 ? getMemberSize(start, startSize) : 0;
+    this.stopMemberPtr = stop > 0 ? getMemberAddress(stop) : 0;
+    this.stopMemberSize = stopSize > 0 ? getMemberSize(stop, stopSize) : 0;
     init();
   }
-  
-//  private void dumpLimits() {
-//   System.out.println("start=" + (startMemberPtr > 0? Bytes.toHex(startMemberPtr, startMemberSize): "0") 
-//     + " end="+(stopMemberPtr > 0? Bytes.toHex(stopMemberPtr, stopMemberSize): "0") );
-//  }
-//  
-//  
-//  private void dumpKey() {
-//    long ptr = this.mapScanner.keyAddress();
-//    int size = this.mapScanner.keySize();
-//
-//    //long mptr = getMemberAddress(ptr);
-//    //size = getMemberSize(ptr, size);
-//    System.out.println("KEY="+ Bytes.toHex(ptr, size));
-//  }
-  
-  private long getMemberAddress(long ptr) {
-    int keySize = UnsafeAccess.toInt(ptr + Utils.SIZEOF_BYTE);
-    return ptr + keySize + Utils.SIZEOF_BYTE + Commons.KEY_SIZE;
-  }
-  
-  private int getMemberSize(long ptr, int size) {
-    return (int)(ptr + size - getMemberAddress(ptr));
-  }
-  
+
   /**
    * Constructor for a range scanner
    * @param scanner base scanner
-   * @param start start member address 
+   * @param start start member address
    * @param startSize start member size
    * @param stop stop member address
    * @param stopSize stop member size
    * @param reverse reverse scanner
    */
-  public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
-      long stop, int stopSize, boolean reverse) {
+  public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, long stop,
+      int stopSize, boolean reverse) {
     this.mapScanner = scanner;
-    this.startMemberPtr = start > 0? getMemberAddress(start): 0;
-    this.startMemberSize = startSize > 0? getMemberSize(start, startSize): 0;
-    this.stopMemberPtr = stop > 0? getMemberAddress(stop): 0;
-    this.stopMemberSize = stopSize > 0? getMemberSize(stop, stopSize): 0;
+    this.startMemberPtr = start > 0 ? getMemberAddress(start) : 0;
+    this.startMemberSize = startSize > 0 ? getMemberSize(start, startSize) : 0;
+    this.stopMemberPtr = stop > 0 ? getMemberAddress(stop) : 0;
+    this.stopMemberSize = stopSize > 0 ? getMemberSize(stop, stopSize) : 0;
+    this.reverse = reverse;
     init();
   }
-  
+
+  @SuppressWarnings("unused")
+  private void dumpLimits() {
+    System.out.println(
+      "start=" + (startMemberPtr > 0 ? Bytes.toHex(startMemberPtr, startMemberSize) : "0") + " end="
+          + (stopMemberPtr > 0 ? Bytes.toHex(stopMemberPtr, stopMemberSize) : "0"));
+  }
+
+  @SuppressWarnings("unused")
+  private void dumpKey() {
+    long ptr = this.mapScanner.keyAddress();
+    int size = this.mapScanner.keySize();
+    System.out.println("KEY=" + Bytes.toHex(ptr, size));
+  }
+
+  /**
+   * Get set member address from a set key
+   * @param ptr set key
+   * @return address
+   */
+  private long getMemberAddress(long ptr) {
+    int keySize = UnsafeAccess.toInt(ptr + Utils.SIZEOF_BYTE);
+    return ptr + keySize + Utils.SIZEOF_BYTE + Commons.KEY_SIZE;
+  }
+
+  /**
+   * Get set member size
+   * @param ptr set key 
+   * @param size set key size
+   * @return size of a member
+   */
+  private int getMemberSize(long ptr, int size) {
+    return (int) (ptr + size - getMemberAddress(ptr));
+  }
+
+  /**
+   * Dispose range keys on close()
+   * @param b
+   */
   public void setDisposeKeysOnClose(boolean b) {
     this.disposeKeysOnClose = b;
   }
-  
+
   private void init() {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     if (this.valueAddress == -1) {
       // Hack, rewind block scanner by one record back
       // This hack works, b/c when scanner seeks first record
-      // which is  *always* greater or equals to a startRow, but
+      // which is *always* greater or equals to a startRow, but
       // we need the previous one, which is the largest row which is less
-      // to a startRow. 
-      //TODO: Reverse scanner?
+      // to a startRow.
+      // TODO: Reverse scanner?
       mapScanner.getBlockScanner().prev();
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
 
-    } else if (this.startMemberPtr > 0){
+    } else if (this.startMemberPtr > 0) {
       // Check if current key in a mapScanner is equals to start
       long ptr = mapScanner.keyAddress();
       int size = mapScanner.keySize();
@@ -187,10 +200,10 @@ public class SetScanner extends BidirectionalScanner{
       searchFirstMember();
     }
   }
-  
+
   private boolean searchFirstMember() {
-    
-    if(this.valueAddress <= 0) {
+
+    if (this.valueAddress <= 0) {
       return false;
     }
     this.offset = NUM_ELEM_SIZE;
@@ -215,9 +228,13 @@ public class SetScanner extends BidirectionalScanner{
     }
     return false;
   }
-  
+
   private boolean searchLastMember() {
-    if (this.valueAddress <= 0) return false;
+    
+    if (this.valueAddress <= 0) {
+      return false;
+    }
+    
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     // check if it it is not empty
@@ -239,7 +256,8 @@ public class SetScanner extends BidirectionalScanner{
     if (this.offset == 0) {
       return false;
     }
-    
+
+    // TODO: what is it for?
     if (startMemberPtr > 0) {
       int size = Utils.readUVInt(valueAddress + offset);
       long ptr = valueAddress + offset + Utils.sizeUVInt(size);
@@ -253,13 +271,16 @@ public class SetScanner extends BidirectionalScanner{
     this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
     return true;
   }
+
   /**
    * Checks if scanner has next element
    * @return true, false
    * @throws IOException
    */
   public boolean hasNext() throws IOException {
-    if (this.valueAddress <=0) return false;
+    if (this.valueAddress <= 0) {
+      return false;
+    }
     if (reverse) {
       throw new UnsupportedOperationException("hasNext");
     }
@@ -279,7 +300,8 @@ public class SetScanner extends BidirectionalScanner{
       // First K-V in a set can be empty, we need to scan to the next one
       mapScanner.next();
       if (mapScanner.hasNext()) {
-        //mapScanner.next();
+        // mapScanner.next();
+        this.valueAddress = mapScanner.valueAddress();
         this.valueSize = mapScanner.valueSize();
         this.offset = NUM_ELEM_SIZE;
         this.memberSize = Utils.readUVInt(valueAddress + offset);
@@ -290,10 +312,9 @@ public class SetScanner extends BidirectionalScanner{
       }
     }
   }
-  
+
   /**
-   * Advance scanner by one element 
-   * MUST BE USED IN COMBINATION with hasNext()
+   * Advance scanner by one element MUST BE USED IN COMBINATION with hasNext()
    * @return true if operation succeeded , false - end of scanner
    * @throws IOException
    */
@@ -303,7 +324,7 @@ public class SetScanner extends BidirectionalScanner{
     }
     if (offset < valueSize) {
       int elSize = Utils.readUVInt(valueAddress + offset);
-      int elSizeSize =Utils.sizeUVInt(elSize);
+      int elSizeSize = Utils.sizeUVInt(elSize);
       offset += elSize + elSizeSize;
       if (offset < valueSize) {
         this.memberSize = Utils.readUVInt(valueAddress + offset);
@@ -315,12 +336,12 @@ public class SetScanner extends BidirectionalScanner{
     // TODO next K-V can not have 0 elements - it must be deleted
     // but first element can, so we has to check what next() call return
     // the best way is to use do
-    
+
     // TODO: fix previous, hashScanner.next previous
-    
+
     mapScanner.next();
 
-    while(mapScanner.hasNext()) {
+    while (mapScanner.hasNext()) {
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
       // check if it it is not empty
@@ -329,15 +350,15 @@ public class SetScanner extends BidirectionalScanner{
         // empty set in K-V? Must be deleted
         mapScanner.next();
         continue;
-      } 
-      
+      }
+
       this.memberSize = Utils.readUVInt(valueAddress + offset);
       this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
-      
+
       if (this.stopMemberPtr > 0) {
-        
-        if (Utils.compareTo(this.memberAddress, this.memberSize, 
-          this.stopMemberPtr, this.stopMemberSize) >=0) {
+
+        if (Utils.compareTo(this.memberAddress, this.memberSize, this.stopMemberPtr,
+          this.stopMemberSize) >= 0) {
           this.offset = 0;
           return false;
         } else {
@@ -348,12 +369,12 @@ public class SetScanner extends BidirectionalScanner{
         pos++;
         return true;
       }
-      
+
     }
     this.offset = 0;
     return false;
   }
-  
+
   /**
    * Get current element address
    * @return element address
@@ -361,7 +382,7 @@ public class SetScanner extends BidirectionalScanner{
   public long memberAddress() {
     return this.memberAddress;
   }
-  
+
   /**
    * Gets current element size
    * @return element size
@@ -369,11 +390,11 @@ public class SetScanner extends BidirectionalScanner{
   public int memberSize() {
     return this.memberSize;
   }
-  
+
   public long getPosition() {
     return this.pos;
   }
-  
+
   /**
    * Skips to position
    * @param pos position to skip
@@ -381,7 +402,7 @@ public class SetScanner extends BidirectionalScanner{
    */
   public long skipTo(long pos) {
     if (pos <= this.pos) return this.pos;
-    while(this.pos < pos) {
+    while (this.pos < pos) {
       try {
         boolean res = next();
         if (!res) break;
@@ -391,21 +412,21 @@ public class SetScanner extends BidirectionalScanner{
     }
     return this.pos;
   }
-  
+
   @Override
   public void close() throws IOException {
     mapScanner.close(disposeKeysOnClose);
   }
-  
+
   /**
    * Delete current Element
    * @return true if success, false - otherwise
    */
   public boolean delete() {
-    //TODO
+    // TODO
     return false;
   }
-  
+
   /**
    * Delete all Elements in this scanner
    * @return true on success, false?
@@ -414,13 +435,11 @@ public class SetScanner extends BidirectionalScanner{
     return false;
   }
 
-
   @Override
   public boolean first() throws IOException {
     // TODO Auto-generated method stub
     return false;
   }
-
 
   @Override
   public boolean last() throws IOException {
@@ -428,12 +447,11 @@ public class SetScanner extends BidirectionalScanner{
     return false;
   }
 
-
   @Override
   public boolean previous() throws IOException {
     if (!reverse) {
       throw new UnsupportedOperationException("previous");
-    }    
+    }
     if (this.offset > NUM_ELEM_SIZE && this.offset < this.valueSize) {
       int off = NUM_ELEM_SIZE;
       while (off < this.offset) {
@@ -461,23 +479,23 @@ public class SetScanner extends BidirectionalScanner{
     return searchLastMember();
   }
 
-
   @Override
   public boolean hasPrevious() throws IOException {
-    if (this.valueAddress <=0) return false;
+    if (this.valueAddress <= 0) return false;
     if (!reverse) {
       throw new UnsupportedOperationException("hasPrevious");
-    } 
+    }
     if (this.offset >= NUM_ELEM_SIZE && this.offset < this.valueSize) {
       // TODO check startMemberPtr
       if (this.startMemberPtr > 0) {
-        if (Utils.compareTo(this.memberAddress, this.memberSize, this.startMemberPtr, this.startMemberSize) < 0) {
+        if (Utils.compareTo(this.memberAddress, this.memberSize, this.startMemberPtr,
+          this.startMemberSize) < 0) {
           return false;
         }
       }
       return true;
     } else {
       return false;
-    }     
+    }
   }
 }

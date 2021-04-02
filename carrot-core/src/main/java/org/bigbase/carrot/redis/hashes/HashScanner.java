@@ -5,389 +5,462 @@ import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
-import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.BidirectionalScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+
 /**
- * 
- * Scanner for hash field values.
- * TODO: pattern matching support (native C)
+ * Scanner to iterate through hash field- values
  * @author Vladimir Rodionov
  *
  */
 public class HashScanner extends BidirectionalScanner{
   
-  /**
-   * Base scanner
+  /*
+   * Base Map scanner
    */
   private BigSortedMapDirectMemoryScanner mapScanner;
-  
-  /**
-   * Start row
+  /*
+   * Minimum field (inclusive)
    */
-  long startFieldPtr; // Inclusive
-  
-  /**
-   * Start row size
+  long startFieldPtr;
+  /*
+   * Minimum field size
    */
   int startFieldSize;
-  
-  /**
-   * Stop row
+  /*
+   * Maximum field (exclusive) 
    */
-  
-  long stopFieldPtr; // Exclusive
-  
-  /**
-   * Stop row size
+  long stopFieldPtr;
+  /*
+   * Maximum field size
    */
   int stopFieldSize;
   
-  /**
-   * Current BigSortedMap value address
+  /*
+   * Current value address
    */
   long valueAddress;
-  /**
-   * Current BigSortedMap value size
+  /*
+   * Current value size
    */
   int valueSize;
-  
-  /**
-   * Current offset in BSM value, which is <= valueSize
+  /*
+   * Current offset in the value
    */
   int offset;
-  /**
-   * Current hash field address
-   */
-  long fieldAddress;
-  /**
-   * Current hash value address
-   */
-  long fieldValueAddress;
-  /**
-   * Current hash field size
+  
+  /*
+   * Current field size
    */
   int fieldSize;
-  /**
-   * Current hash value size
+  /*
+   * Current field address
+   */
+  long fieldAddress;
+  /*
+   * Current field value size
    */
   int fieldValueSize;
-  
-  /**
-   * Free keys on close
+  /*
+   * Current field value address
    */
-  boolean disposeKeysOnClose = false;
+  long fieldValueAddress;
+  /*
+   * Current position (index)
+   */
+  long pos = 1;
   
-  /**
+  /*
    * Reverse scanner
    */
   boolean reverse;
   
+  /*
+   * 
+   * Delete start/stop keys on close()
+   */
+  boolean disposeKeysOnClose;
   /**
    * Constructor
-   * @param scanner base BSM scanner
-   * @param keyPtr address of a start key
-   * @throws OperationFailedException 
+   * @param scanner base scanner
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner) throws OperationFailedException {
-    this(scanner, false);
+  public HashScanner(BigSortedMapDirectMemoryScanner scanner) {
+    this(scanner, 0, 0, 0, 0);
   }
+  
   
   /**
    * Constructor
-   * @param scanner base BSM scanner
-   * @param keyPtr address of a start key
-   * @throws OperationFailedException 
+   * @param scanner base scanner
+   * @param reverse true, if reverse scanner, false - otherwise
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) throws OperationFailedException {
+  public HashScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) {
     this(scanner, 0, 0, 0, 0, reverse);
   }
   
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner, long startFieldPtr, int startFieldSize, 
-      long stopFieldPtr, int stopFieldSize, boolean reverse) throws OperationFailedException {
+  /**
+   * Constructor for a range scanner
+   * @param scanner base scanner
+   * @param start start field address 
+   * @param startSize start field size
+   * @param stop stop field address
+   * @param stopSize stop field size
+   */
+  public HashScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
+      long stop, int stopSize) {
     this.mapScanner = scanner;
-    this.reverse = reverse;
-    setStartStopFields(startFieldPtr, startFieldSize, stopFieldPtr, stopFieldSize);
+    this.startFieldPtr = start;
+    this.startFieldSize = startSize;
+    this.stopFieldPtr = stop;
+    this.stopFieldSize = stopSize;
+    init();
   }
   
+  /**
+   * Constructor for a range scanner
+   * @param scanner base scanner
+   * @param start start field address 
+   * @param startSize start field size
+   * @param stop stop field address
+   * @param stopSize stop field size
+   * @param reverse reverse scanner
+   */
+  public HashScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
+      long stop, int stopSize, boolean reverse) {
+    this.mapScanner = scanner;
+    this.startFieldPtr = start;
+    this.startFieldSize = startSize;
+    this.stopFieldPtr = stop;
+    this.stopFieldSize = stopSize;
+    this.reverse = reverse;
+    init();
+  }
+
+  /**
+   * Get hash field address from a key
+   * @param ptr key address
+   * @return address of a start of a field
+   */
+  private long getFieldAddress(long ptr) {
+    int keySize = UnsafeAccess.toInt(ptr + Utils.SIZEOF_BYTE);
+    return ptr + keySize + Utils.SIZEOF_BYTE + Commons.KEY_SIZE;
+  }
+  
+  /**
+   * Get hash field size from a key and key size
+   * @param ptr address of a key
+   * @param size key size
+   * @return size of a field
+   */
+  private int getFieldSize(long ptr, int size) {
+    return (int)(ptr + size - getFieldAddress(ptr));
+  }
+  
+  /**
+   * Set dispose start/stop keys on close()
+   * @param b dispose if true
+   */
   public void setDisposeKeysOnClose(boolean b) {
     this.disposeKeysOnClose = b;
   }
   
-  /**
-   * Sets start and stop field for the scanner
-   * @param startPtr start field address
-   * @param startSize start field size
-   * @param stopPtr stop field address
-   * @param stopSize stop field size
-   * @throws OperationFailedException 
-   */
-  private void setStartStopFields(long startPtr, int startSize, long stopPtr, int stopSize) 
-      throws OperationFailedException {
+  private void init() {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
-    //*DEBUG*/ System.out.println("value address=" + valueAddress + " valueSize="+ valueSize);
-    this.offset = NUM_ELEM_SIZE;
-        
-    this.startFieldPtr = startPtr;
-    this.startFieldSize = startSize;
-    this.stopFieldPtr = stopPtr;
-    this.stopFieldSize = stopSize;
-    boolean result = false;
-    if (!reverse && this.startFieldPtr >= 0) {
-      result = searchFirstMember();
-    } else if (reverse) {
-      result = searchLastMember();
-    }
-    if (!result) {
-      try {
-        close();
-      } catch (IOException e) {
+    if (this.valueAddress == -1) {
+      // Hack, rewind block scanner by one record back
+      // This hack works, b/c when scanner seeks first record
+      // which is  *always* greater or equals to a startRow, but
+      // we need the previous one, which is the largest row which is less
+      // or equals to a startRow. 
+      //TODO: Reverse scanner?
+      mapScanner.getBlockScanner().prev();
+      this.valueAddress = mapScanner.valueAddress();
+      this.valueSize = mapScanner.valueSize();
+
+    } else if (this.startFieldPtr > 0){
+      // Check if current key in a mapScanner is equals to start
+      long ptr = mapScanner.keyAddress();
+      int size = mapScanner.keySize();
+      size = getFieldSize(ptr, size);
+      ptr = getFieldAddress(ptr);
+      if (Utils.compareTo(this.startFieldPtr, this.startFieldSize, ptr, size) != 0) {
+        // TODO: check the result
+        mapScanner.getBlockScanner().prev();
+        this.valueAddress = mapScanner.valueAddress();
+        this.valueSize = mapScanner.valueSize();
       }
-      throw new OperationFailedException();
     }
-    updateFields();
-  }
-  
-  private void debugValue(long ptr, int size) {
-    System.out.println("size="+ UnsafeAccess.toShort(ptr));
-    long off = NUM_ELEM_SIZE;
-    
-    while(off < size) {
-      int fSize = Utils.readUVInt(ptr + off);
-      int fSizeSize = Utils.sizeUVInt(fSize);
-      int vSize = Utils.readUVInt(ptr + off + fSizeSize);
-      int vSizeSize = Utils.sizeUVInt(vSize);
-      System.out.println("->"+ Utils.toString(ptr + off + fSizeSize + vSizeSize, fSize));
-      off += fSize + vSize + fSizeSize + vSizeSize;
+    if (reverse) {
+      searchLastMember();
+    } else {
+      searchFirstMember();
     }
   }
   
   private boolean searchFirstMember() {
-    if (this.startFieldPtr == 0) {
-      this.offset = NUM_ELEM_SIZE;
-      return true;
+    
+    if(this.valueAddress <= 0) {
+      return false;
     }
-    return seek(this.startFieldPtr, this.startFieldSize, false);
-  }
-  
-  private boolean searchLastMember() {
-    return seekLower(this.stopFieldPtr, this.stopFieldSize);
+    this.offset = NUM_ELEM_SIZE;
+    this.fieldSize = Utils.readUVInt(this.valueAddress + this.offset);
+    int fSizeSize = Utils.sizeUVInt(this.fieldSize);
+    this.fieldValueSize = Utils.readUVInt(this.valueAddress + this.offset+ fSizeSize);
+    int vSizeSize = Utils.sizeUVInt(this.fieldValueSize);
+    this.fieldAddress = this.valueAddress + this.offset + fSizeSize + vSizeSize;
+    this.fieldValueAddress = this.fieldAddress + this.fieldSize;
+    
+    try {
+      if (this.startFieldPtr != 0) {
+        while (hasNext()) {
+          int fSize = Utils.readUVInt(this.valueAddress + this.offset);
+          fSizeSize = Utils.sizeUVInt(fSize);
+          int vSize = Utils.readUVInt(this.valueAddress + this.offset + fSizeSize);
+          vSizeSize = Utils.sizeUVInt(vSize);
+          long fPtr = this.valueAddress + this.offset + fSizeSize + vSizeSize;
+          int res = Utils.compareTo(fPtr, fSize, this.startFieldPtr, this.startFieldSize);
+          if (res >= 0) {
+            return true;
+          }
+          next();
+        }
+      } else if (this.valueSize == NUM_ELEM_SIZE) { // skip possible empty K-V (first one)
+        next();
+      }
+    } catch (IOException e) {
+      // should never be thrown
+    }
+    return false;
   }
   /**
-   * Updates all current fields, after scanner advances by one field-value
+   * TODO: fix it
+   * @return
    */
-  private void updateFields() {
+  private boolean searchLastMember() {
+    
+    if (this.valueAddress <= 0) {
+      return false;
+    }
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
+    // check if it it is not empty
+    this.offset = NUM_ELEM_SIZE;
+    int prevOffset = 0;
+    while (this.offset < this.valueAddress + this.valueSize) {
+      int fSize = Utils.readUVInt(valueAddress + offset);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = Utils.readUVInt(valueAddress + offset + fSizeSize);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      long fPtr = valueAddress + offset + fSizeSize + vSizeSize;
+      
+      if (stopFieldPtr > 0) {
+        int res = Utils.compareTo(fPtr, fSize, this.stopFieldPtr, this.stopFieldSize);
+        if (res >= 0) {
+          break;
+        }
+      }
+      prevOffset = offset;
+      offset += fSize + vSize + fSizeSize + vSizeSize;
+    }
+    
+    this.offset = prevOffset;
+    if (this.offset == 0) {
+      return false;
+    }
+    
+    if (startFieldPtr > 0) {
+      int fSize = Utils.readUVInt(valueAddress + offset);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = Utils.readUVInt(valueAddress + offset + fSizeSize);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      long fPtr = valueAddress + offset + fSizeSize + vSizeSize;
+      
+      int res = Utils.compareTo(fPtr, fSize, this.startFieldPtr, this.startFieldSize);
+      if (res < 0) {
+        this.offset = 0;
+        return false;
+      }
+    }
+    updateFields();
+    return true;
+  }
+  
+  private void updateFields() {
     this.fieldSize = Utils.readUVInt(valueAddress + offset);
     int fSizeSize = Utils.sizeUVInt(this.fieldSize);
     this.fieldValueSize = Utils.readUVInt(valueAddress + offset + fSizeSize);
     int vSizeSize = Utils.sizeUVInt(this.fieldValueSize);
+    
     this.fieldAddress = valueAddress + offset + fSizeSize + vSizeSize;
     this.fieldValueAddress = this.fieldAddress + this.fieldSize;
   }
-  /**
-   * Returns total current field-value pair size
-   * @return size of a field-value pair
-   */
   
-  private int fvSize() {
-    return fieldSize + fieldValueSize + Utils.sizeUVInt(fieldSize) + Utils.sizeUVInt(fieldValueSize);
-  }
   /**
-   * Has next field-value
-   * @return true, if yes, false - otherwise
+   * Checks if scanner has next element
+   * @return true, false
    * @throws IOException
    */
   public boolean hasNext() throws IOException {
+    if (this.valueAddress <= 0) {
+      return false;
+    }
     if (reverse) {
       throw new UnsupportedOperationException("hasNext");
     }
-    //*DEBUG*/ System.out.println("has next; off="+ offset + " valueSize="+ valueSize);
     if (offset < valueSize && offset >= NUM_ELEM_SIZE) {
-      if (this.stopFieldPtr > 0) {
-        if (Utils.compareTo(this.stopFieldPtr, this.stopFieldSize, fieldAddress, fieldSize) <= 0) {
+      if (stopFieldPtr == 0) {
+        return true;
+      } else {
+
+        if (Utils.compareTo(this.fieldAddress, this.fieldSize, this.stopFieldPtr,
+          this.stopFieldSize) >= 0) {
           return false;
         } else {
           return true;
         }
-      } else {
-        return true;
       }
     } else {
-      boolean result = mapScanner.next();
-      if (!result) return false;
-      updateFields();
-      return true;
+      // First K-V in a set can be empty, we need to scan to the next one
+      mapScanner.next();
+      if (mapScanner.hasNext()) {
+        this.valueAddress = mapScanner.valueAddress();
+        this.valueSize = mapScanner.valueSize();
+        this.offset = NUM_ELEM_SIZE;
+        updateFields();
+        return true;
+      } else {
+        return false;
+      }
     }
   }
   
   /**
-   * Advances scanner by one field-value
-   * @return true if success, false if end of scanner reached
+   * Advance scanner by one element 
+   * MUST BE USED IN COMBINATION with hasNext()
+   * @return true if operation succeeded , false - end of scanner
    * @throws IOException
    */
   public boolean next() throws IOException {
     if (reverse) {
       throw new UnsupportedOperationException("next");
     }
-    if (offset < valueSize) {     
-      offset += fvSize();
+    if (offset < valueSize) {
+      int fSize = Utils.readUVInt(valueAddress + offset);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = Utils.readUVInt(valueAddress + offset + fSizeSize);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      offset += fSize + vSize + fSizeSize + vSizeSize;
       if (offset < valueSize) {
         updateFields();
-        if (this.stopFieldPtr > 0) {
-          if (Utils.compareTo(this.fieldAddress, this.fieldSize, this.stopFieldPtr, this.stopFieldSize) >=0) {
-            this.offset = 0;
-            return false;
-          }
-        }
+        pos++;
         return true;
       }
     }
     // TODO next K-V can not have 0 elements - it must be deleted
     // but first element can, so we has to check what next() call return
     // the best way is to use do
-//    do {
-//      boolean result = mapScanner.next();
-//      if (!result) return false;
-//      this.valueAddress = mapScanner.valueAddress();
-//      this.valueSize = mapScanner.valueSize();
-//      // check if it it is not empty
-//      this.offset = NUM_ELEM_SIZE;
-//      if (valueSize <= NUM_ELEM_SIZE) {
-//        // empty set in K-V? Must be deleted
-//        continue;
-//      } else {
-//        updateFields();
-//        if (this.stopFieldPtr > 0) {
-//          if (Utils.compareTo(this.fieldAddress, this.fieldSize, this.stopFieldPtr, this.stopFieldSize) >=0) {
-//            this.offset = 0;
-//            return false;
-//          } else {
-//            return true;
-//          }
-//        }
-//        return true;
-//      }
-//    } while(mapScanner.hasNext());
+    
+    // TODO: fix previous, hashScanner.next previous
+    
+    mapScanner.next();
+
+    while(mapScanner.hasNext()) {
+      this.valueAddress = mapScanner.valueAddress();
+      this.valueSize = mapScanner.valueSize();
+      // check if it it is not empty
+      this.offset = NUM_ELEM_SIZE;
+      if (valueSize <= NUM_ELEM_SIZE) {
+        // empty set in K-V? Must be deleted
+        mapScanner.next();
+        continue;
+      } 
+      updateFields();
+      if (this.stopFieldPtr > 0) {  
+        if (Utils.compareTo(this.fieldAddress, this.fieldSize, 
+          this.stopFieldPtr, this.stopFieldSize) >=0) {
+          this.offset = 0;
+          return false;
+        } else {
+          pos++;
+          return true;
+        }
+      } else {
+        pos++;
+        return true;
+      }
+    }
     this.offset = 0;
     return false;
   }
   
   /**
-   * Seeks a position which is larger or equals to a given field
-   * @param fieldPtr field address
-   * @param fieldSize field's size
-   * @param next if true, exactly next field is required
-   * @return true if success, false if end of scanner reached
-   */
-  public boolean seek(long fieldPtr, int fieldSize, boolean next) {
-    while (this.offset < this.valueSize) {
-      int fSize = Utils.readUVInt(this.valueAddress + this.offset);
-      int fSizeSize = Utils.sizeUVInt(fSize);
-      int vSize = Utils.readUVInt(this.valueAddress + this.offset + fSizeSize);
-      int vSizeSize = Utils.sizeUVInt(vSize);
-      long fPtr = this.valueAddress + this.offset + fSizeSize + vSizeSize;
-
-      if (fieldPtr > 0) {
-        int res = Utils.compareTo(fPtr, fSize, fieldPtr, fieldSize);
-        if (next) {
-          if (res > 0) return true;
-        } else {
-          if (res >= 0) return true;
-        }
-      }
-      if (this.offset + fSize + vSize + fSizeSize + vSizeSize == this.valueSize) {
-        break;
-      }
-      this.offset += fSize + vSize + fSizeSize + vSizeSize;
-    }
-
-    return false;
-  }
-  
-  /**
-   * Seeks a maximum position which is strictly less than a given field
-   * @param fieldPtr field address
-   * @param fieldSize field's size
-   * @return true if success, false if end of scanner reached
-   */
-  public boolean seekLower(long fieldPtr, int fieldSize) {
-    int prevOff = -1;
-    while (this.offset < this.valueSize) {
-      int fSize = Utils.readUVInt(this.valueAddress + this.offset);
-      int fSizeSize = Utils.sizeUVInt(fSize);
-      int vSize = Utils.readUVInt(this.valueAddress + this.offset + fSizeSize);
-      int vSizeSize = Utils.sizeUVInt(vSize);
-      long fPtr = this.valueAddress + this.offset + fSizeSize + vSizeSize;
-
-      if (fieldPtr > 0) {
-        int res = Utils.compareTo(fPtr, fSize, fieldPtr, fieldSize);
-        if (res >= 0) {
-          if (prevOff < 0) {
-            return false;
-          } else {
-            this.offset = prevOff;
-            return true;
-          }
-        }
-      }
-      if (this.offset + fSize + vSize + fSizeSize + vSizeSize == this.valueSize) {
-        break;
-      }
-      prevOff = this.offset;
-      this.offset += fSize + vSize + fSizeSize + vSizeSize;
-    }
-    if (prevOff < 0) {
-      return false;
-    }
-    this.offset = prevOff;
-    return true;
-  }
-  
-  /**
-   * Returns current field's address
+   * Get current field address
    * @return field address
    */
-  public final long fieldAddress() {
+  public long fieldAddress() {
     return this.fieldAddress;
   }
   
   /**
-   * Returns field's size
+   * Gets current field size
    * @return field size
    */
-  
-  public final int fieldSize() {
+  public int fieldSize() {
     return this.fieldSize;
   }
   
   /**
-   * Returns current value's address
-   * @return value's address
+   * Get current field-value address
+   * @return field value address
    */
-
-  public final long valueAddress() {
+  public long fieldValueAddress() {
     return this.fieldValueAddress;
   }
   
   /**
-   * Returns current value's size 
-   * @return value's size
-   */  
-  public final int valueSize() {
-    return this.fieldValueSize;
+   * Gets current field value size
+   * @return field value size
+   */
+  public int fieldValueSize() {
+    return this.fieldSize;
   }
   
+  /**
+   * Get current position of a scanner (in field-values)
+   * @return position
+   */
+  public long getPosition() {
+    return this.pos;
+  }
+  
+  /**
+   * Skips to position
+   * @param pos position to skip
+   * @return current position (can be less than pos)
+   */
+  public long skipTo(long pos) {
+    if (pos <= this.pos) return this.pos;
+    while(this.pos < pos) {
+      try {
+        boolean res = next();
+        if (!res) break;
+      } catch (IOException e) {
+        // Should not throw
+      }
+    }
+    return this.pos;
+  }
   
   @Override
   public void close() throws IOException {
     mapScanner.close(disposeKeysOnClose);
   }
+  
   /**
-   * Delete current field-value
+   * Delete current Element
    * @return true if success, false - otherwise
    */
   public boolean delete() {
@@ -396,12 +469,13 @@ public class HashScanner extends BidirectionalScanner{
   }
   
   /**
-   * Delete all fields in this scanner
+   * Delete all Elements in this scanner
    * @return true on success, false?
    */
   public boolean deleteAll() {
     return false;
   }
+
 
   @Override
   public boolean first() throws IOException {
@@ -409,81 +483,63 @@ public class HashScanner extends BidirectionalScanner{
     return false;
   }
 
+
   @Override
   public boolean last() throws IOException {
     // TODO Auto-generated method stub
     return false;
   }
 
+
   @Override
   public boolean previous() throws IOException {
     if (!reverse) {
       throw new UnsupportedOperationException("previous");
-    }
-    if (this.offset > NUM_ELEM_SIZE) {
+    }    
+    if (this.offset > NUM_ELEM_SIZE && this.offset < this.valueSize) {
       int off = NUM_ELEM_SIZE;
       while (off < this.offset) {
-        int fSize = Utils.readUVInt(this.valueAddress + off);
-        int fSizeSize = Utils.sizeUVInt(fSize);
-        int vSize = Utils.readUVInt(this.valueAddress + off + fSizeSize);
-        int vSizeSize = Utils.sizeUVInt(vSize);
-        long fAddress = this.valueAddress + off + fSizeSize + vSizeSize;
-        if (off + fSize + vSize + fSizeSize + vSizeSize == this.offset) {
-          if (this.startFieldPtr > 0) {
-            if (Utils.compareTo(this.startFieldPtr, this.startFieldSize, fAddress, fSize) > 0) {
-              this.offset = 0;
-              return false;
-            }
-          }
-          this.offset = off;
-          updateFields();
-          return true;
+        int mSize = Utils.readUVInt(this.valueAddress + off);
+        int mSizeSize = Utils.sizeUVInt(mSize);
+        if (off + mSize + mSizeSize >= this.offset) {
+          break;
         }
-        off += fSize + vSize + fSizeSize + vSizeSize;
+        off += mSize + mSizeSize;
       }
-    }
-    while(mapScanner.hasPrevious()) {
-      mapScanner.previous();
-      updateFields();
-      if (this.valueSize  <= NUM_ELEM_SIZE) {
-        // empty
-        continue;
-      }
-      if (!searchLastMember()) {
-        this.offset = 0;
-        return false;
-      }
-      updateFields();
-      // Check startField
-      if (this.startFieldPtr > 0) {
-        if (Utils.compareTo(this.startFieldPtr, this.startFieldSize, this.fieldAddress, this.fieldSize) > 0) {
-          this.offset = 0;
-          return false;
-        }
-      }
+      this.offset = off;
+      this.fieldSize = Utils.readUVInt(valueAddress + offset);
+      this.fieldAddress = valueAddress + offset + Utils.sizeUVInt(this.fieldSize);
       return true;
     }
-    this.offset = 0;
-    return false;  
+    if (mapScanner.hasPrevious()) {
+      mapScanner.previous();
+      this.valueAddress = mapScanner.valueAddress();
+      this.valueSize = mapScanner.valueSize();
+      this.offset = NUM_ELEM_SIZE;
+    } else {
+      this.offset = 0;
+      return false;
+    }
+    return searchLastMember();
   }
 
-  /**
-   * Using both hasPrevious and previous is overkill
-   */
+
   @Override
   public boolean hasPrevious() throws IOException {
+    if (this.valueAddress <=0) return false;
     if (!reverse) {
       throw new UnsupportedOperationException("hasPrevious");
-    }
+    } 
     if (this.offset >= NUM_ELEM_SIZE && this.offset < this.valueSize) {
+      // TODO check startMemberPtr
       if (this.startFieldPtr > 0) {
-        if (Utils.compareTo(this.startFieldPtr, this.startFieldSize, this.fieldAddress, this.fieldSize) > 0) {
+        if (Utils.compareTo(this.fieldAddress, this.fieldSize, this.startFieldPtr, this.startFieldSize) < 0) {
           return false;
         }
       }
       return true;
     } else {
-      return mapScanner.hasPrevious();
-    }
+      return false;
+    }     
   }
 }

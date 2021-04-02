@@ -18,7 +18,6 @@ import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
-import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
@@ -854,8 +853,8 @@ public class Hashes {
       long totalSize = 0;
       try {
         while(scanner.hasNext()) {
-          long vptr = scanner.valueAddress();
-          int size = scanner.valueSize();
+          long vptr = scanner.fieldValueAddress();
+          int size = scanner.fieldValueSize();
           count++;
           totalSize += size + Utils.SIZEOF_INT;
           if (ptr + Utils.SIZEOF_INT + size < valueBuf + valueBufSize) {
@@ -1072,8 +1071,8 @@ public class Hashes {
         long fPtr = scanner.fieldAddress();
         int fSize = scanner.fieldSize();
         int fSizeSize = Utils.sizeUVInt(fSize);
-        long vPtr = scanner.valueAddress();
-        int vSize = scanner.valueSize();
+        long vPtr = scanner.fieldValueAddress();
+        int vSize = scanner.fieldValueSize();
         int vSizeSize = Utils.sizeUVInt(vSize);
         if ( ptr + fSize + fSizeSize + vSize + vSizeSize <= buffer + bufferSize) {
           Utils.writeUVInt(ptr, fSize);
@@ -1128,8 +1127,8 @@ public class Hashes {
         int fSize = scanner.fieldSize();
         //*DEBUG*/ System.out.println("ptr="+fPtr + " " + Utils.toString(fPtr, fSize));
         int fSizeSize = Utils.sizeUVInt(fSize);
-        long vPtr = scanner.valueAddress();
-        int vSize = scanner.valueSize();
+        long vPtr = scanner.fieldValueAddress();
+        int vSize = scanner.fieldValueSize();
         int vSizeSize = Utils.sizeUVInt(vSize);
         if ( ptr + fSize + fSizeSize + vSize + vSizeSize <= buffer + bufferSize) {
           c++;
@@ -1241,8 +1240,8 @@ public class Hashes {
       long ptr = buffer + Utils.SIZEOF_INT;
       int c = 0;
       while(scanner.hasNext()) {
-        long vPtr = scanner.valueAddress();
-        int vSize = scanner.valueSize();
+        long vPtr = scanner.fieldValueAddress();
+        int vSize = scanner.fieldValueSize();
         int vSizeSize = Utils.sizeUVInt(vSize);
         
         if (ptr + vSize + vSizeSize <= buffer + bufferSize) {
@@ -1286,13 +1285,9 @@ public class Hashes {
       stopKeyPtr, startKeySize);
     // TODO - test this call
     HashScanner hs = null;
-    try {
-      hs = new HashScanner(scanner);
-    } catch(OperationFailedException e) {
-      return null;
-    }
-    hs.seek(lastFieldSeenPtr, lastFieldSeenSize, true);
-    
+    hs = new HashScanner(scanner);
+    //TODO: below is the old impl artefact
+   // hs.seek(lastFieldSeenPtr, lastFieldSeenSize, true);
     return hs;
   }
   
@@ -1344,11 +1339,7 @@ public class Hashes {
       return null;
     }
     HashScanner hs = null;
-    try {
-      hs = new HashScanner(scanner, reverse);
-    } catch(OperationFailedException e) {
-      return null;
-    }
+    hs = new HashScanner(scanner, reverse);
     hs.setDisposeKeysOnClose(true);
     return hs;
   }
@@ -1400,11 +1391,7 @@ public class Hashes {
       return null;
     }
     HashScanner hs = null;
-    try {
-      hs = new HashScanner(scanner,startFieldPtr, startFieldSize, endFieldPtr, endFieldSize, reverse);
-    } catch (OperationFailedException e) {
-      return null;
-    }
+    hs = new HashScanner(scanner,startFieldPtr, startFieldSize, endFieldPtr, endFieldSize, reverse);
     hs.setDisposeKeysOnClose(true);
     return hs;
   }
