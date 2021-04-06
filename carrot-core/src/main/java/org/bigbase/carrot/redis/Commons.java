@@ -150,10 +150,11 @@ public class Commons {
      * '\0' - ZERO suffix
      * 
      */
-    if (foundKeySize > keySize + 2 * Utils.SIZEOF_BYTE + Utils.SIZEOF_INT) {
+    int firstKeySize = keySize + 2 * Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;
+    if (foundKeySize > firstKeySize || foundKeySize < firstKeySize) {
       return false;
     }
-    return UnsafeAccess.toByte(foundKeyAddress + foundKeySize -1) == 0;
+    return UnsafeAccess.toByte(foundKeyAddress + foundKeySize - 1) == 0;
   }
   
   public static long countRecords(BigSortedMap map) throws IOException {

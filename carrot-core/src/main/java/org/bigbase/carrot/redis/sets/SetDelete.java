@@ -9,6 +9,8 @@ import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.redis.Commons;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -51,17 +53,18 @@ public class SetDelete extends Operation{
       return false;
     }
     // check prefix
-    int setKeySize = keySizeWithPrefix(keyAddress);
+    int setKeySizeWithPrefix = keySizeWithPrefix(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (foundKeySize <= setKeySize) {
+    if (foundKeySize <= setKeySizeWithPrefix) {
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
-    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, keySize); 
+    int setKeySize = setKeySizeWithPrefix - Commons.KEY_PREFIX_SIZE;
+    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, setKeySize); 
 
     // Prefix keys must be equals
-    if (Utils.compareTo(keyAddress, setKeySize, foundKeyAddress, 
-      setKeySize) != 0) {
+    if (Utils.compareTo(keyAddress, setKeySizeWithPrefix, foundKeyAddress, 
+      setKeySizeWithPrefix) != 0) {
       return false;
     }
     
@@ -80,6 +83,11 @@ public class SetDelete extends Operation{
     int numElements = addNumElements(valueAddress, -1);
     if (numElements == 0) {
       this.checkForEmpty = true;
+      //*DEBUG*/ System.out.println("Empty key =" + Bytes.toHex(foundKeyAddress, foundKeySize) 
+      //+ " isFirst=" + isFirstKey);
+      //if (isFirstKey) {
+      //  isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, keySize);
+      //}
     }
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     int newValueSize = valueSize - toCut;
@@ -98,6 +106,7 @@ public class SetDelete extends Operation{
     if (numElements == 0 && !isFirstKey/*canDelete(foundKeyAddress, foundKeySize)*/) {
       // Delete Key, b/c its empty
       //TODO - this code leaves last key, which needs to be deleted explicitly
+      //*DEBUG*/ System.out.println("Delete "+ Bytes.toHex(foundKeyAddress, foundKeySize));
       this.updateTypes[0] = true;
     }
     return true;

@@ -1861,33 +1861,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     return prevPtr;
 
   }
-
-//  /**
-//   * Search position of a first key which starts with a given key
-//   * @param keyPtr
-//   * @param keyLength
-//   * @return address to insert (or update)
-//   */
-//  private long searchFisrtStartsWith(long keyPtr, int keyLength) {
-//    long ptr = dataPtr;
-//    int count = 0;
-//    long prevPtr = NOT_FOUND;
-//    while (count++ < numDataBlocks) {
-//      int keylen = keyLength(ptr);
-//      int klen = Math.min(keyLength, keylen);
-//      int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), klen);
-//      if (res == 0) {
-//        // Found
-//        return ptr;
-//      }
-//      if (isExternalBlock(ptr)) {
-//        keylen = ADDRESS_SIZE;
-//      }
-//      ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
-//    }
-//    // Not found
-//    return NOT_FOUND;
-//  }
   
   /**
    * Search largest block which is less than a given key
@@ -1948,6 +1921,87 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
   }
   
+  /**
+   * Search largest block which is less or equals to a given key
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param version version
+   * @param type type
+   * @return position of a data block
+   */
+  private long searchFloor(long keyPtr, int keyLength) {
+    long ptr = dataPtr;
+    long prevPtr = NOT_FOUND;
+    int count = 0;
+    while (count++ < numDataBlocks) {
+      int keylen = keyLength(ptr);
+      int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
+      if (res < 0) {
+        if (prevPtr == NOT_FOUND) {
+          // It is possible situation (race condition when first key in
+          // index block was deleted after we found this block and before we locked it
+          return ptr = NOT_FOUND;
+        } else {
+          return prevPtr;
+        }
+      } else if (res == 0) {
+        return ptr;
+      }
+      prevPtr = ptr;
+      if (isExternalBlock(ptr)) {
+        keylen = ADDRESS_SIZE;
+      }
+      ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
+    }
+    // last data block
+    return prevPtr;
+  }
+  
+  
+  /**
+   * Search data block whose first key is lees or equals to a given key
+   * @param keyPtr key
+   * @param keyLength  key length
+   * @return data block or null
+   */
+  DataBlock searchFloorBlock(long keyPtr, int keyLength) {
+    long ptr = searchFloor(keyPtr, keyLength);
+    if (ptr == NOT_FOUND) return null;
+    DataBlock b = block.get();
+    b.set(this, ptr - dataPtr);
+    return b;
+  }
+  
+  
+  /**
+   * Search a largest key which is less or equals to a given key
+   * MUST be read locked first 
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param buf buffer for a found key
+   * @param bufSize buffer size
+   * @return size of a found key or -1
+   */
+  long floorKey(long keyPtr, int keySize, long buf, int bufSize) {
+
+    DataBlock b = null;
+    try {
+      readLock();
+      b = searchFloorBlock(keyPtr, keySize);
+      if (b == null) {
+        return NOT_FOUND;
+      }
+      b.decompressDataBlockIfNeeded();
+      long size = b.floorKey(keyPtr, keySize, buf, bufSize);
+      return size;
+    } finally {
+      if (b != null) {
+        b.compressDataBlockIfNeeded();
+      }
+      readUnlock();
+    }
+  }
+  
 	/**
 	 * TODO: handle not found (new block) Search position of a block, which can
 	 * contain this key
@@ -1988,11 +2042,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 				return null;
 			} else {
 				DataBlock b = block.get();
-				b.set(this, ptr - dataPtr);
-				
-//				/*DEBUG*/ System.out.println("BLOCK first="+ new String(b.getFirstKey()) + 
-//				  " Block next first=" + new String(nextBlock(b).getFirstKey()));
-				
 				b.set(this, ptr - dataPtr);
 				return b;
 			}
@@ -2588,6 +2637,11 @@ public final class IndexBlock implements Comparable<IndexBlock> {
   /*DEBUG*/ void dumpStartEndKeys() {
     byte[] first = getFirstKey();
     long lastRecordAddress = lastRecordAddress();
+    if (lastRecordAddress == NOT_FOUND) {
+      System.out.println("First key=" + Bytes.toHex(first)+
+        "\nLast key = null");
+      return;
+    }
     long lastPtr = DataBlock.keyAddress(lastRecordAddress);
     int lastSize = DataBlock.keyLength(lastRecordAddress);
     System.out.println("First key=" + Bytes.toHex(first)+

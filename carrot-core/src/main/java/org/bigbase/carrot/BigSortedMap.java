@@ -1062,6 +1062,56 @@ public class BigSortedMap {
     }
   }
   
+  /**
+   * Returns the greatest key, which is less or equals to a given key
+   * @param keyPtr key
+   * @param keyLength key length
+   * @param buf key buffer
+   * @param bufLength key buffer length
+   * @return size of a key, -1 - does not exists
+   */
+  public long floorKey(long keyPtr, int keyLength, long buf, int bufLength) {
+    IndexBlock kvBlock = getThreadLocalBlock();
+    kvBlock.putForSearch(keyPtr, keyLength, 0);
+    boolean locked = false;
+    IndexBlock b = null;
+    while (true) {
+      try {
+        b = map.floorKey(kvBlock);
+        //TODO: b == null? possible?
+        long result = b.floorKey(keyPtr, keyLength, buf, bufLength);
+        if (result < 0 && b.hasRecentUnsafeModification()) {
+          // check one more time with lock
+          // - we caught split in flight
+          IndexBlock bb = null;
+          while (true) {
+            b = map.floorKey(kvBlock);
+            //lock(b);
+            b.readLock();
+            locked = true;
+            bb = map.floorKey(kvBlock);
+            if (bb != b) {
+              //unlock(b);
+              b.readUnlock();
+              locked = false;
+              continue;
+            } else {
+              break;
+            }
+          }
+          result =  b.floorKey(keyPtr, keyLength, buf, bufLength);
+        }
+        return result;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        if (locked && b != null) {
+          //unlock(b);
+          b.readUnlock();
+        }
+      }
+    }
+  }
   
   /**
    * TODO: test

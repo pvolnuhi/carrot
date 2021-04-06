@@ -2208,7 +2208,22 @@ public final class DataBlock  {
   final long search(long keyPtr, int keyLength, long version) {
     return search(keyPtr, keyLength, version, false);
   }
-    
+  
+  final void dumpRecords() {
+    long ptr = dataPtr;
+    long stopAddress =0;
+    int dataSize = getDataInBlockSize();
+    stopAddress = dataPtr + dataSize;
+    System.out.println("DataBlock records:");
+    while (ptr < stopAddress) {
+      long pptr = keyAddress(ptr);
+      int len = keyLength(ptr);
+      System.out.println(Bytes.toHex(pptr, len));
+      int keylen = blockKeyLength(ptr);
+      int vallen = blockValueLength(ptr);
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+    }
+  }
   /**
    * WARNING: Public API
    * Search position of a first key which is greater or equals to a given key
@@ -2253,12 +2268,11 @@ public final class DataBlock  {
    * @param keyLength
    * @return address to insert (or update)
    */
-  private final long searchFloor(long keyPtr, int keyLength, long version) {
+  final long searchFloor(long keyPtr, int keyLength, long version) {
     long ptr = dataPtr;
     long stopAddress =0;
     int numRecords = getNumberOfRecords();
     int dataSize = getDataInBlockSize();
-    //long txId = BigSortedMap.getMostRecentActiveTxSeqId();
     long prevPtr = NOT_FOUND;
     stopAddress = dataPtr + dataSize;
     while (ptr < stopAddress) {
@@ -2267,17 +2281,7 @@ public final class DataBlock  {
       int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
       if (res < 0) {
         return prevPtr; // can be NOT_FOUND
-      } 
-      else if (res == 0) {
-//        // check versions
-//        long ver = getRecordSeqId(ptr);
-//        if (ver >= version) {
-//          return ptr;
-//        } else if (ver < version) {
-//          return prevPtr;
-//        } else if (version > txId) {
-//          return NOT_FOUND;
-//        }
+      }  else if (res == 0) {
         return ptr;
       }
       prevPtr = ptr;
@@ -2288,6 +2292,30 @@ public final class DataBlock  {
     return prevPtr;
   }
 
+  /**
+   * Get the largest key which is less or equals to a given key
+   * @param keyPtr key
+   * @param keyLength key length 
+   * @param buf buffer for a return key
+   * @param bufLength buffer length
+   * @return size of a found key or -1 (NOT FOUND)
+   */
+  final long floorKey (long keyPtr, int keyLength, long buf, int bufLength) {
+    long ptr = searchFloor(keyPtr, keyLength, 0);
+    if (ptr == NOT_FOUND) {
+      return NOT_FOUND;
+    }
+    
+    long kPtr = keyAddress(ptr);
+    int kLength = keyLength(ptr);
+    
+    if (kLength > bufLength) {
+      return kLength;
+    }
+    
+    UnsafeAccess.copy(kPtr, buf, kLength);
+    return kLength;
+  }
   
   /**
    * WARNING: Public API
@@ -2319,30 +2347,6 @@ public final class DataBlock  {
     return address == dataPtr + getDataInBlockSize();
   }
   
-//  /**
-//   * Check if record is deleted
-//   * @param addr record address
-//   * @return true, false
-//   */
-//  private boolean isDeleted(long addr) {
-//    return getRecordType(addr) == Op.DELETE;
-//  }
-
-//  /**
-//   * Checks if this data block is in between two keys
-//   * @param start start key address
-//   * @param startSize start key size
-//   * @param end end key address
-//   * @param endSize end key size
-//   * @param version version
-//   * @return true, if - yes, false - otherwise
-//   */
-//  public boolean between(long start /*Inclusive*/, int startSize, long end /*Exclusive*/, 
-//      int endSize, long version)
-//  {
-//    return compareTo(start, startSize, version, Op.PUT) >=0 && isLargerThanMax(end, endSize, version);
-//  }
-//  
   /**
    * Bulk delete operation - for delete range operation. 
    * Additional handling is required at IndexBlock, such as updating first key
@@ -3704,7 +3708,7 @@ public final class DataBlock  {
    * @return address
    */
   final long getAddress() {
-    return dataPtr;
+    return this.dataPtr;
   }
 
   
@@ -3785,4 +3789,28 @@ public final class DataBlock  {
     return buf;
   }
 
+  
+  final byte[] getLastKey() {
+    if (this.indexBlock != null) {
+      if (getNumberOfRecords() == 0 || 
+          (getNumberOfRecords() == 1 && isFirstBlock())) 
+        return null;
+    } else {
+      if (this.numRecords == 0) return null;
+    }
+    long addr = last();
+    long ptr = keyAddress(addr);
+    int size = keyLength(addr);
+    byte[] buf = new byte[size];
+    UnsafeAccess.copy(ptr, buf, 0, size);
+    return buf;
+  }
+  
+  public final void dumpFirstLastKeys() {
+    System.out.println("DataBlock first="+ Bytes.toHex(getFirstKey())); 
+    byte[] last = getLastKey();
+    if (last != null) {
+      System.out.println("DataBlock last =" + Bytes.toHex(getLastKey()));
+    }
+  }
 }

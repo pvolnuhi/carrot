@@ -16,6 +16,7 @@ import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -1059,11 +1060,37 @@ public class Sets {
       long memberStartPtr, int memberStartSize, long memberStopPtr, int memberStopSize, boolean safe, boolean reverse) {
     //TODO Check start stop 0
     //TODO: for public API - primary key locking? 
-    // Primary key (keyPtr, keySize) must be under lock
+    //TODO: Primary key (keyPtr, keySize) must be under lock !!!
+    // Check if start == stop != null
+    if (memberStartPtr > 0 && memberStopPtr > 0) {
+      if (Utils.compareTo(memberStartPtr, memberStartSize, memberStopPtr, memberStopSize) == 0) {
+        // start = stop - scanner is empty (null)
+        return null;
+      }
+    }
     long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStartSize);
     int startPtrSize = buildKey(keyPtr, keySize, memberStartPtr, memberStartSize, startPtr);
     long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStopSize);
     int stopPtrSize = buildKey(keyPtr, keySize, memberStopPtr, memberStopSize, stopPtr);
+    
+    if (reverse) {
+      // Get floorKey
+      long size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
+      if (size < 0) {
+        //TODO: should not happen if set key is locked
+      }
+      if (size > valueArenaSize.get()) {
+        checkValueArena((int)size);
+        // One more time
+        size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
+      }
+      // free start key
+      UnsafeAccess.free(startPtr);
+      startPtr = UnsafeAccess.malloc(size);
+      UnsafeAccess.copy(valueArena.get(), startPtr, size);
+      startPtrSize = (int)size;
+    }
+
     
     //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
@@ -1074,7 +1101,8 @@ public class Sets {
       UnsafeAccess.free(stopPtr);
       return null;
     }
-    SetScanner sc = new SetScanner(scanner, startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
+    SetScanner sc = new SetScanner(scanner, memberStartPtr, memberStartSize, 
+      memberStopPtr, memberStopSize, reverse);
     sc.setDisposeKeysOnClose(true);
     return sc;
   }

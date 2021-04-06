@@ -110,6 +110,7 @@ public final class DataBlockDirectMemoryScanner extends BidirectionalScanner{
     bs.setSnapshotId(snapshotId);
     bs.setStartRow(startRowPtr, startRowLength);
     bs.setStopRow(stopRowPtr, stopRowLength);
+    //*DEBUG*/ System.out.println("New DBDMS Block address=" + b.getAddress() + " rows="+ b.getNumberOfRecords());
     return bs;
   }
   
@@ -698,7 +699,6 @@ public final class DataBlockDirectMemoryScanner extends BidirectionalScanner{
     }
 
     this.curPtr = pptr;
-
     return true;
   }
   

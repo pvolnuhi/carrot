@@ -138,9 +138,7 @@ public class BigSortedMapDirectMemoryScanner extends BidirectionalScanner{
             }
           }
         }
-        
-        //*DEBUG*/ this.currentIndexBlock.dumpStartEndKeys();
-        
+                
         if (!isMultiSafe) {
           indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
             this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId, reverse);
@@ -170,6 +168,7 @@ public class BigSortedMapDirectMemoryScanner extends BidirectionalScanner{
     } 
     if (blockScanner == null) {
       close();
+      /*DEBUG*/ System.out.println("Scanner=NULL");
       throw new IOException("empty scanner");
     }
   }
@@ -574,14 +573,14 @@ public class BigSortedMapDirectMemoryScanner extends BidirectionalScanner{
     boolean result = blockScanner.hasPrevious();
     if (result) {
       return result;
+    } else {
+      return previousBlockAndScanner();  
+//      result = previousBlockAndScanner();
+//      if (!result) {
+//        return false;
+//      }
     }
-    if (!result) {    
-      result = previousBlockAndScanner();
-      if (!result) {
-        return false;
-      }
-    }
-    return this.blockScanner.hasPrevious();
+//    return this.blockScanner.hasPrevious();
   }
 
 }

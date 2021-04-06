@@ -263,7 +263,6 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     if (this.currentDataBlock != null) {
       this.currentDataBlock.decompressDataBlockIfNeeded();
     }
-    
   }
  
   /**

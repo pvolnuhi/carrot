@@ -10,6 +10,7 @@ import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -100,17 +101,18 @@ public class HashDelete extends Operation{
       return false;
     }
     // check prefix
-    int setKeySize = keySizeWithPrefix(keyAddress);
+    int hashKeySizeWithPrefix = keySizeWithPrefix(keyAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (foundKeySize <= setKeySize) {
+    if (foundKeySize <= hashKeySizeWithPrefix) {
       // Hash does not exists
       return false;
     }
     long foundKeyAddress = DataBlock.keyAddress(foundRecordAddress);
-    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, keySize(keyAddress)); 
+    int hashKeySize  = hashKeySizeWithPrefix - Commons.KEY_PREFIX_SIZE;
+    boolean isFirstKey = isFirstKey(foundKeyAddress, foundKeySize, hashKeySize); 
     // Prefix keys must be equals
-    if (Utils.compareTo(keyAddress, setKeySize , foundKeyAddress, 
-      setKeySize) != 0) {
+    if (Utils.compareTo(keyAddress, hashKeySizeWithPrefix , foundKeyAddress, 
+      hashKeySizeWithPrefix) != 0) {
       // Hash does not exists
       return false;
     }    

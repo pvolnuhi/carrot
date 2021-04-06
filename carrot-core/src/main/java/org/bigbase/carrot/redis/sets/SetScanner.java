@@ -98,12 +98,7 @@ public class SetScanner extends BidirectionalScanner {
    */
   public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, long stop,
       int stopSize) {
-    this.mapScanner = scanner;
-    this.startMemberPtr = start > 0 ? getMemberAddress(start) : 0;
-    this.startMemberSize = startSize > 0 ? getMemberSize(start, startSize) : 0;
-    this.stopMemberPtr = stop > 0 ? getMemberAddress(stop) : 0;
-    this.stopMemberSize = stopSize > 0 ? getMemberSize(stop, stopSize) : 0;
-    init();
+   this(scanner, start, startSize, stop, stopSize, false);
   }
 
   /**
@@ -118,10 +113,10 @@ public class SetScanner extends BidirectionalScanner {
   public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, long stop,
       int stopSize, boolean reverse) {
     this.mapScanner = scanner;
-    this.startMemberPtr = start > 0 ? getMemberAddress(start) : 0;
-    this.startMemberSize = startSize > 0 ? getMemberSize(start, startSize) : 0;
-    this.stopMemberPtr = stop > 0 ? getMemberAddress(stop) : 0;
-    this.stopMemberSize = stopSize > 0 ? getMemberSize(stop, stopSize) : 0;
+    this.startMemberPtr = start;
+    this.startMemberSize = startSize;
+    this.stopMemberPtr = stop;
+    this.stopMemberSize = stopSize;
     this.reverse = reverse;
     init();
   }
@@ -182,8 +177,9 @@ public class SetScanner extends BidirectionalScanner {
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
 
-    } else if (this.startMemberPtr > 0) {
+    } else if (this.startMemberPtr > 0 && !reverse) {
       // Check if current key in a mapScanner is equals to start
+      // This is a hack for direct scanner
       long ptr = mapScanner.keyAddress();
       int size = mapScanner.keySize();
       size = getMemberSize(ptr, size);
@@ -195,7 +191,14 @@ public class SetScanner extends BidirectionalScanner {
       }
     }
     if (reverse) {
-      searchLastMember();
+      if (!searchLastMember()) {
+        try {
+          previous();
+        } catch (IOException e) {
+          // TODO Auto-generated catch block
+          //e.printStackTrace();
+        }
+      }
     } else {
       searchFirstMember();
     }
@@ -233,14 +236,13 @@ public class SetScanner extends BidirectionalScanner {
     
     if (this.valueAddress <= 0) {
       return false;
-    }
-    
+    }  
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     // check if it it is not empty
     this.offset = NUM_ELEM_SIZE;
     int prevOffset = 0;
-    while (this.offset < this.valueAddress + this.valueSize) {
+    while (this.offset <  this.valueSize) {
       int size = Utils.readUVInt(valueAddress + offset);
       long ptr = valueAddress + offset + Utils.sizeUVInt(size);
       if (stopMemberPtr > 0) {
@@ -300,7 +302,6 @@ public class SetScanner extends BidirectionalScanner {
       // First K-V in a set can be empty, we need to scan to the next one
       mapScanner.next();
       if (mapScanner.hasNext()) {
-        // mapScanner.next();
         this.valueAddress = mapScanner.valueAddress();
         this.valueSize = mapScanner.valueSize();
         this.offset = NUM_ELEM_SIZE;
@@ -447,12 +448,17 @@ public class SetScanner extends BidirectionalScanner {
     return false;
   }
 
+  /**
+   * To iterate reverse scan use the following pattern
+   * do {} while(scanner.previous())
+   *  
+   */
   @Override
   public boolean previous() throws IOException {
     if (!reverse) {
       throw new UnsupportedOperationException("previous");
     }
-    if (this.offset > NUM_ELEM_SIZE && this.offset < this.valueSize) {
+    if (this.offset > NUM_ELEM_SIZE) {
       int off = NUM_ELEM_SIZE;
       while (off < this.offset) {
         int mSize = Utils.readUVInt(this.valueAddress + off);
@@ -465,37 +471,30 @@ public class SetScanner extends BidirectionalScanner {
       this.offset = off;
       this.memberSize = Utils.readUVInt(valueAddress + offset);
       this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
-      return true;
-    }
-    if (mapScanner.hasPrevious()) {
-      mapScanner.previous();
-      this.valueAddress = mapScanner.valueAddress();
-      this.valueSize = mapScanner.valueSize();
-      this.offset = NUM_ELEM_SIZE;
-    } else {
-      this.offset = 0;
-      return false;
-    }
-    return searchLastMember();
-  }
-
-  @Override
-  public boolean hasPrevious() throws IOException {
-    if (this.valueAddress <= 0) return false;
-    if (!reverse) {
-      throw new UnsupportedOperationException("hasPrevious");
-    }
-    if (this.offset >= NUM_ELEM_SIZE && this.offset < this.valueSize) {
-      // TODO check startMemberPtr
       if (this.startMemberPtr > 0) {
-        if (Utils.compareTo(this.memberAddress, this.memberSize, this.startMemberPtr,
-          this.startMemberSize) < 0) {
+        int result = Utils.compareTo(this.memberAddress, this.memberSize, 
+          this.startMemberPtr, this.startMemberSize);
+        if (result < 0) {
           return false;
         }
       }
       return true;
+    }
+    
+    boolean result = mapScanner.previous();
+    if (result) {
+      return searchLastMember();
     } else {
       return false;
     }
+  }
+  
+  /**
+   * Do not use it. 
+   */
+  @Override
+  public boolean hasPrevious() throws IOException {
+    throw new UnsupportedOperationException("hasPrevious");
+
   }
 }
