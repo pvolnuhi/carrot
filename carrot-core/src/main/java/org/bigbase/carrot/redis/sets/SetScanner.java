@@ -6,7 +6,7 @@ import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.redis.Commons;
-import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.Scanner;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -15,7 +15,7 @@ import org.bigbase.carrot.util.Utils;
  * Scanner to iterate through set members
  * @author Vladimir Rodionov
  */
-public class SetScanner extends BidirectionalScanner {
+public class SetScanner extends Scanner {
 
   /*
    * Base Map scanner
@@ -74,8 +74,9 @@ public class SetScanner extends BidirectionalScanner {
   /**
    * Constructor
    * @param scanner base scanner
+   * @throws IOException 
    */
-  public SetScanner(BigSortedMapDirectMemoryScanner scanner) {
+  public SetScanner(BigSortedMapDirectMemoryScanner scanner) throws IOException {
     this(scanner, 0, 0, 0, 0);
   }
 
@@ -83,8 +84,9 @@ public class SetScanner extends BidirectionalScanner {
    * Constructor
    * @param scanner base scanner
    * @param reverse true, if reverse scanner, false - otherwise
+   * @throws IOException 
    */
-  public SetScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) {
+  public SetScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) throws IOException {
     this(scanner, 0, 0, 0, 0, reverse);
   }
 
@@ -95,9 +97,10 @@ public class SetScanner extends BidirectionalScanner {
    * @param startSize start member size
    * @param stop stop member address
    * @param stopSize stop member size
+   * @throws IOException 
    */
   public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, long stop,
-      int stopSize) {
+      int stopSize) throws IOException {
    this(scanner, start, startSize, stop, stopSize, false);
   }
 
@@ -109,9 +112,10 @@ public class SetScanner extends BidirectionalScanner {
    * @param stop stop member address
    * @param stopSize stop member size
    * @param reverse reverse scanner
+   * @throws IOException 
    */
   public SetScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, long stop,
-      int stopSize, boolean reverse) {
+      int stopSize, boolean reverse) throws IOException {
     this.mapScanner = scanner;
     this.startMemberPtr = start;
     this.startMemberSize = startSize;
@@ -163,7 +167,7 @@ public class SetScanner extends BidirectionalScanner {
     this.disposeKeysOnClose = b;
   }
 
-  private void init() {
+  private void init() throws IOException {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     if (this.valueAddress == -1) {
@@ -192,11 +196,9 @@ public class SetScanner extends BidirectionalScanner {
     }
     if (reverse) {
       if (!searchLastMember()) {
-        try {
-          previous();
-        } catch (IOException e) {
-          // TODO Auto-generated catch block
-          //e.printStackTrace();
+        boolean result = previous();
+        if (!result) {
+          throw new IOException("Empty scanner");
         }
       }
     } else {

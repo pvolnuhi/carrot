@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -493,7 +494,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  valid = false;
 	}
 	
-	
+	static long count = 0;
 	/**
 	 * Read lock
 	 * 
@@ -532,7 +533,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		lock.readLock().unlock();
 	}
 
-	
 	/**
 	 * Write lock
 	 * 

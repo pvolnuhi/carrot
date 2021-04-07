@@ -396,7 +396,7 @@ public class ZSets {
     int removed = 0;
     // get key from hash
     for (int i = 0; i < memberPtrs.length; i++) {
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false);      
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);      
       try {
           long ptr = 0;
           int size = 0;
@@ -468,7 +468,7 @@ public class ZSets {
     SetScanner scanner = null;
     try {
       KeysLocker.writeLock(k);
-      scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      scanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         // TODO - report
         return;
@@ -642,7 +642,7 @@ public class ZSets {
       
       stopPtr =UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + Utils.SIZEOF_DOUBLE);
       int stopSize = buildKeyForSet(keyPtr, keySize, 0, 0, max, startPtr);
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, startPtr, startSize, 
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, 
         stopPtr, stopSize, false);
       if (scanner == null) {
         return 0;
@@ -717,7 +717,7 @@ public class ZSets {
 
       } else {
         // Search in set for member
-        scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+        scanner = Sets.getScanner(map, keyPtr, keySize, false);
         if (scanner != null) {
           while(scanner.hasNext()) {
             long ptr = scanner.memberAddress();
@@ -827,7 +827,7 @@ public class ZSets {
     try {
       KeysLocker.readLock(key);
       hashScanner =
-          Hashes.getHashScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
+          Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
       if (hashScanner != null) {
         if (!startInclusive) {
           if (startPtr > 0 && hashScanner.hasNext()) {
@@ -845,7 +845,7 @@ public class ZSets {
         }
       } else {
         // Run through the Set
-        setScanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+        setScanner = Sets.getScanner(map, keyPtr, keySize, false);
         while (setScanner.hasNext()) {
           long mPtr = setScanner.memberAddress();
           int mSize = setScanner.memberSize();
@@ -914,7 +914,7 @@ public class ZSets {
     long ptr = buffer + Utils.SIZEOF_INT;
     try {
       KeysLocker.writeLock(key);
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false, true);
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false, true);
       if (scanner == null) {
         return 0;
       }
@@ -1003,7 +1003,7 @@ public class ZSets {
     long ptr = buffer + Utils.SIZEOF_INT;
     try {
       KeysLocker.writeLock(key);
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
@@ -1122,7 +1122,7 @@ public class ZSets {
       if (end >= cardinality) {
         end = cardinality - 1;
       }
-      scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      scanner = Sets.getScanner(map, keyPtr, keySize, false);
       long counter= 0;
       ptr = buffer + Utils.SIZEOF_INT;
       while(scanner.hasNext()) {
@@ -1244,7 +1244,7 @@ public class ZSets {
 
       KeysLocker.readLock(key);
       ptr = buffer + Utils.SIZEOF_INT;
-      setScanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      setScanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (setScanner == null) {
         return 0;
       }
@@ -1318,7 +1318,7 @@ public class ZSets {
     try {
       KeysLocker.readLock(key);
       hashScanner =
-          Hashes.getHashScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
+          Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
       if (hashScanner != null) {
         
         while (hashScanner.hasNext()) {
@@ -1343,7 +1343,7 @@ public class ZSets {
         }
       } else {
         // Run through the Set
-        setScanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+        setScanner = Sets.getScanner(map, keyPtr, keySize, false);
         while (setScanner.hasNext()) {
           long mPtr = setScanner.memberAddress();
           int mSize = setScanner.memberSize();
@@ -1454,7 +1454,7 @@ public class ZSets {
     try {
       KeysLocker.readLock(k);
       // TODO : optimize scanner with start min and max score
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
@@ -1536,7 +1536,7 @@ public class ZSets {
       
       stopPtr =UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + Utils.SIZEOF_DOUBLE);
       int stopSize = buildKeyForSet(keyPtr, keySize, 0, 0, maxScore, startPtr);
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, startPtr, startSize, 
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, 
         stopPtr, stopSize, false);
       if (scanner == null) {
         return 0;
@@ -1605,7 +1605,7 @@ public class ZSets {
     SetScanner scanner = null;
     try {
       KeysLocker.readLock(key);
-      scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      scanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return -1;
       }
@@ -1697,7 +1697,7 @@ public class ZSets {
         //TODO: Optimize for multiple members
         for (int i = 0; i < memberPtrs.length; i++) {
 
-          scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+          scanner = Sets.getScanner(map, keyPtr, keySize, false);
           while (scanner.hasNext()) {
 
             long mPtr = scanner.memberAddress();
@@ -1790,7 +1790,7 @@ public class ZSets {
     try {
       KeysLocker.writeLock(key);
       hashScanner =
-          Hashes.getHashScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
+          Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
       if (hashScanner != null) {
         if (!startInclusive) {
           hashScanner.hasNext();
@@ -1804,7 +1804,7 @@ public class ZSets {
         }
       }
       // Run through the Set
-      setScanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      setScanner = Sets.getScanner(map, keyPtr, keySize, false);
       while (setScanner.hasNext()) {
         long mPtr = setScanner.memberAddress();
         int mSize = setScanner.memberSize();
@@ -1875,7 +1875,7 @@ public class ZSets {
           stopRank += cardinality;
         }
       } 
-      scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+      scanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
@@ -1943,7 +1943,7 @@ public class ZSets {
       
       long stopPtr =UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + Utils.SIZEOF_DOUBLE);
       int stopSize = buildKeyForSet(keyPtr, keySize, 0, 0, stopScore, startPtr);
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, startPtr, startSize, 
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, 
         stopPtr, stopSize, false);
       if (scanner == null) {
         return 0;
@@ -2032,7 +2032,7 @@ public class ZSets {
       if (end >= cardinality) {
         end = cardinality - 1;
       }
-      scanner = Sets.getSetScanner(map, keyPtr, keySize, false, true);
+      scanner = Sets.getScanner(map, keyPtr, keySize, false, true);
       if (scanner == null) {
         return 0;
       }
@@ -2123,7 +2123,7 @@ public class ZSets {
 
      KeysLocker.readLock(key);
      ptr = buffer + Utils.SIZEOF_INT;
-     setScanner = Sets.getSetScanner(map, keyPtr, keySize, false, true);
+     setScanner = Sets.getScanner(map, keyPtr, keySize, false, true);
      if (setScanner == null) {
        return 0;
      }
@@ -2198,7 +2198,7 @@ public class ZSets {
    try {
      KeysLocker.readLock(key);
      hashScanner =
-         Hashes.getHashScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false, true);
+         Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false, true);
      if (hashScanner != null) {
   
        while (hashScanner.hasPrevious()) {
@@ -2217,7 +2217,7 @@ public class ZSets {
        }
      } else {
        // Run through the Set
-       setScanner = Sets.getSetScanner(map, keyPtr, keySize, false, true);
+       setScanner = Sets.getScanner(map, keyPtr, keySize, false, true);
        while (setScanner.hasPrevious()) {
          long mPtr = setScanner.memberAddress();
          int mSize = setScanner.memberSize();
@@ -2311,7 +2311,7 @@ public class ZSets {
     try {
       KeysLocker.readLock(k);
       // Reverse scanner
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false, true);
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false, true);
       if (scanner == null) {
         return 0;
       }
@@ -2405,7 +2405,7 @@ public class ZSets {
       stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + Utils.SIZEOF_DOUBLE);
       int stopSize = buildKeyForSet(keyPtr, keySize, 0, 0, maxScore, startPtr);
       
-      SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, startPtr, startSize, 
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, 
         stopPtr, stopSize, false, true);
       if (scanner == null) {
         return 0;
@@ -2478,7 +2478,7 @@ public class ZSets {
    SetScanner scanner = null;
    try {
      KeysLocker.readLock(key);
-     scanner = Sets.getSetScanner(map, keyPtr, keySize, false, true);
+     scanner = Sets.getScanner(map, keyPtr, keySize, false, true);
      if (scanner == null) {
        return -1;
      }
@@ -2806,7 +2806,7 @@ public class ZSets {
    SetScanner scanner = null;
    try {
      KeysLocker.readLock(key);
-     scanner = Sets.getSetScanner(map, keyPtr, keySize, lastSeenMemberPtr, lastSeenMemberSize, 0, 0, false);
+     scanner = Sets.getScanner(map, keyPtr, keySize, lastSeenMemberPtr, lastSeenMemberSize, 0, 0, false);
      if (scanner == null) {
        return 0;
      }
@@ -2867,7 +2867,7 @@ public class ZSets {
      if (cardinality <= maxCompactSize) {
        // Scan Set to search member
        // TODO: Reverse search?
-       SetScanner scanner = Sets.getSetScanner(map, keyPtr, keySize, false);
+       SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);
        try {
          while(scanner.hasNext()) {
            long ptr = scanner.memberAddress();

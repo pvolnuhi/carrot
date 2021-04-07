@@ -2,7 +2,7 @@ package org.bigbase.carrot;
 
 import java.io.IOException;
 
-import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.Scanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -11,7 +11,7 @@ import org.bigbase.carrot.util.Utils;
  * 
  * TODO: stopRow logic
  */
-public final class DataBlockScanner extends BidirectionalScanner{
+public final class DataBlockScanner extends Scanner{
 
   /*
    * Start Row

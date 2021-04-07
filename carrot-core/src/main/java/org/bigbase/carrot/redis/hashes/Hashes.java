@@ -843,7 +843,7 @@ public class Hashes {
     HashScanner scanner = null;
     try {
       readLock(k);
-      scanner = getHashScanner(map, keyPtr, keySize, false);
+      scanner = getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {        
         return -1;
       }
@@ -1052,7 +1052,7 @@ public class Hashes {
     HashScanner scanner = null;
     try {
       KeysLocker.readLock(key);
-      scanner = Hashes.getHashScanner(map, keyPtr, keySize, lastSeenFieldPtr, lastSeenFieldSize, 0, 0, false);
+      scanner = Hashes.getScanner(map, keyPtr, keySize, lastSeenFieldPtr, lastSeenFieldSize, 0, 0, false);
       if (scanner == null) {
         return 0;
       }
@@ -1115,7 +1115,7 @@ public class Hashes {
     HashScanner scanner = null;
     try {
       KeysLocker.readLock(key);
-      scanner = getHashScanner(map, keyPtr, keySize, false);
+      scanner = getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
@@ -1179,7 +1179,7 @@ public class Hashes {
     HashScanner scanner = null;
     try {
       KeysLocker.readLock(key);
-      scanner = Hashes.getHashScanner(map, keyPtr, keySize, false);
+      scanner = Hashes.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
@@ -1232,7 +1232,7 @@ public class Hashes {
     HashScanner scanner = null;
     try {
       KeysLocker.readLock(key);
-      scanner = Hashes.getHashScanner(map, keyPtr, keySize, false);
+      scanner = Hashes.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
@@ -1274,7 +1274,7 @@ public class Hashes {
    * @param lastFieldSeenSize last seen field size
    * @return hash scanner
    */
-  public static HashScanner getHashScanner(BigSortedMap map, long lastSeenKeyPtr, 
+  public static HashScanner getScanner(BigSortedMap map, long lastSeenKeyPtr, 
       int lastSeenKeySize, long lastFieldSeenPtr, int lastFieldSeenSize) {
     int startKeySize = keySizeWithPrefix(lastSeenKeyPtr);
     long stopKeyPtr = Utils.prefixKeyEnd(lastSeenKeyPtr, startKeySize);
@@ -1285,9 +1285,12 @@ public class Hashes {
       stopKeyPtr, startKeySize);
     // TODO - test this call
     HashScanner hs = null;
-    hs = new HashScanner(scanner);
-    //TODO: below is the old impl artefact
-   // hs.seek(lastFieldSeenPtr, lastFieldSeenSize, true);
+    try {
+      hs = new HashScanner(scanner);
+    } catch (IOException e) {
+      return null;
+    }
+    //TODO: Memory deallocation?
     return hs;
   }
   
@@ -1301,8 +1304,8 @@ public class Hashes {
    * @param safe get safe instance
    * @return hash scanner
    */
-  public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
-    return getHashScanner(map, keyPtr, keySize, safe, false);
+  public static HashScanner getScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
+    return getScanner(map, keyPtr, keySize, safe, false);
   }
   
   /**
@@ -1316,7 +1319,7 @@ public class Hashes {
    * @param reverse reverse scanner
    * @return hash scanner
    */
-  public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, 
+  public static HashScanner getScanner(BigSortedMap map, long keyPtr, int keySize, 
       boolean safe, boolean reverse) {
     
     long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
@@ -1339,8 +1342,16 @@ public class Hashes {
       return null;
     }
     HashScanner hs = null;
-    hs = new HashScanner(scanner, reverse);
-    hs.setDisposeKeysOnClose(true);
+    try {
+      hs = new HashScanner(scanner, reverse);
+      hs.setDisposeKeysOnClose(true);
+    } catch (IOException e) {
+      try {
+        scanner.close();
+      } catch (IOException e1) {
+      }
+      return null;
+    }
     return hs;
   }
   
@@ -1354,9 +1365,9 @@ public class Hashes {
    * @param safe get safe instance
    * @return hash scanner
    */
-  public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, long startFieldPtr, 
+  public static HashScanner getScanner(BigSortedMap map, long keyPtr, int keySize, long startFieldPtr, 
       int startFieldSize, long endFieldPtr, int endFieldSize, boolean safe) {
-    return getHashScanner(map, keyPtr, keySize, startFieldPtr, startFieldSize, endFieldPtr, 
+    return getScanner(map, keyPtr, keySize, startFieldPtr, startFieldSize, endFieldPtr, 
       endFieldSize, safe, false);
   }
   
@@ -1371,29 +1382,68 @@ public class Hashes {
    * @param reverse reverse scanner
    * @return hash scanner
    */
-  public static HashScanner getHashScanner(BigSortedMap map, long keyPtr, int keySize, long startFieldPtr, 
-      int startFieldSize, long endFieldPtr, int endFieldSize, boolean safe, boolean reverse) {
-    long kStartPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + startFieldSize + Utils.SIZEOF_BYTE);
-    int kStartSize = buildKey(keyPtr, keySize, startFieldPtr, startFieldSize, kStartPtr);
-
-    //TODO check that endPtr is 0 - no limit
-    long kStopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + endFieldSize + Utils.SIZEOF_BYTE);
-    int kStopSize = buildKey(keyPtr, keySize, endFieldPtr, endFieldSize, kStopPtr);
-    
-    if (endFieldPtr == 0) {
-      kStopPtr = Utils.prefixKeyEndNoAlloc(kStopPtr, kStopSize);
+  public static HashScanner getScanner(BigSortedMap map, long keyPtr, int keySize, long fieldStartPtr, 
+      int fieldStartSize, long fieldStopPtr, int fieldStopSize, boolean safe, boolean reverse) {
+    //TODO Check start stop 0
+    //TODO: for public API - primary key locking? 
+    //TODO: Primary key (keyPtr, keySize) must be under lock !!!
+    // Check if start == stop != null
+    if (fieldStartPtr > 0 && fieldStopPtr > 0) {
+      if (Utils.compareTo(fieldStartPtr, fieldStartSize, fieldStopPtr, fieldStopSize) == 0) {
+        // start = stop - scanner is empty (null)
+        return null;
+      }
     }
+    long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldStartSize);
+    int startPtrSize = buildKey(keyPtr, keySize, fieldStartPtr, fieldStartSize, startPtr);
+    long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldStopSize);
+    int stopPtrSize = buildKey(keyPtr, keySize, fieldStopPtr, fieldStopSize, stopPtr);
+    if (fieldStopPtr == 0) {
+      stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopPtrSize);
+    }
+    if (reverse && fieldStartPtr > 0) {
+      // Get floorKey
+      long size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
+      if (size < 0) {
+        //TODO: should not happen if set key is locked
+      }
+      if (size > valueArenaSize.get()) {
+        checkValueArena((int)size);
+        // One more time
+        size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
+      }
+      // free start key
+      UnsafeAccess.free(startPtr);
+      startPtr = UnsafeAccess.malloc(size);
+      UnsafeAccess.copy(valueArena.get(), startPtr, size);
+      startPtrSize = (int)size;
+    }
+
     
+    //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
-        map.getSafeScanner(kStartPtr, kStartSize, kStopPtr, kStopSize, reverse): 
-          map.getScanner(kStartPtr, kStartSize, kStopPtr, kStopSize, reverse);
+        map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse):
+          map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     if (scanner == null) {
+      UnsafeAccess.free(startPtr);
+      UnsafeAccess.free(stopPtr);
       return null;
     }
+    
+    
     HashScanner hs = null;
-    hs = new HashScanner(scanner,startFieldPtr, startFieldSize, endFieldPtr, endFieldSize, reverse);
-    hs.setDisposeKeysOnClose(true);
+    try {
+      hs = new HashScanner(scanner, fieldStartPtr, fieldStartSize, fieldStopPtr, fieldStopSize, reverse);
+      hs.setDisposeKeysOnClose(true);
+    } catch (IOException e) {
+      try {
+        scanner.close();
+      } catch (IOException e1) {
+      }
+      return null;
+    }
     return hs;
+    
   }
   
   /**

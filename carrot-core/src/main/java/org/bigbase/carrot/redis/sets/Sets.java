@@ -719,7 +719,7 @@ public class Sets {
         }
         return result;
       }
-      scanner = getSetScanner(map, keyPtr, keySize, false);
+      scanner = getScanner(map, keyPtr, keySize, false);
       long result = readByIndex(scanner, index, bufferPtr, bufferSize);
       if (result == -1) {
         // OOM
@@ -873,7 +873,7 @@ public class Sets {
         // Return all elements
         return SMEMBERS(map, keyPtr, keySize, bufferPtr, bufferSize);
       }
-      scanner = getSetScanner(map, keyPtr, keySize, false);
+      scanner = getScanner(map, keyPtr, keySize, false);
       long result = readByIndex(scanner, index, bufferPtr, bufferSize);
       if (result == -1) {
         // OOM
@@ -932,7 +932,7 @@ public class Sets {
     long ptr = bufferPtr + Utils.SIZEOF_LONG;
     long count = 0;
     boolean scannerDone = false;
-    SetScanner scanner = getSetScanner(map, keyPtr, keySize, false);
+    SetScanner scanner = getScanner(map, keyPtr, keySize, false);
     
     if (scanner == null) {
       return 0;
@@ -982,8 +982,8 @@ public class Sets {
    * @param reverse reverse scanner
    * @return set scanner
    */
-  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
-    return getSetScanner(map, keyPtr, keySize, safe, false);
+  public static SetScanner getScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe) {
+    return getScanner(map, keyPtr, keySize, safe, false);
   }
 
   /**
@@ -996,7 +996,7 @@ public class Sets {
    * @param safe get safe instance
    * @return set scanner
    */
-  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe, boolean reverse) {
+  public static SetScanner getScanner(BigSortedMap map, long keyPtr, int keySize, boolean safe, boolean reverse) {
     long kPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
     UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
     UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
@@ -1016,10 +1016,17 @@ public class Sets {
       UnsafeAccess.free(kPtr);
       return null;
     }
-    SetScanner sc = new SetScanner(scanner, reverse);
-    sc.setDisposeKeysOnClose(true);
-
+    try {
+      SetScanner sc = new SetScanner(scanner, reverse);
+      sc.setDisposeKeysOnClose(true);
     return sc;
+    } catch (IOException e) {
+      try {
+        scanner.close();
+      } catch (IOException e1) {
+      }
+      return null;
+    }
   }
   /**
    * Get set scanner (with a given range) for set operations, as since we can create multiple
@@ -1035,9 +1042,9 @@ public class Sets {
    * @param safe get safe instance
    * @return set scanner
    */
-  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, 
+  public static SetScanner getScanner(BigSortedMap map, long keyPtr, int keySize, 
       long memberStartPtr, int memberStartSize, long memberStopPtr, int memberStopSize, boolean safe) {
-    return getSetScanner(map, keyPtr, keySize, memberStartPtr, memberStartSize, memberStopPtr, 
+    return getScanner(map, keyPtr, keySize, memberStartPtr, memberStartSize, memberStopPtr, 
       memberStopSize, safe, false);
   }
   
@@ -1048,32 +1055,36 @@ public class Sets {
    * @param map sorted map to run on
    * @param keyPtr key address
    * @param keySize key size
-   * @param memberStartPtr start member address
-   * @param memberStartSize size
-   * @param memberStopPtr member stop address
-   * @param memberStopSize member stop size
+   * @param fieldStartPtr start member address
+   * @param fieldStartSize size
+   * @param fieldStopPtr member stop address
+   * @param fieldStopSize member stop size
    * @param safe get safe instance
    * @param reverse get reverse scanner (true), normal (false)
    * @return set scanner
    */
-  public static SetScanner getSetScanner(BigSortedMap map, long keyPtr, int keySize, 
-      long memberStartPtr, int memberStartSize, long memberStopPtr, int memberStopSize, boolean safe, boolean reverse) {
+  public static SetScanner getScanner(BigSortedMap map, long keyPtr, int keySize, 
+      long fieldStartPtr, int fieldStartSize, long fieldStopPtr, int fieldStopSize, boolean safe, boolean reverse) {
     //TODO Check start stop 0
     //TODO: for public API - primary key locking? 
     //TODO: Primary key (keyPtr, keySize) must be under lock !!!
     // Check if start == stop != null
-    if (memberStartPtr > 0 && memberStopPtr > 0) {
-      if (Utils.compareTo(memberStartPtr, memberStartSize, memberStopPtr, memberStopSize) == 0) {
+    if (fieldStartPtr > 0 && fieldStopPtr > 0) {
+      if (Utils.compareTo(fieldStartPtr, fieldStartSize, fieldStopPtr, fieldStopSize) == 0) {
         // start = stop - scanner is empty (null)
         return null;
       }
     }
-    long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStartSize);
-    int startPtrSize = buildKey(keyPtr, keySize, memberStartPtr, memberStartSize, startPtr);
-    long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + memberStopSize);
-    int stopPtrSize = buildKey(keyPtr, keySize, memberStopPtr, memberStopSize, stopPtr);
+    long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldStartSize);
+    int startPtrSize = buildKey(keyPtr, keySize, fieldStartPtr, fieldStartSize, startPtr);
+    long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldStopSize);
+    int stopPtrSize = buildKey(keyPtr, keySize, fieldStopPtr, fieldStopSize, stopPtr);
     
-    if (reverse) {
+    if (fieldStopPtr == 0) {
+      stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopPtrSize);
+    }
+    
+    if (reverse && fieldStartPtr > 0) {
       // Get floorKey
       long size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
       if (size < 0) {
@@ -1091,7 +1102,6 @@ public class Sets {
       startPtrSize = (int)size;
     }
 
-    
     //TODO do not use thread local in scanners - check it
     BigSortedMapDirectMemoryScanner scanner = safe? 
         map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse):
@@ -1101,10 +1111,18 @@ public class Sets {
       UnsafeAccess.free(stopPtr);
       return null;
     }
-    SetScanner sc = new SetScanner(scanner, memberStartPtr, memberStartSize, 
-      memberStopPtr, memberStopSize, reverse);
-    sc.setDisposeKeysOnClose(true);
-    return sc;
+    try {
+      SetScanner sc = new SetScanner(scanner, fieldStartPtr, fieldStartSize, 
+        fieldStopPtr, fieldStopSize, reverse);
+      sc.setDisposeKeysOnClose(true);
+      return sc;
+    } catch (IOException e) {
+      try {
+        scanner.close();
+      } catch (IOException e1) {
+      }
+      return null;
+    }
   }
   
   /**

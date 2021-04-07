@@ -2,7 +2,7 @@ package org.bigbase.carrot;
 
 import java.io.IOException;
 
-import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.Scanner;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -10,7 +10,7 @@ import org.bigbase.carrot.util.Utils;
 /**
  * Thread unsafe implementation
  */
-public final class DataBlockDirectMemoryScanner extends BidirectionalScanner{
+public final class DataBlockDirectMemoryScanner extends Scanner{
 
   /*
    * Start Row pointer

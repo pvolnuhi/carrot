@@ -6,7 +6,7 @@ import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.redis.Commons;
-import org.bigbase.carrot.util.BidirectionalScanner;
+import org.bigbase.carrot.util.Scanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -15,7 +15,7 @@ import org.bigbase.carrot.util.Utils;
  * @author Vladimir Rodionov
  *
  */
-public class HashScanner extends BidirectionalScanner{
+public class HashScanner extends Scanner{
   
   /*
    * Base Map scanner
@@ -85,8 +85,9 @@ public class HashScanner extends BidirectionalScanner{
   /**
    * Constructor
    * @param scanner base scanner
+   * @throws IOException 
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner) {
+  public HashScanner(BigSortedMapDirectMemoryScanner scanner) throws IOException {
     this(scanner, 0, 0, 0, 0);
   }
   
@@ -95,8 +96,9 @@ public class HashScanner extends BidirectionalScanner{
    * Constructor
    * @param scanner base scanner
    * @param reverse true, if reverse scanner, false - otherwise
+   * @throws IOException 
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) {
+  public HashScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) throws IOException {
     this(scanner, 0, 0, 0, 0, reverse);
   }
   
@@ -107,15 +109,11 @@ public class HashScanner extends BidirectionalScanner{
    * @param startSize start field size
    * @param stop stop field address
    * @param stopSize stop field size
+   * @throws IOException 
    */
   public HashScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
-      long stop, int stopSize) {
-    this.mapScanner = scanner;
-    this.startFieldPtr = start;
-    this.startFieldSize = startSize;
-    this.stopFieldPtr = stop;
-    this.stopFieldSize = stopSize;
-    init();
+      long stop, int stopSize) throws IOException {
+   this(scanner, start, startSize, stop, stopSize, false);
   }
   
   /**
@@ -126,9 +124,10 @@ public class HashScanner extends BidirectionalScanner{
    * @param stop stop field address
    * @param stopSize stop field size
    * @param reverse reverse scanner
+   * @throws IOException 
    */
   public HashScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
-      long stop, int stopSize, boolean reverse) {
+      long stop, int stopSize, boolean reverse) throws IOException {
     this.mapScanner = scanner;
     this.startFieldPtr = start;
     this.startFieldSize = startSize;
@@ -166,7 +165,7 @@ public class HashScanner extends BidirectionalScanner{
     this.disposeKeysOnClose = b;
   }
   
-  private void init() {
+  private void init() throws IOException {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     if (this.valueAddress == -1) {
@@ -180,7 +179,7 @@ public class HashScanner extends BidirectionalScanner{
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
 
-    } else if (this.startFieldPtr > 0){
+    } else if (this.startFieldPtr > 0 && !reverse){
       // Check if current key in a mapScanner is equals to start
       long ptr = mapScanner.keyAddress();
       int size = mapScanner.keySize();
@@ -194,7 +193,12 @@ public class HashScanner extends BidirectionalScanner{
       }
     }
     if (reverse) {
-      searchLastMember();
+      if (!searchLastMember()) {
+        boolean result = previous();
+        if (!result) {
+          throw new IOException("Empty scanner");
+        }
+      }
     } else {
       searchFirstMember();
     }
@@ -236,8 +240,8 @@ public class HashScanner extends BidirectionalScanner{
     return false;
   }
   /**
-   * TODO: fix it
-   * @return
+   * Search last field in a current Value
+   * @return true on success, false - otherwise
    */
   private boolean searchLastMember() {
     
@@ -249,7 +253,7 @@ public class HashScanner extends BidirectionalScanner{
     // check if it it is not empty
     this.offset = NUM_ELEM_SIZE;
     int prevOffset = 0;
-    while (this.offset < this.valueAddress + this.valueSize) {
+    while (this.offset < this.valueSize) {
       int fSize = Utils.readUVInt(valueAddress + offset);
       int fSizeSize = Utils.sizeUVInt(fSize);
       int vSize = Utils.readUVInt(valueAddress + offset + fSizeSize);
@@ -264,6 +268,7 @@ public class HashScanner extends BidirectionalScanner{
       }
       prevOffset = offset;
       offset += fSize + vSize + fSizeSize + vSizeSize;
+      //*DEBUG*/ System.out.println("off="+ this.offset);
     }
     
     this.offset = prevOffset;
@@ -495,51 +500,43 @@ public class HashScanner extends BidirectionalScanner{
   public boolean previous() throws IOException {
     if (!reverse) {
       throw new UnsupportedOperationException("previous");
-    }    
-    if (this.offset > NUM_ELEM_SIZE && this.offset < this.valueSize) {
+    }
+    if (this.offset > NUM_ELEM_SIZE) {
       int off = NUM_ELEM_SIZE;
       while (off < this.offset) {
-        int mSize = Utils.readUVInt(this.valueAddress + off);
-        int mSizeSize = Utils.sizeUVInt(mSize);
-        if (off + mSize + mSizeSize >= this.offset) {
+        int fSize = Utils.readUVInt(this.valueAddress + off);
+        int fSizeSize = Utils.sizeUVInt(fSize);
+        int vSize = Utils.readUVInt(this.valueAddress + off + fSizeSize);
+        int vSizeSize = Utils.sizeUVInt(vSize);
+        if (off + fSize + vSize + fSizeSize + vSizeSize >= this.offset) {
           break;
         }
-        off += mSize + mSizeSize;
+        off += fSize + vSize + fSizeSize + vSizeSize;
       }
       this.offset = off;
-      this.fieldSize = Utils.readUVInt(valueAddress + offset);
-      this.fieldAddress = valueAddress + offset + Utils.sizeUVInt(this.fieldSize);
+      updateFields();
+      
+      if (this.startFieldPtr > 0) {
+        int result = Utils.compareTo(this.fieldAddress, this.fieldSize, 
+          this.startFieldPtr, this.startFieldSize);
+        if (result < 0) {
+          return false;
+        }
+      }
       return true;
     }
-    if (mapScanner.hasPrevious()) {
-      mapScanner.previous();
-      this.valueAddress = mapScanner.valueAddress();
-      this.valueSize = mapScanner.valueSize();
-      this.offset = NUM_ELEM_SIZE;
+    
+    boolean result = mapScanner.previous();
+    if (result) {
+      return searchLastMember();
     } else {
-      this.offset = 0;
       return false;
     }
-    return searchLastMember();
   }
 
 
   @Override
   public boolean hasPrevious() throws IOException {
-    if (this.valueAddress <=0) return false;
-    if (!reverse) {
-      throw new UnsupportedOperationException("hasPrevious");
-    } 
-    if (this.offset >= NUM_ELEM_SIZE && this.offset < this.valueSize) {
-      // TODO check startMemberPtr
-      if (this.startFieldPtr > 0) {
-        if (Utils.compareTo(this.fieldAddress, this.fieldSize, this.startFieldPtr, this.startFieldSize) < 0) {
-          return false;
-        }
-      }
-      return true;
-    } else {
-      return false;
-    }     
+    throw new UnsupportedOperationException("hasPrevious");
   }
 }
