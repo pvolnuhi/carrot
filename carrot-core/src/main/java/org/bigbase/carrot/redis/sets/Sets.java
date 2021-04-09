@@ -18,14 +18,8 @@ import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-
-
-
-
-
 
 /**
  * Support for packing multiple values into one K-V value
@@ -698,6 +692,54 @@ public class Sets {
   
   /**
    * For testing only
+   * @param map sorted map storage
+   * @param key set's key
+   * @param members list of members to check
+   * @return result array
+   */
+  public static byte[] SMISMEMBER(BigSortedMap map, String key, String[] members) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize= key.length();
+    long[] elemPtrs = new long[members.length];
+    int[] elemSizes = new int[members.length];
+    int i=0;
+    for(String m: members) {
+      elemPtrs[i] = UnsafeAccess.allocAndCopy(m, 0, m.length());
+      elemSizes[i++] = m.length();
+    }
+    long buffer = SMISMEMBER(map, keyPtr, keySize, elemPtrs, elemSizes);
+    byte[] returnValue = new byte[members.length];
+    for(i=0; i < returnValue.length; i++) {
+      returnValue[i] = UnsafeAccess.toByte(buffer + i);
+    }
+    return returnValue;
+  }
+  
+  /**
+   * Returns whether each member is a member of the set stored at key.
+   * For every member, 1 is returned if the value is a member of the set, 
+   * or 0 if the element is not a member of the set or if key does not exist.
+   * @param map sorted map storage
+   * @param keyPtr set's key address
+   * @param keySize set's key size
+   * @param elemPtrs array of pointers
+   * @param elemSizes array of sizes
+   * @return address of a buffer to read results from
+   */
+  public static long SMISMEMBER (BigSortedMap map, long keyPtr, int keySize, long[] elemPtrs,
+      int[] elemSizes) {
+    
+    checkValueArena(elemPtrs.length);
+    long buffer = valueArena.get();
+    for (int i=0; i < elemPtrs.length; i++) {
+      int result = SISMEMBER(map, keyPtr, keySize, elemPtrs[i], elemSizes[i]);
+      UnsafeAccess.putByte(buffer + i, (byte) result);
+    }
+    return buffer;
+  }
+  
+  /**
+   * For testing only
    * @param map sorted ordered map
    * @param srcKey source set key
    * @param dstKey destination set key
@@ -1081,6 +1123,159 @@ public class Sets {
     // Return required buffer size to hold all members
     return ptr - bufferPtr;
   }
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key set's key
+   * @param lastSeenMember last seen member
+   * @param count number of members to return
+   * @param bufferSize recommended buffer size
+   * @return list of members
+   */
+  public static List<String> SSCAN(BigSortedMap map, String key, String lastSeenMember, 
+      int count, int bufferSize, String regex){
+    
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long lastSeenPtr = lastSeenMember == null? 0: 
+      UnsafeAccess.allocAndCopy(lastSeenMember, 0, lastSeenMember.length());
+    int lastSeenSize = lastSeenMember == null? 0: lastSeenMember.length();
+    long buffer = UnsafeAccess.malloc(bufferSize);
+    // Clear first 4 bytes of a buffer
+    UnsafeAccess.putInt(buffer, 0);
+    long totalSize = SSCAN(map, keyPtr, keySize, lastSeenPtr, lastSeenSize, count, buffer, bufferSize, regex);
+    if (totalSize == 0) {
+      return null;
+    }
+    int total = UnsafeAccess.toInt(buffer);
+    if (total == 0) return null;
+    List<String> list = new ArrayList<String>();
+    long ptr = buffer + Utils.SIZEOF_INT;
+    // the last is going to be last seen member (duplicate if regex == null)
+    for (int i=0; i < total; i++) {
+      int size = Utils.readUVInt(ptr);
+      int sizeSize = Utils.sizeUVInt(size);
+      String s = Utils.toString(ptr + sizeSize, size);
+      list.add(s);
+      ptr += size + sizeSize;
+    }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(lastSeenPtr);
+    UnsafeAccess.free(buffer);
+    return list;
+  }
+  
+  
+  /**
+   * 
+   * TODO: regex 
+   * TODO: regex flavors 
+   * TODO: regex speed
+   * TODO: Always put last seen member into the result
+   * Available since 2.8.0.
+   * Time complexity: O(1) for every call. O(N) for a complete iteration, 
+   * including enough command calls for the cursor to return back to 0. N is the number of elements 
+   * inside the collection.
+   * The SCAN command and the closely related commands SSCAN, HSCAN and ZSCAN are used in order 
+   * to incrementally iterate over a collection of elements.
+   * SCAN iterates the set of keys in the currently selected Redis database.
+   * SSCAN iterates elements of Sets types.
+   * HSCAN iterates fields of Hash types and their associated values.
+   * ZSCAN iterates elements of Sorted Set types and their associated scores.
+   * Since these commands allow for incremental iteration, returning only a small number of elements 
+   * per call, they can be used in production without the downside of commands like KEYS or SMEMBERS 
+   * that may block the server for a long time (even several seconds) when called against big collections 
+   * of keys or elements.
+   * 
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param lastSeenMemberPtr  last seen field address
+   * @param lastSeenMemberSize last seen field size
+   * @param count number of elements to return
+   * @param buffer memory buffer for return items
+   * @param bufferSize buffer size
+   * @param regex pattern to match
+   * @return total serialized size of the response, if greater than bufferSize, the call 
+   *         must be retried with the appropriately sized buffer
+   */
+  public static long SSCAN(BigSortedMap map, long keyPtr, int keySize, long lastSeenMemberPtr,
+      int lastSeenMemberSize, int count, long buffer, int bufferSize, String regex) {
+    Key key = getKey(keyPtr, keySize);
+    SetScanner scanner = null;
+    try {
+      KeysLocker.readLock(key);
+      scanner = Sets.getScanner(map, keyPtr, keySize, lastSeenMemberPtr, lastSeenMemberSize, 0, 0,
+        false);
+      if (scanner == null) {
+        return 0;
+      }
+      // Check first member
+      if (lastSeenMemberPtr > 0) {
+        long ptr = scanner.memberAddress();
+        int size = scanner.memberSize();
+        if (Utils.compareTo(ptr, size, lastSeenMemberPtr, lastSeenMemberSize) == 0) {
+          if (scanner.hasNext()) {
+            scanner.next();
+          } else {
+            scanner.close();
+            return 0;
+          }
+        }
+      }
+      int c = 1; // There will always be at least one element (last seen)
+      long ptr = buffer + Utils.SIZEOF_INT;
+      // Clear first 4 bytes
+      UnsafeAccess.putInt(buffer, 0);
+      // Clear first 4 bytes of value arena
+      UnsafeAccess.putInt(valueArena.get(), 0);
+      int lastSeenSize = 0;
+      long lastPtr = ptr;
+      while (scanner.hasNext() && c <= count) {
+        long mPtr = scanner.memberAddress();
+        int mSize = scanner.memberSize();
+        int mSizeSize = Utils.sizeUVInt(mSize);
+        if (mSize + mSizeSize > lastSeenSize) {
+          lastSeenSize = mSize + mSizeSize;
+        }
+        if ((ptr + 2 *(mSize + mSizeSize)/* to add lastSeenSize*/  
+            <= buffer + bufferSize)) {
+          // Update last seen
+          checkValueArena(mSize + mSizeSize);
+          long arena = valueArena.get();
+          Utils.writeUVInt(arena, mSize);
+          UnsafeAccess.copy(mPtr, arena + mSizeSize, mSize);
+          if (regex == null || Utils.matches(mPtr, mSize, regex)) {
+            c++;
+            Utils.writeUVInt(ptr, mSize);
+            UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
+            UnsafeAccess.putInt(buffer, c);
+            lastPtr +=  mSize + mSizeSize;
+          }
+        }
+        ptr += mSize + mSizeSize;
+        scanner.next();
+      }
+        // Write last seen member
+      long arena = valueArena.get();
+      int mSize = Utils.readUVInt(arena);
+      int mSizeSize = Utils.sizeUVInt(mSize);
+      if (mSize > 0) {
+        Utils.writeUVInt(lastPtr, mSize);
+        UnsafeAccess.copy(arena + mSizeSize, lastPtr + mSizeSize, mSize);
+      }
+      scanner.close();
+      //TODO: add last seen size 
+      return ptr - buffer + lastSeenSize;
+    } catch (IOException e) {
+      // Will never be thrown
+    } finally {
+      KeysLocker.readUnlock(key);
+    }
+    return 0;
+  }
+  
   
   /**
    * Get set scanner for set operations, as since we can create multiple

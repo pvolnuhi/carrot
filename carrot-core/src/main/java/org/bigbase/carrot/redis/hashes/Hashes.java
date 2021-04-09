@@ -1084,9 +1084,10 @@ public class Hashes {
         ptr += fSize + fSizeSize + vSize + vSizeSize;
         scanner.next();
       }
-      return ptr - buffer - Utils.SIZEOF_INT;
+      scanner.close();
+      return ptr - buffer;
     } catch (IOException e) {
-
+      // Will never be thrown
    } finally {
       KeysLocker.readUnlock(key);
     }

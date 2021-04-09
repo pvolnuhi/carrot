@@ -4,10 +4,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -144,9 +148,188 @@ public class SetsAPITest {
 
   }
   
+  @Test
+  public void testMultipleMembersOperation() {
+    System.out.println("Test Sets SMISMEMBER API call");
+    // Add multiple members
+    int result = Sets.SADD(map, "key" , new String[] {"member1", "member2", "member3", "member4", "member5"});
+    assertEquals(5, result);
+    byte[] res = Sets.SMISMEMBER(map, "key", new String[] {"member1", "member2", "member3", "member4", "member5"});
+    // All must be 1
+    assertEquals(5, res.length);
+    for(int i=0; i < res.length; i++) {
+      assertEquals(1, (int)res[i]);
+    }
+    
+    res = Sets.SMISMEMBER(map, "key", new String[] {"member3", "member4", "member5"});
+    // All must be 1
+    assertEquals(3, res.length);
+    for(int i=0; i < res.length; i++) {
+      assertEquals(1, (int)res[i]);
+    }
+    
+    res = Sets.SMISMEMBER(map, "key1", new String[] {"member1", "member2", "member3", "member4", "member5"});
+    // All must be 1
+    assertEquals(5, res.length);
+    for(int i=0; i < res.length; i++) {
+      assertEquals(0, (int)res[i]);
+    }
+    
+    res = Sets.SMISMEMBER(map, "key", new String[] {"xember1", "xember2", "xember3", "member4", "member5"});
+    // All must be 1
+    assertEquals(5, res.length);
+    assertEquals(0, (int)res[0]);
+    assertEquals(0, (int)res[1]);
+    assertEquals(0, (int)res[2]);
+    assertEquals(1, (int)res[3]);
+    assertEquals(1, (int)res[4]);
+    
+  }
+  
+  @Test
+  public void testSscanNoRegex() {
+    System.out.println("Test Sets SSCAN API call w/o regex pattern");
+    // Load X elements
+    int X = 10000;
+    String key = "key";
+    Random r = new Random();
+    List<String> list = new ArrayList<String>();
+    for (int i=0; i < X; i++) {
+      String m = Utils.getRandomStr(r, 10);
+      list.add(m);
+      int res = Sets.SADD(map, key, m);
+      assertEquals(1, res);
+    }
+    
+    Collections.sort(list);
+    
+    // Check cardinality
+    assertEquals(X, (int)Sets.SCARD(map, key));
+    
+    // Check full scan
+    String lastSeenMember = null;
+    int count = 11;
+    int total = scan(map, key, lastSeenMember, count, 200, null);
+    assertEquals(X, total);
+
+    // Check correctness of partial scans
+    
+    for(int i = 0; i < 1000; i++) {
+      int index = r.nextInt(list.size());
+      String lastSeen =  list.get(index);
+      int expected = list.size() - index - 1;
+      total = scan(map, key, lastSeen, count, 200, null) ;
+      assertEquals(expected, total);
+    }
+    
+    // Check edge cases
+    
+    String before = "A";
+    String after  = "zzzzzzzzzzzzzzzz";
+    
+    total = scan(map, key, before, count, 200, null);
+    assertEquals(X, total);
+    total = scan(map, key, after, count, 200, null);
+    assertEquals(0, total);
+    
+    // Test buffer underflow - small buffer
+    // buffer size is less than needed to keep 'count' members
+    
+    total = scan(map, key, before, count, 100, null);
+    assertEquals(X, total);
+    total = scan(map, key, after, count, 100, null);
+    assertEquals(0, total);
+    
+  }
+  
+  private int countMatches(List<String> list, int startIndex, String regex)
+  {
+    int total = 0;
+    List<String> subList = list.subList(startIndex, list.size());
+    for (String s: subList) {
+      if (s.matches(regex)) {
+        total++;
+      }
+    }
+    return total;
+  }
+  
+  @Test
+  public void testSscanWithRegex() {
+    System.out.println("Test Sets SSCAN API call w/o regex pattern");
+    // Load X elements
+    int X = 10000;
+    String key = "key";
+    String regex = "^A.*";
+    Random r = new Random();
+    List<String> list = new ArrayList<String>();
+    for (int i=0; i < X; i++) {
+      String m = Utils.getRandomStr(r, 10);
+      list.add(m);
+      int res = Sets.SADD(map, key, m);
+      assertEquals(1, res);
+    }
+    
+    Collections.sort(list);
+    
+    // Check cardinality
+    assertEquals(X, (int)Sets.SCARD(map, key));
+    
+    // Check full scan
+    int expected = countMatches(list, 0, regex);
+    String lastSeenMember = null;
+    int count = 11;
+    int total = scan(map, key, lastSeenMember, count, 200, regex);
+    assertEquals(expected, total);
+
+    // Check correctness of partial scans
+    
+    for(int i = 0; i < 100; i++) {
+      int index = r.nextInt(list.size());
+      String lastSeen =  list.get(index);
+      String pattern = "^" + lastSeen.charAt(0) + ".*";
+      expected = index == list.size() -1? 0: countMatches(list, index + 1, pattern);
+      total = scan(map, key, lastSeen, count, 200, pattern) ;
+      assertEquals(expected, total);
+    }
+    
+    // Check edge cases
+    
+    String before = "A";
+    String after  = "zzzzzzzzzzzzzzzz";
+    expected = countMatches(list, 0, regex);
+    
+    total = scan(map, key, before, count, 200, regex);
+    assertEquals(expected, total);
+    total = scan(map, key, after, count, 200, regex);
+    assertEquals(0, total);
+    
+    // Test buffer underflow - small buffer
+    // buffer size is less than needed to keep 'count' members
+    expected = countMatches(list, 0, regex);
+    total = scan(map, key, before, count, 100, regex);
+    assertEquals(expected, total);
+    total = scan(map, key, after, count, 100, regex);
+    assertEquals(0, total);
+    
+  }
+  
+  private int scan(BigSortedMap map, String key, String lastSeenMember, 
+      int count, int bufferSize, String regex)
+  {
+    int total = 0;
+    List<String> result = null;
+    // Check overall functionality - full scan
+    while((result = Sets.SSCAN(map, key, lastSeenMember, count, 200, regex)) != null) {
+      total += result.size() - 1;
+      lastSeenMember = result.get(result.size() - 1);
+    }
+    return total;
+  }
+  
   @Before
   public void setUp() {
-    map = new BigSortedMap(100000);
+    map = new BigSortedMap(100000000);
   }
   
   @After

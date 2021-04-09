@@ -1217,6 +1217,21 @@ public class Utils {
   }
   
   /**
+   * TODO: optimize for speed
+   * TODO: Regex flavors? What flavor does Java support?
+   * Checks if a memory blob specified by address and size
+   * matches regular expression
+   * @param ptr address
+   * @param size size
+   * @param pattern pattern to match
+   * @return true - yes, false - otherwise
+   */
+  public static boolean matches(long ptr, int size, String pattern) {
+    String s = toString(ptr, size);
+    return s.matches(pattern);
+  }
+  
+  /**
    * Read memory as byte array
    * @param ptr address
    * @param size size of a memory 
@@ -1256,7 +1271,7 @@ public class Utils {
    */
   public static String getRandomStr(Random r, int size) {
     int start = 'A';
-    int stop = 'z';
+    int stop = 'Z';
     StringBuffer sb = new StringBuffer(size);
     for (int i=0; i < size; i++) {
       int v = r.nextInt(stop - start) + start;
