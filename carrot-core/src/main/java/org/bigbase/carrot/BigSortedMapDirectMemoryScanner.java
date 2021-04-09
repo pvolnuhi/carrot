@@ -168,7 +168,6 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
     } 
     if (blockScanner == null) {
       close();
-      /*DEBUG*/ System.out.println("Scanner=NULL");
       throw new IOException("empty scanner");
     }
   }

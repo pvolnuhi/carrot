@@ -1401,7 +1401,7 @@ public class Hashes {
     if (fieldStopPtr == 0) {
       stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopPtrSize);
     }
-    if (reverse && fieldStartPtr > 0) {
+    if (/*reverse &&*/ fieldStartPtr > 0) {
       // Get floorKey
       long size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
       if (size < 0) {

@@ -153,6 +153,7 @@ public class HashScanner extends Scanner{
    * @param size key size
    * @return size of a field
    */
+  @SuppressWarnings("unused")
   private int getFieldSize(long ptr, int size) {
     return (int)(ptr + size - getFieldAddress(ptr));
   }
@@ -169,28 +170,7 @@ public class HashScanner extends Scanner{
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     if (this.valueAddress == -1) {
-      // Hack, rewind block scanner by one record back
-      // This hack works, b/c when scanner seeks first record
-      // which is  *always* greater or equals to a startRow, but
-      // we need the previous one, which is the largest row which is less
-      // or equals to a startRow. 
-      //TODO: Reverse scanner?
-      mapScanner.getBlockScanner().prev();
-      this.valueAddress = mapScanner.valueAddress();
-      this.valueSize = mapScanner.valueSize();
-
-    } else if (this.startFieldPtr > 0 && !reverse){
-      // Check if current key in a mapScanner is equals to start
-      long ptr = mapScanner.keyAddress();
-      int size = mapScanner.keySize();
-      size = getFieldSize(ptr, size);
-      ptr = getFieldAddress(ptr);
-      if (Utils.compareTo(this.startFieldPtr, this.startFieldSize, ptr, size) != 0) {
-        // TODO: check the result
-        mapScanner.getBlockScanner().prev();
-        this.valueAddress = mapScanner.valueAddress();
-        this.valueSize = mapScanner.valueSize();
-      }
+      throw new IOException("Empty scanner");
     }
     if (reverse) {
       if (!searchLastMember()) {

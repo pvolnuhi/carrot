@@ -3,7 +3,6 @@ package org.bigbase.carrot;
 import java.io.IOException;
 
 import org.bigbase.carrot.util.Scanner;
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -97,7 +96,7 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
 
     DataBlockDirectMemoryScanner bs = scanner.get();
     bs.reset();
-    if (!b.isValid() /*|| b.isEmpty()*/) {
+    if (!b.isValid()) {
       // Return null for now
       return null;
     }
@@ -109,8 +108,15 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
     bs.setBlock(b);
     bs.setSnapshotId(snapshotId);
     bs.setStartRow(startRowPtr, startRowLength);
+    if (startRowPtr > 0 && stopRowPtr > 0 && bs.curPtr < bs.ptr + bs.dataSize) {
+      long ptr = DataBlock.keyAddress(bs.curPtr);
+      int size = DataBlock.keyLength(bs.curPtr);
+      if (Utils.compareTo(ptr, size, stopRowPtr, stopRowLength) >= 0) {
+        // Actual start row is not less than stop row
+        return null;
+      }
+    }
     bs.setStopRow(stopRowPtr, stopRowLength);
-    //*DEBUG*/ System.out.println("New DBDMS Block address=" + b.getAddress() + " rows="+ b.getNumberOfRecords());
     return bs;
   }
   
@@ -147,6 +153,15 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
     bs.setBlock(b);
     bs.setSnapshotId(snapshotId);
     bs.setStartRow(startRowPtr, startRowLength);
+    // Now check this.curPtr against stopRow
+    if (startRowPtr > 0 && stopRowPtr > 0 && bs.curPtr < bs.ptr + bs.dataSize) {
+      long ptr = DataBlock.keyAddress(bs.curPtr);
+      int size = DataBlock.keyLength(bs.curPtr);
+      if (Utils.compareTo(ptr, size, stopRowPtr, stopRowLength) >= 0) {
+        // Actual start row is not less than stop row
+        return null;
+      }
+    }
     bs.setStopRow(stopRowPtr, stopRowLength);
     return bs;
   }
@@ -176,7 +191,7 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
     this.startRowLength = len;
     if (startRowPtr != 0) {
       search(startRowPtr, startRowLength, snapshotId, Op.DELETE);
-      skipDeletedAndIrrelevantRecords();// One more time
+      //skipDeletedAndIrrelevantRecords();// One more time
     } else {
       this.curPtr = this.ptr;
     }
@@ -193,11 +208,9 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
   void search(long key, int keyLength, long snapshotId, Op type) {
     long ptr = this.ptr;
     int count = 0;
-    //*DEBUG*/ System.out.println("Search   ="+Bytes.toHex(key, keyLength)+ " numRecords=" + numRecords);
     while (count++ < numRecords) {
       int keylen = DataBlock.keyLength(ptr);
       int vallen = DataBlock.valueLength(ptr);
-      //*DEBUG*/ System.out.println("Search   =" + Bytes.toHex(DataBlock.keyAddress(ptr), keylen));
       int res =
           Utils.compareTo(key, keyLength, DataBlock.keyAddress(ptr), keylen);
       if (res < 0) {
@@ -330,7 +343,7 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
    */
   public final boolean next() {
 
-    skipDeletedAndIrrelevantRecords();
+    //skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr < this.dataSize) {
       int keylen = DataBlock.blockKeyLength(this.curPtr);
       int vallen = DataBlock.blockValueLength(this.curPtr);
@@ -727,7 +740,7 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
   
   @Override
   public boolean hasPrevious() {
-    long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 : this.ptr;
+    long limit = isFirst ? this.ptr + DataBlock.RECORD_TOTAL_OVERHEAD + 2 /*{0,0}*/ : this.ptr;
     long pptr = limit;
     if (pptr == this.curPtr) {
       return false;

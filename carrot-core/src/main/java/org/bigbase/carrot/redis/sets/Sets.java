@@ -9,6 +9,8 @@ import static org.bigbase.carrot.redis.KeysLocker.readUnlock;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
@@ -224,6 +226,33 @@ public class Sets {
     }
   }
   
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key set's key
+   * @param members array of members
+   * @return number of newly added members
+   */
+  
+  public static int SADD(BigSortedMap map, String key, String[] members) {
+    
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length(); 
+    long[] ptrs = new long[members.length];
+    int [] sizes = new int[members.length];
+    int i = 0;
+    for(String m : members) {
+      ptrs[i] = UnsafeAccess.allocAndCopy(m, 0, m.length());
+      sizes[i++] = m.length();
+    }
+    
+    int result = SADD(map, keyPtr, keySize, ptrs, sizes);
+    UnsafeAccess.free(keyPtr);
+    Arrays.stream(ptrs).forEach( x-> UnsafeAccess.free(x));
+    return result;
+  }
+  
   /**
    * For testing only
    */
@@ -356,6 +385,21 @@ public class Sets {
    */
   public static long SUNIONSTORE(BigSortedMap map, long[] keyPtrs, int[] keySizes) {
     return 0;
+  }
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key set's key
+   * @return set's cardinality
+   */
+  
+  public static long SCARD(BigSortedMap map, String key) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long result = SCARD(map, keyPtr, keySize);
+    UnsafeAccess.free(keyPtr);
+    return result;
   }
   
   /**
@@ -601,6 +645,31 @@ public class Sets {
   }
   
   /**
+   * For TESTING only
+   * 
+   * Returns if member is a member of the set stored at key.
+   * Return value
+   * Integer reply, specifically:
+   * 1 if the element is a member of the set.
+   * 0 if the element is not a member of the set, or if key does not exist.   
+   * @param map sorted map
+   * @param key set's key 
+   * @param value member to check
+   * @return 1 if exists, 0 - otherwise
+   */
+  
+  public static int SISMEMBER(BigSortedMap map, String key, String value) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long elemPtr = UnsafeAccess.allocAndCopy(value, 0, value.length());
+    int elemSize = value.length();
+    int result = SISMEMBER(map, keyPtr, keySize, elemPtr, elemSize);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(elemPtr);
+    return result;
+  }
+  
+  /**
    * Returns if member is a member of the set stored at key.
    * Return value
    * Integer reply, specifically:
@@ -625,6 +694,29 @@ public class Sets {
       return 1;
     }
     return 0;
+  }
+  
+  /**
+   * For testing only
+   * @param map sorted ordered map
+   * @param srcKey source set key
+   * @param dstKey destination set key
+   * @param member member to move
+   * @return 1 - success, 0 - member is not in source
+   */
+  public static int SMOVE(BigSortedMap map, String srcKey, String dstKey, String member) {
+    long srcKeyPtr = UnsafeAccess.allocAndCopy(srcKey, 0, srcKey.length());
+    int srcKeySize = srcKey.length();
+    long dstKeyPtr = UnsafeAccess.allocAndCopy(dstKey, 0, dstKey.length());
+    int dstKeySize = dstKey.length();
+    long memPtr = UnsafeAccess.allocAndCopy(member, 0, member.length());
+    int memSize = member.length();
+    
+    int result = SMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, memPtr, memSize);
+    UnsafeAccess.free(srcKeyPtr);
+    UnsafeAccess.free(dstKeyPtr);
+    UnsafeAccess.free(memPtr);
+    return result;
   }
   
   /**
@@ -660,13 +752,11 @@ public class Sets {
     keyList.add(dst);    
     try {
       KeysLocker.writeLockAllKeys(keyList);
-      long[] elemPtrs = new long[] {elemPtr};
-      int [] elemSizes = new int[] {elemSize};
-      int n = SREM(map, srcKeyPtr, srcKeySize, elemPtrs, elemSizes);
+      int n = SREM(map, srcKeyPtr, srcKeySize, elemPtr, elemSize);
       if (n == 0) {
         return 0;
       }
-      int count = SADD(map, dstKeyPtr, dstKeySize, elemPtrs, elemSizes);
+      int count = SADD(map, dstKeyPtr, dstKeySize, elemPtr, elemSize);
       return count;
     } finally {
       KeysLocker.writeUnlockAllKeys(keyList);
@@ -916,6 +1006,37 @@ public class Sets {
   }
   
   /**
+   * For testing only
+   * @param map sorted ordered map
+   * @param key set's key
+   * @param bufferSize recommended buffer size to hold all data
+   * @return list of members, which fit buffer or null (set does not exist)
+   */
+  public static List<byte[]> SMEMBERS (BigSortedMap map, byte[] key, int bufferSize) {
+    
+    long bufferPtr = UnsafeAccess.malloc(bufferSize);
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length);
+    int keySize = key.length;
+    long result = SMEMBERS(map, keyPtr, keySize, bufferPtr, bufferSize);
+    if (result <= 0) {
+      return null;
+    }
+    List<byte[]> list = new ArrayList<byte[]>();
+    long count = UnsafeAccess.toLong(bufferPtr);
+    long ptr = bufferPtr + Utils.SIZEOF_LONG;
+    for (int i = 0; i < count; i++) {
+      int size = Utils.readUVInt(ptr);
+      int sizeSize = Utils.sizeUVInt(size);
+      byte[] member = Utils.toBytes(ptr + sizeSize, size);
+      list.add(member);
+      ptr += size + sizeSize;
+    }
+    UnsafeAccess.free(bufferPtr);
+    UnsafeAccess.free(keyPtr);
+    return list;
+  }
+  
+  /**
    * Returns all the members of the set value stored at key.
    * Serialized format : [SET_SIZE][MEMBER]+
    *  [SET_SIZE] = 8 bytes
@@ -926,49 +1047,39 @@ public class Sets {
    * @param map sorted map storage
    * @param keyPtr key address
    * @param keySize key size
-   * @return number of elements or -1 if buffer is not large enough, 0 - empty or does not exists
+   * @return total buffer size required to hold all members, or -1 if set does not exist 0 - empty
    */
   public static long SMEMBERS(BigSortedMap map, long keyPtr, int keySize, long bufferPtr, int bufferSize) {
     long ptr = bufferPtr + Utils.SIZEOF_LONG;
     long count = 0;
-    boolean scannerDone = false;
     SetScanner scanner = getScanner(map, keyPtr, keySize, false);
-    
     if (scanner == null) {
-      return 0;
-    }
-    
-    while(ptr < bufferPtr + bufferSize) {
-      
-      int elSize = scanner.memberSize();
-      int elSizeSize = Utils.sizeUVInt(elSize);
-      if ( ptr + elSize + elSizeSize > bufferPtr + bufferSize) {
-        break;
-      }
-      long elPtr = scanner.memberAddress();
-      // Write size
-      Utils.writeUVInt(ptr, elSize);
-      // Copy member
-      UnsafeAccess.copy(elPtr,  ptr + elSizeSize, elSize);
-      ptr += elSize + elSizeSize;
-      count++;
-      try {
-        if (!scanner.next()) {
-          scannerDone = true;
-          break;
-        }
-      } catch (IOException e) {
-        // Should throw it
-      }
-    }
-    
-    if (!scannerDone) {
       return -1;
-    } else {
-      // Write total number of elements
-      UnsafeAccess.putLong(bufferPtr, count);
-      return count;
     }
+    try {
+      // Write total number of elements
+      UnsafeAccess.putLong(bufferPtr, count);// Write 0
+      while (scanner.hasNext()) {
+        int elSize = scanner.memberSize();
+        int elSizeSize = Utils.sizeUVInt(elSize);
+        if (ptr + elSize + elSizeSize <= bufferPtr + bufferSize) {
+          long elPtr = scanner.memberAddress();
+          // Write size
+          Utils.writeUVInt(ptr, elSize);
+          // Copy member
+          UnsafeAccess.copy(elPtr, ptr + elSizeSize, elSize);
+          count++;
+          // Write total number of elements
+          UnsafeAccess.putLong(bufferPtr, count);
+        }
+        ptr += elSize + elSizeSize;
+        scanner.next();
+      }
+      scanner.close();
+    } catch (IOException e) {
+    } 
+    // Return required buffer size to hold all members
+    return ptr - bufferPtr;
   }
   
   /**
@@ -1002,12 +1113,9 @@ public class Sets {
     UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE,(byte) 0);
-    
     keySize += KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
-    
     long endPtr = Utils.prefixKeyEnd(kPtr, keySize - 1);
-    int endKeySize = keySize - 1; 
-        
+    int endKeySize = keySize - 1;     
     BigSortedMapDirectMemoryScanner scanner = safe? 
         map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
           map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
@@ -1019,7 +1127,7 @@ public class Sets {
     try {
       SetScanner sc = new SetScanner(scanner, reverse);
       sc.setDisposeKeysOnClose(true);
-    return sc;
+      return sc;
     } catch (IOException e) {
       try {
         scanner.close();
@@ -1084,7 +1192,7 @@ public class Sets {
       stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopPtrSize);
     }
     
-    if (reverse && fieldStartPtr > 0) {
+    if (/*reverse &&*/ fieldStartPtr > 0) {
       // Get floorKey
       long size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
       if (size < 0) {

@@ -171,28 +171,7 @@ public class SetScanner extends Scanner {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     if (this.valueAddress == -1) {
-      // Hack, rewind block scanner by one record back
-      // This hack works, b/c when scanner seeks first record
-      // which is *always* greater or equals to a startRow, but
-      // we need the previous one, which is the largest row which is less
-      // to a startRow.
-      // TODO: Reverse scanner?
-      mapScanner.getBlockScanner().prev();
-      this.valueAddress = mapScanner.valueAddress();
-      this.valueSize = mapScanner.valueSize();
-
-    } else if (this.startMemberPtr > 0 && !reverse) {
-      // Check if current key in a mapScanner is equals to start
-      // This is a hack for direct scanner
-      long ptr = mapScanner.keyAddress();
-      int size = mapScanner.keySize();
-      size = getMemberSize(ptr, size);
-      ptr = getMemberAddress(ptr);
-      if (Utils.compareTo(this.startMemberPtr, this.startMemberSize, ptr, size) != 0) {
-        mapScanner.getBlockScanner().prev();
-        this.valueAddress = mapScanner.valueAddress();
-        this.valueSize = mapScanner.valueSize();
-      }
+      throw new IOException("Empty scanner");
     }
     if (reverse) {
       if (!searchLastMember()) {

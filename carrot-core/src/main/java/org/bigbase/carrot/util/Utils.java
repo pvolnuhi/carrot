@@ -9,6 +9,7 @@ import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetInt;
 import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetLong;
 import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetShort;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -511,6 +512,8 @@ public class Utils {
     return -1;
   }
   /**
+   * 
+   * TODO: THIS METHOD IS UNSAFE??? CHECK IT
    * Read unsigned VarInt
    * @param ptr address to read from
    * @return int value
@@ -1166,6 +1169,12 @@ public class Utils {
     }
   }
   
+  /**
+   * Gets overall allocated memory size 
+   * for a list of objects
+   * @param list
+   * @return total size
+   */
   public static long size(List<KeyValue> list) {
     long size = 0;
     for (KeyValue kv :list) {
@@ -1174,12 +1183,20 @@ public class Utils {
     return size;
   }
   
+  /**
+   * Free memory
+   * @param keys
+   */
   public static void freeKeys(List<Key> keys) {
     for (Key k: keys) {
       UnsafeAccess.free(k.address);
     }
   }
   
+  /**
+   * Free memory
+   * @param kvs
+   */
   public static void freeKeyValues(List<KeyValue> kvs) {
     for (KeyValue kv: kvs) {
       UnsafeAccess.free(kv.keyPtr);
@@ -1187,12 +1204,36 @@ public class Utils {
     }
   }
   
+  /**
+   * Reads memory as a string
+   * @param ptr address
+   * @param size size of a memory
+   * @return string
+   */
   public static String toString(long ptr, int size) {
     byte[] buf = new byte[size];
     UnsafeAccess.copy(ptr, buf, 0, size);
     return new String(buf);
   }
   
+  /**
+   * Read memory as byte array
+   * @param ptr address
+   * @param size size of a memory 
+   * @return byte array
+   */
+  public static byte[] toBytes(long ptr, int size) {
+    byte[] buf = new byte[size];
+    UnsafeAccess.copy(ptr, buf, 0, size);
+    return buf;
+  }
+  
+  /**
+   * Converts string representation of a number 
+   * to a byte array
+   * @param value string number
+   * @return number as a byte array
+   */
   public static byte[] numericStrToBytes(String value) {
     // value is numeric 
     long v = Long.parseLong(value);
@@ -1207,6 +1248,12 @@ public class Utils {
     }
   }
   
+  /**
+   * Generates random alphanumeric string
+   * @param r random generator
+   * @param size size of a string to generate
+   * @return string
+   */
   public static String getRandomStr(Random r, int size) {
     int start = 'A';
     int stop = 'z';
@@ -1216,6 +1263,36 @@ public class Utils {
       sb.append((char)v);
     }
     return sb.toString();
+  }
+  
+  /**
+   * Counts elements in a reverse scanner
+   * @param s scanner
+   * @return total number of elements
+   * @throws IOException
+   */
+  public static int countReverse (Scanner s) throws IOException {
+    if (s == null) return 0;
+    int total = 0;
+    do {
+      total++;
+    } while(s.previous());
+    return total;
+  }
+  /**
+   * Counts elements in a direct scanner
+   * @param s scanner
+   * @return total number of elements
+   * @throws IOException
+   */
+  public static int count (Scanner s) throws IOException {
+    if (s == null) return 0;
+    int total = 0;
+    while(s.hasNext()) {
+      total++;
+      s.next();
+    };
+    return total;
   }
   
   public static void main(String[] args) {

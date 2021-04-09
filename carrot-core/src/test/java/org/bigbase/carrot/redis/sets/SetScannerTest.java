@@ -105,6 +105,12 @@ public class SetScannerTest {
   private void allTests() throws IOException {
     long start = System.currentTimeMillis();
     setUp();
+    testDirectScannerPerformance();
+    tearDown();
+    setUp();
+    testReverseScannerPerformance();
+    tearDown();
+    setUp();
     testEdgeConditions();
     tearDown();
     setUp();
@@ -186,6 +192,11 @@ public class SetScannerTest {
       deleteRandom(map, key.address, key.length, copy, r);
       SetScanner scanner = Sets.getScanner(map, key.address, key.length, false);
       int expected = copy.size();
+      if (expected == 0 && scanner == null) {
+        break;
+      } else if (scanner == null) {
+        fail("Scanner is null, but expected="+ expected);
+      }
       int cc = 0;
       while(scanner.hasNext()) {
         cc++;
@@ -279,7 +290,7 @@ public class SetScannerTest {
     if (expected == 0) {
       assertTrue(scanner.hasNext() == false);
     } else {
-      assertEquals(expected, count(scanner));
+      assertEquals(expected, Utils.count(scanner));
     }
     scanner.close();
     
@@ -290,7 +301,7 @@ public class SetScannerTest {
     if (expected == 0) {
       assertTrue(scanner == null);
     } else {
-      assertEquals(expected, countReverse(scanner));
+      assertEquals(expected, Utils.countReverse(scanner));
       scanner.close();
     }
     // Always close ALL scanners
@@ -305,7 +316,7 @@ public class SetScannerTest {
     if (expected == 0) {
       assertTrue(scanner.hasNext() == false);
     } else {
-      assertEquals(expected, count(scanner));
+      assertEquals(expected, Utils.count(scanner));
     }
     scanner.close();
 
@@ -316,7 +327,7 @@ public class SetScannerTest {
     if (expected == 0) {
       assertTrue(scanner == null);
     } else {
-      assertEquals(expected, countReverse(scanner));
+      assertEquals(expected, Utils.countReverse(scanner));
       scanner.close();
     }
 
@@ -327,25 +338,6 @@ public class SetScannerTest {
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
 
-  }
-  
-  int countReverse (SetScanner s) throws IOException {
-    if (s == null) return 0;
-    int total = 0;
-    do {
-      total++;
-    } while(s.previous());
-    return total;
-  }
-  
-  int count (SetScanner s) throws IOException {
-    if (s == null) return 0;
-    int total = 0;
-    while(s.hasNext()) {
-      total++;
-      s.next();
-    };
-    return total;
   }
   
   @Ignore
@@ -453,8 +445,10 @@ public class SetScannerTest {
       int expected = (int)(endIndex - startIndex);
       SetScanner scanner = Sets.getScanner(map, key.address, key.length,
         startPtr, startSize, endPtr, endSize, false);
-      if (scanner == null) {
+      if (scanner == null && expected == 0) {
         continue;
+      } else if (scanner == null) {
+        fail("Scanner is null, but expected="+ expected);
       }
       int cc = 0;
       while(scanner.hasNext()) {
@@ -520,8 +514,10 @@ public class SetScannerTest {
       int expected = (int)(endIndex - startIndex);
       SetScanner scanner = Sets.getScanner(map, key.address, key.length,
         startPtr, startSize, endPtr, endSize, false);
-      if (scanner == null) {
+      if (scanner == null && expected == 0) {
         continue;
+      } else if (scanner == null) {
+        fail("Scanner is null, but expected="+ expected);
       }
       int cc = 0;
       while(scanner.hasNext()) {
@@ -587,8 +583,10 @@ public class SetScannerTest {
       int expected = (int)(endIndex - startIndex);
       SetScanner scanner = Sets.getScanner(map, key.address, key.length,
         startPtr, startSize, endPtr, endSize, false);
-      if (scanner == null) {
+      if (scanner == null && expected == 0) {
         continue;
+      }  else if (scanner == null) {
+        fail("Scanner is null, but expected="+ expected);
       }
       int cc = 0;
       while(scanner.hasNext()) {
@@ -816,6 +814,68 @@ public class SetScannerTest {
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
 
   }
+  
+  @Ignore
+  @Test
+  public void testDirectScannerPerformance() throws IOException {
+    //int n = 5000000; // 5M elements
+    System.out.println("Test direct scanner performance "+ n + " elements");
+    Key key = getKey();
+    List<Value> values = getValues(n);
+    long start = System.currentTimeMillis();
+    loadData(key, values);
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+    " bytes per value. Time to load: "+(end -start)+"ms");
+    
+    SetScanner scanner = Sets.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, false);
+    
+    start = System.currentTimeMillis();
+    long count = 0;
+    while(scanner.hasNext()) {
+      count++;
+      scanner.next();
+    }
+    scanner.close();
+    assertEquals(count, (long) n);
+    end = System.currentTimeMillis();
+    System.out.println("Scanned "+ n+" elements in "+ (end-start)+"ms");
+  }  
+  
+  @Ignore
+  @Test
+  public void testReverseScannerPerformance() throws IOException {
+    //int n = 5000000; // 5M elements
+    System.out.println("Test reverse scanner performance "+ n + " elements");
+    Key key = getKey();
+    List<Value> values = getValues(n);
+    long start = System.currentTimeMillis();
+    loadData(key, values);
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+    " bytes per value. Time to load: "+(end -start)+"ms");
+    
+    SetScanner scanner = Sets.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, true);
+    
+    start = System.currentTimeMillis();
+    long count = 0;
+    
+    do {
+      count++;
+    } while(scanner.previous());
+    scanner.close();
+    assertEquals(count, (long) n);
+    
+    end = System.currentTimeMillis();
+    System.out.println("Scanned (reversed) "+ n+" elements in "+ (end-start)+"ms");
+  }  
+  
   
   private <T> List<T> copy(List<T> src) {
     List<T> copy = new ArrayList<T>();

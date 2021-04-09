@@ -179,6 +179,10 @@ public class HashScannerTest {
       deleteRandom(map, key.address, key.length, copy, r);
       HashScanner scanner = Hashes.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, false);
       int expected = copy.size();
+      if (scanner == null) {
+        assertEquals(0, expected);
+        break;
+      }
       int cc = 0;
       while(scanner.hasNext()) {
         cc++;
@@ -270,7 +274,7 @@ public class HashScannerTest {
     if (expected == 0) {
       assertTrue(scanner.hasNext() == false);
     } else {
-      assertEquals(expected, count(scanner));
+      assertEquals(expected, Utils.count(scanner));
     }
     scanner.close();
     
@@ -281,7 +285,7 @@ public class HashScannerTest {
     if (expected == 0) {
       assertTrue(scanner == null);
     } else {
-      assertEquals(expected, countReverse(scanner));
+      assertEquals(expected, Utils.countReverse(scanner));
       scanner.close();
     }
     // Always close ALL scanners
@@ -296,7 +300,7 @@ public class HashScannerTest {
     if (expected == 0) {
       assertTrue(scanner.hasNext() == false);
     } else {
-      assertEquals(expected, count(scanner));
+      assertEquals(expected, Utils.count(scanner));
     }
     scanner.close();
 
@@ -307,7 +311,7 @@ public class HashScannerTest {
     if (expected == 0) {
       assertTrue(scanner == null);
     } else {
-      assertEquals(expected, countReverse(scanner));
+      assertEquals(expected, Utils.countReverse(scanner));
       scanner.close();
     }
 
@@ -319,26 +323,7 @@ public class HashScannerTest {
     values.stream().forEach(x -> {UnsafeAccess.free(x.keyPtr);UnsafeAccess.free(x.valuePtr);});
 
   }
-  
-  int countReverse (HashScanner s) throws IOException {
-    if (s == null) return 0;
-    int total = 0;
-    do {
-      total++;
-    } while(s.previous());
-    return total;
-  }
-  
-  int count (HashScanner s) throws IOException {
-    if (s == null) return 0;
-    int total = 0;
-    while(s.hasNext()) {
-      total++;
-      s.next();
-    };
-    return total;
-  }
-  
+    
   @Ignore
   @Test
   public void testSingleFullScannerReverse() throws IOException {
@@ -375,7 +360,7 @@ public class HashScannerTest {
       
       int expected = copy.size();
       if (scanner == null && expected == 0) {
-        continue;
+        break;
       } else if (scanner == null) {
         fail("Scanner is null, but expected=" + expected);
       }
@@ -444,6 +429,7 @@ public class HashScannerTest {
       HashScanner scanner = Hashes.getScanner(map, key.address, key.length,
         startPtr, startSize, endPtr, endSize, false, false);
       if (scanner == null) {
+        assertEquals(0, expected);
         continue;
       }
       int cc = 0;
@@ -511,6 +497,7 @@ public class HashScannerTest {
       HashScanner scanner = Hashes.getScanner(map, key.address, key.length,
         startPtr, startSize, endPtr, endSize, false, false);
       if (scanner == null) {
+        assertEquals(0, expected);
         continue;
       }
       int cc = 0;
@@ -578,6 +565,7 @@ public class HashScannerTest {
       HashScanner scanner = Hashes.getScanner(map, key.address, key.length,
         startPtr, startSize, endPtr, endSize, false, false);
       if (scanner == null) {
+        assertEquals(0, expected);
         continue;
       }
       int cc = 0;
