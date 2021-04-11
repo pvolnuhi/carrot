@@ -2,6 +2,7 @@ package org.bigbase.carrot.util;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -286,7 +287,7 @@ public class TestUtils {
   public void testLongOrdering() {
     Random r = new Random();
     List<Key> list = new ArrayList<Key>();
-    for (int i=0; i < 20; i++) {
+    for (int i = 0; i < 20; i++) {
       long ptr = UnsafeAccess.malloc(Utils.SIZEOF_LONG);
       long v = Math.abs(r.nextLong());
       UnsafeAccess.putLong(ptr, Long.MAX_VALUE - v);
@@ -297,6 +298,28 @@ public class TestUtils {
     
     for(Key k : list) {
       System.out.println(Long.MAX_VALUE - UnsafeAccess.toLong(k.address));
+    }
+  }
+  
+  @Test
+  public void testRandomDistinctArray() {
+    long max = Long.MAX_VALUE / 2;
+    int count = 1000;
+    while(max > count) {
+      long[] arr = Utils.randomDistinctArray(max, count);
+      System.out.println("max=" + max + " count="+ count);
+      verifyUnique(arr);
+      max >>>= 1;
+    }
+  }
+  
+  private void verifyUnique(long[] arr) {
+    Arrays.sort(arr);
+    
+    for (int i = 1; i < arr.length; i++) {
+      if (arr[i-1] == arr[i]) {
+        fail("Failed");
+      }
     }
   }
 }

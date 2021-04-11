@@ -17,6 +17,18 @@ import org.bigbase.carrot.util.Utils;
  */
 public class SetScanner extends Scanner {
 
+  static ThreadLocal<Long> offsetBuffer = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      long ptr = UnsafeAccess.malloc(4096); // More than enough to keep reverse scanner offsets 
+      return ptr;
+    }
+  };
+  
+  /*
+   * Keeps index for offsetBuffer
+   */
+  int offsetIndex = 0;
   /*
    * Base Map scanner
    */
@@ -47,7 +59,11 @@ public class SetScanner extends Scanner {
    */
   int valueSize;
   /*
-   * Current offset in the value
+   * Number of members in a current value 
+   */
+  int valueNumber;
+  /*
+   * Current offset in the value (bytes)
    */
   int offset;
 
@@ -60,15 +76,20 @@ public class SetScanner extends Scanner {
    */
   long memberAddress;
   /*
-   * Current position (index)
+   * Current global position (index)
    */
-  long pos = 1;
-
+  long position = 0;
+  /*
+   * Position at current value 
+   */
+  int pos = 0;
   /*
    * Reverse scanner
    */
   boolean reverse;
-
+  /*
+   * Free memory for keys on close
+   */
   boolean disposeKeysOnClose;
 
   /**
@@ -155,24 +176,40 @@ public class SetScanner extends Scanner {
    * @param size set key size
    * @return size of a member
    */
+  @SuppressWarnings("unused")
   private int getMemberSize(long ptr, int size) {
     return (int) (ptr + size - getMemberAddress(ptr));
   }
 
   /**
    * Dispose range keys on close()
-   * @param b
+   * @param b true - dispose, false - don't
    */
   public void setDisposeKeysOnClose(boolean b) {
     this.disposeKeysOnClose = b;
   }
 
+  
+  /**
+   * Get value number (number elements in a current value)
+   * @return value number
+   */
+  public int getValueNumber() {
+    return this.valueNumber;
+  }
+  
+  /**
+   *  Main initialization routine
+   */
   private void init() throws IOException {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     if (this.valueAddress == -1) {
       throw new IOException("Empty scanner");
     }
+
+    this.valueNumber = Commons.numElementsInValue(this.valueAddress);
+
     if (reverse) {
       if (!searchLastMember()) {
         boolean result = previous();
@@ -213,6 +250,16 @@ public class SetScanner extends Scanner {
     return false;
   }
 
+  private final void setOffsetIndexValue(int index, short value) {
+    long ptr = offsetBuffer.get();
+    UnsafeAccess.putShort(ptr + Utils.SIZEOF_SHORT * index, value);
+  }
+  
+  private final int getOffsetByIndex(int index) {
+    long ptr = offsetBuffer.get();
+    return UnsafeAccess.toShort(ptr + Utils.SIZEOF_SHORT * index);
+  }
+  
   private boolean searchLastMember() {
     
     if (this.valueAddress <= 0) {
@@ -220,8 +267,11 @@ public class SetScanner extends Scanner {
     }  
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
+    this.valueNumber = Commons.numElementsInValue(this.valueAddress);
+
     // check if it it is not empty
     this.offset = NUM_ELEM_SIZE;
+    this.offsetIndex = -1;    
     int prevOffset = 0;
     while (this.offset <  this.valueSize) {
       int size = Utils.readUVInt(valueAddress + offset);
@@ -233,6 +283,7 @@ public class SetScanner extends Scanner {
         }
       }
       prevOffset = offset;
+      setOffsetIndexValue(++this.offsetIndex, (short)prevOffset);
       offset += size + Utils.sizeUVInt(size);
     }
     this.offset = prevOffset;
@@ -285,9 +336,12 @@ public class SetScanner extends Scanner {
       if (mapScanner.hasNext()) {
         this.valueAddress = mapScanner.valueAddress();
         this.valueSize = mapScanner.valueSize();
+        this.valueNumber = Commons.numElementsInValue(this.valueAddress);
+
         this.offset = NUM_ELEM_SIZE;
         this.memberSize = Utils.readUVInt(valueAddress + offset);
         this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
+        position++; pos = 0;
         return true;
       } else {
         return false;
@@ -311,7 +365,7 @@ public class SetScanner extends Scanner {
       if (offset < valueSize) {
         this.memberSize = Utils.readUVInt(valueAddress + offset);
         this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
-        pos++;
+        position++; pos++;
         return true;
       }
     }
@@ -326,6 +380,7 @@ public class SetScanner extends Scanner {
     while (mapScanner.hasNext()) {
       this.valueAddress = mapScanner.valueAddress();
       this.valueSize = mapScanner.valueSize();
+
       // check if it it is not empty
       this.offset = NUM_ELEM_SIZE;
       if (valueSize <= NUM_ELEM_SIZE) {
@@ -333,25 +388,23 @@ public class SetScanner extends Scanner {
         mapScanner.next();
         continue;
       }
+      this.valueNumber = Commons.numElementsInValue(this.valueAddress);
 
       this.memberSize = Utils.readUVInt(valueAddress + offset);
       this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
-
       if (this.stopMemberPtr > 0) {
-
         if (Utils.compareTo(this.memberAddress, this.memberSize, this.stopMemberPtr,
           this.stopMemberSize) >= 0) {
           this.offset = 0;
           return false;
         } else {
-          pos++;
+          position++; pos = 0;
           return true;
         }
       } else {
-        pos++;
+        position++; pos = 0;
         return true;
       }
-
     }
     this.offset = 0;
     return false;
@@ -372,19 +425,31 @@ public class SetScanner extends Scanner {
   public int memberSize() {
     return this.memberSize;
   }
-
+  /** 
+   * Get global position
+   * @return global position
+   */
   public long getPosition() {
+    return this.position;
+  }
+  /**
+   * Get local (in current value) position
+   * @return position
+   */
+  public int getPos() {
     return this.pos;
   }
-
   /**
-   * Skips to position
+   * Skips to position - works only forward
    * @param pos position to skip
    * @return current position (can be less than pos)
    */
   public long skipTo(long pos) {
-    if (pos <= this.pos) return this.pos;
-    while (this.pos < pos) {
+    if (reverse) {
+      throw new UnsupportedOperationException("skipTo");
+    }
+    if (pos <= this.position) return this.position;
+    while (this.position < pos) {
       try {
         boolean res = next();
         if (!res) break;
@@ -392,9 +457,14 @@ public class SetScanner extends Scanner {
         // Should not throw
       }
     }
-    return this.pos;
+    return this.position;
   }
-
+  
+  private int skipToLocal(int pos) {
+    
+    return 0;
+  }
+  
   @Override
   public void close() throws IOException {
     mapScanner.close(disposeKeysOnClose);
@@ -439,17 +509,19 @@ public class SetScanner extends Scanner {
     if (!reverse) {
       throw new UnsupportedOperationException("previous");
     }
-    if (this.offset > NUM_ELEM_SIZE) {
-      int off = NUM_ELEM_SIZE;
-      while (off < this.offset) {
-        int mSize = Utils.readUVInt(this.valueAddress + off);
-        int mSizeSize = Utils.sizeUVInt(mSize);
-        if (off + mSize + mSizeSize >= this.offset) {
-          break;
-        }
-        off += mSize + mSizeSize;
-      }
-      this.offset = off;
+    if (this.offset > NUM_ELEM_SIZE && this.offsetIndex > 0) {
+//      int off = NUM_ELEM_SIZE;
+//      while (off < this.offset) {
+//        int mSize = Utils.readUVInt(this.valueAddress + off);
+//        int mSizeSize = Utils.sizeUVInt(mSize);
+//        if (off + mSize + mSizeSize >= this.offset) {
+//          break;
+//        }
+//        off += mSize + mSizeSize;
+//      }
+      this.offsetIndex--;
+      this.offset = getOffsetByIndex(this.offsetIndex);
+      //this.offset = off;
       this.memberSize = Utils.readUVInt(valueAddress + offset);
       this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
       if (this.startMemberPtr > 0) {

@@ -822,6 +822,9 @@ public class Sets {
   public static long SPOP(BigSortedMap map, long keyPtr, int keySize, long bufferPtr, int bufferSize, 
       int count) 
   {
+    if (count == 0) {
+      return 0;
+    }
     Key k = getKey(keyPtr, keySize);
     boolean distinct = count > 0;
     if (!distinct) {
@@ -830,23 +833,23 @@ public class Sets {
     SetScanner scanner = null;
     try {
       KeysLocker.writeLock(k);
-      int total = (int) SCARD(map, keyPtr, keySize);
+      long total =  SCARD(map, keyPtr, keySize);
       if (total == 0) {
         return 0; // Empty set or does not exists
       }
       
-      int[] index = null;
+      long[] index = null;
       if (distinct) {
         if (count < total) {
           index = Utils.randomDistinctArray(total, count);
-        }
+        } 
       } else {
         index = Utils.randomArray(total, count);
       }
       if (index == null) {
         // Return all elements
         long result = SMEMBERS(map, keyPtr, keySize, bufferPtr, bufferSize);
-        if (result >=0) {
+        if (result >= 0) {
           DELETE(map, keyPtr, keySize);
         }
         return result;
@@ -993,10 +996,12 @@ public class Sets {
         return 0; // Empty set or does not exists
       }
       
-      int[] index = null;
+      long[] index = null;
       if (distinct) {
         if (count < total) {
           index = Utils.randomDistinctArray(total, count);
+        } else {
+          // ???
         }
       } else {
         index = Utils.randomArray(total, count);
@@ -1025,7 +1030,7 @@ public class Sets {
     
   }
   
-  private static long readByIndex(SetScanner scanner, int[] index, long bufferPtr, int bufferSize) {
+  private static long readByIndex(SetScanner scanner, long[] index, long bufferPtr, int bufferSize) {
     long ptr = bufferPtr + Utils.SIZEOF_INT;
     
     for (int i=0; i < index.length; i++) {

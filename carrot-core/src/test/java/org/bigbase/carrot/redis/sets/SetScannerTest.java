@@ -283,6 +283,13 @@ public class SetScannerTest {
     int index = r.nextInt(values.size());
     int expected = index;
     Value v = values.get(index);
+    
+    //System.out.println("Expected:");
+    
+//    for(int i=0; i < index; i++) {
+//      Value vv = values.get(i);
+//      System.out.println(Bytes.toHex(vv.address, vv.length));
+//    }
     // Direct
     scanner = Sets.getScanner(map, key.address, key.length, zptr1, zptrSize1, 
       v.address, v.length, false, false);
@@ -294,10 +301,12 @@ public class SetScannerTest {
     }
     scanner.close();
     
+    //System.out.println("Result:");
+   
     // Reverse
     scanner = Sets.getScanner(map, key.address, key.length, zptr1, zptrSize1, 
       v.address, v.length, false, true);
-    
+        
     if (expected == 0) {
       assertTrue(scanner == null);
     } else {

@@ -256,7 +256,7 @@ public class SetsAPITest {
   
   @Test
   public void testSscanWithRegex() {
-    System.out.println("Test Sets SSCAN API call w/o regex pattern");
+    System.out.println("Test Sets SSCAN API call with regex pattern");
     // Load X elements
     int X = 10000;
     String key = "key";
@@ -295,8 +295,8 @@ public class SetsAPITest {
     
     // Check edge cases
     
-    String before = "A";
-    String after  = "zzzzzzzzzzzzzzzz";
+    String before = "A"; // less than any values
+    String after  = "zzzzzzzzzzzzzzzz"; // larger than any values
     expected = countMatches(list, 0, regex);
     
     total = scan(map, key, before, count, 200, regex);

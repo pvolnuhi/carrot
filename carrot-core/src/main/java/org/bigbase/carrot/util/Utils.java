@@ -18,6 +18,7 @@ import java.util.Random;
 
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
+import org.bigbase.carrot.redis.sets.SetScanner;
 
 import sun.misc.Unsafe;
 
@@ -926,12 +927,13 @@ public class Utils {
    * Generated random array (with possible repeats)
    * @param max max value
    * @param count total random elements count
-   * @return random  (array) sorted
+   * @return random  long array sorted
    */
-  public static int[] randomArray(int max, int count) {
-     int[] ret = new int[count];
-     for (int i=0; i < count; i++) {
-       ret[i] = rnd.nextInt(max) + 1;
+  public static long[] randomArray(long max, int count) {
+     long[] ret = new long[count];
+     for (int i = 0; i < count; i++) {
+       long v = Math.abs(rnd.nextLong()) % max;
+       ret[i] = v;
      }
      Arrays.sort(ret);
      return ret;
@@ -944,45 +946,54 @@ public class Utils {
    * @param count total random elements count
    * @return random  distinct (array) sorted
    */
-  public static int[] randomDistinctArray(int max, int count) {
+  public static long[] randomDistinctArray(long max, int count) {
      boolean reverseBuild = count > max/2;
-     if (reverseBuild) count = max - count;
-     int[] ret = new int[count];
-     for (int i=0; i < count; i++) {
+     if (reverseBuild) {
+       count = (int)(max - count); // Hey , this is not kosher
+     }
+     long[] ret = new long[count];
+     Arrays.fill(ret, -1);    
+     for (int i = 0; i < count; i++) {
        while (true) {
-         int v = rnd.nextInt(max) + 1;
+         long v = Math.abs(rnd.nextLong()) % max;
          if (!contains(ret, v)) {
            ret[i] = v;
            break;
          }
        }
      }
+     
      Arrays.sort(ret);
+     
      if (!reverseBuild) {
        return ret;
      } else {
-       int[] arr = new int[max - count];
+       long[] arr = new long[(int)(max - count)];
        int k = 0;
-       for (int i=0; i < ret.length; i++) {
-         for(; k < ret[i]; k++) {
-           arr[k] = k;
+       for (int i=0; i <= ret.length; i++) {
+         long start = i == 0? 0: ret[i-1] + 1;
+         long end = i == ret.length? max: ret[i];
+         for(long n = start; n < end; n++, k++) {
+           arr[k] = n;
          }
-         k++;// skip ret[i]
        }
        // already sorted
        return arr;
-     }
-     
+     }     
   }
   /**
    * Checks if array contains the element
    * @param arr integer array
    * @param v element
-   * @return tru, if - yes, false - otherwise
+   * @return true, if - yes, false - otherwise
    */
-  private static boolean contains(int[] arr, int v) {
+  private static boolean contains(final long[] arr, final long v) {
     for (int i = 0; i < arr.length; i++) {
-      if (arr[i] == v) return true;
+      if (arr[i] == v) {
+        return true;
+      } else if (arr[i] < 0) {
+        break;
+      }
     }  
     return false;
   }
