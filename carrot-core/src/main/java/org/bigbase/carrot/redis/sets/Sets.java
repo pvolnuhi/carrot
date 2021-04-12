@@ -804,6 +804,34 @@ public class Sets {
       KeysLocker.writeUnlockAllKeys(keyList);
     }    
   }
+  
+  /**
+   * For testing only 
+   * @param map sorted map storage
+   * @param key set's key
+   * @param count total number of elements
+   * @param bufSize buffer size
+   * @return number of elements written into a buffer
+   */
+  public static List<String> SPOP(BigSortedMap map, String key, int count , int bufSize) {
+    long buffer = UnsafeAccess.malloc(bufSize);
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    
+    long result = SPOP(map, keyPtr, keySize, buffer, bufSize, count) ;
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(buffer);
+    List<String> list = new ArrayList<String>();
+    long ptr = buffer + Utils.SIZEOF_INT;
+    for (int i = 0; i < result; i++) {
+      int mSize = Utils.readUVInt(ptr);
+      int mSizeSize = Utils.sizeUVInt(mSize);
+      String s = Utils.toString(ptr + mSizeSize, mSize);
+      list.add(s);
+      ptr += mSize + mSizeSize;
+    }
+    return list;
+  }
   /**
    * Removes and returns one or more random elements from the set value store at key.
    * This operation is similar to SRANDMEMBER, that returns one or more random elements 
@@ -856,11 +884,6 @@ public class Sets {
       }
       scanner = getScanner(map, keyPtr, keySize, false);
       long result = readByIndex(scanner, index, bufferPtr, bufferSize);
-      if (result == -1) {
-        // OOM
-        return result;
-      }
-      
       if (scanner != null) {
         try {
           scanner.close();
@@ -882,7 +905,6 @@ public class Sets {
       }
       KeysLocker.writeUnlock(k);
     }
-    
   }
   
   /**
@@ -897,7 +919,7 @@ public class Sets {
       final long bufferPtr) {
     // Reads total number of elements
     int total = UnsafeAccess.toInt(bufferPtr);
-    int count = 0;
+    int count = 0, deleted = 0;
     long ptr = bufferPtr + Utils.SIZEOF_INT;
     // No locking - it is safe here
     while (count++ < total) {
@@ -911,11 +933,11 @@ public class Sets {
       remove.setKeySize(kSize);
       // version?
       if (map.execute(remove)) {
-        count++;
+        deleted++;
       }
       ptr += eSize + eSizeSize;
     }
-    return count;
+    return deleted;
 
   }
   /**
@@ -978,7 +1000,7 @@ public class Sets {
    * @param bufferPtr buffer address
    * @param bufferSize buffer size
    * @param count number of random elements to return
-   * @return number of elements or -1 if buffer is not large enough, 0 - empty or does not exists 
+   * @return number of elements which fit the buffer, 0 - empty or does not exists 
    */
   public static long SRANDMEMBER(BigSortedMap map, long keyPtr, int keySize, long bufferPtr, int bufferSize, 
       int count) 
@@ -995,14 +1017,11 @@ public class Sets {
       if (total == 0) {
         return 0; // Empty set or does not exists
       }
-      
       long[] index = null;
       if (distinct) {
         if (count < total) {
           index = Utils.randomDistinctArray(total, count);
-        } else {
-          // ???
-        }
+        } 
       } else {
         index = Utils.randomArray(total, count);
       }
@@ -1012,11 +1031,7 @@ public class Sets {
       }
       scanner = getScanner(map, keyPtr, keySize, false);
       long result = readByIndex(scanner, index, bufferPtr, bufferSize);
-      if (result == -1) {
-        // OOM
-        return result;
-      }
-      return index.length;
+      return result;
     } finally {
       if (scanner != null) {
         try {
@@ -1027,26 +1042,62 @@ public class Sets {
       }
       KeysLocker.readUnlock(k);
     }
-    
   }
   
+  /**
+   * For testing only 
+   * @param map sorted map storage
+   * @param key set's key
+   * @param count total number of elements
+   * @param bufSize buffer size
+   * @return number of elements written into a buffer
+   */
+  public static List<String> SRANDMEMBER(BigSortedMap map, String key, int count , int bufSize) {
+    long buffer = UnsafeAccess.malloc(bufSize);
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    
+    long result = SRANDMEMBER(map, keyPtr, keySize, buffer, bufSize, count) ;
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(buffer);
+    List<String> list = new ArrayList<String>();
+    long ptr = buffer + Utils.SIZEOF_INT;
+    for (int i = 0; i < result; i++) {
+      int mSize = Utils.readUVInt(ptr);
+      int mSizeSize = Utils.sizeUVInt(mSize);
+      String s = Utils.toString(ptr + mSizeSize, mSize);
+      list.add(s);
+      ptr += mSize + mSizeSize;
+    }
+    return list;
+  }
+  /**
+   * Return number of written element
+   * @param scanner set scanner
+   * @param index array of random indexes to read
+   * @param bufferPtr buffer 
+   * @param bufferSize buffer size
+   * @return
+   */
   private static long readByIndex(SetScanner scanner, long[] index, long bufferPtr, int bufferSize) {
     long ptr = bufferPtr + Utils.SIZEOF_INT;
     
-    for (int i=0; i < index.length; i++) {
+    UnsafeAccess.putInt(bufferPtr, 0);
+
+    for (int i = 0; i < index.length; i++) {
       long pos = scanner.skipTo(index[i]);
-      //TODO check pos 
       int eSize = scanner.memberSize();
       int eSizeSize = Utils.sizeUVInt(eSize);
       if (ptr + eSize + eSizeSize > bufferPtr + bufferSize) {
-        return -1; // OOM
+        return i; // OOM
       }
       long ePtr = scanner.memberAddress();
       // Write size
       Utils.writeUVInt(ptr, eSize);
       // Copy member
       UnsafeAccess.copy(ePtr,  ptr + eSizeSize, eSize);
-      ptr += eSize + eSizeSize;     
+      ptr += eSize + eSizeSize;   
+      UnsafeAccess.putInt(bufferPtr, i + 1);
     }
     UnsafeAccess.putInt(bufferPtr, index.length);
     return index.length;

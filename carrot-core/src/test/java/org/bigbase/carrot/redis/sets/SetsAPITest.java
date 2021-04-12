@@ -2,6 +2,7 @@ package org.bigbase.carrot.redis.sets;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class SetsAPITest {
@@ -25,7 +27,23 @@ public class SetsAPITest {
   static {
     //UnsafeAccess.debug = true;
   }
-    
+  
+  private List<String> loadData(String key, int n) {
+    List<String> list = new ArrayList<String>();
+    Random r = new Random();
+    for (int i=0; i < n; i++) {
+      String m = Utils.getRandomStr(r, 10);
+      list.add(m);
+      int res = Sets.SADD(map, key, m);
+      assertEquals(1, res);
+      if (i % 100000 == 0) {
+        System.out.println("Loaded "+ i);
+      }
+    }
+    return list;
+  }
+  
+  //@Ignore
   @Test
   public void testSimpleCalls() throws IOException {
     System.out.println("Test Sets ADD/ISMEMBER/MEMBERS API calls");
@@ -103,6 +121,7 @@ public class SetsAPITest {
     
   }
   
+  //@Ignore
   @Test
   public void testMoveOperation() {
     System.out.println("Test Sets SMOVE API call");
@@ -148,6 +167,7 @@ public class SetsAPITest {
 
   }
   
+  //@Ignore
   @Test
   public void testMultipleMembersOperation() {
     System.out.println("Test Sets SMISMEMBER API call");
@@ -186,6 +206,7 @@ public class SetsAPITest {
     
   }
   
+  //@Ignore
   @Test
   public void testSscanNoRegex() {
     System.out.println("Test Sets SSCAN API call w/o regex pattern");
@@ -193,13 +214,7 @@ public class SetsAPITest {
     int X = 10000;
     String key = "key";
     Random r = new Random();
-    List<String> list = new ArrayList<String>();
-    for (int i=0; i < X; i++) {
-      String m = Utils.getRandomStr(r, 10);
-      list.add(m);
-      int res = Sets.SADD(map, key, m);
-      assertEquals(1, res);
-    }
+    List<String> list = loadData(key, X);
     
     Collections.sort(list);
     
@@ -254,6 +269,7 @@ public class SetsAPITest {
     return total;
   }
   
+  //@Ignore
   @Test
   public void testSscanWithRegex() {
     System.out.println("Test Sets SSCAN API call with regex pattern");
@@ -262,16 +278,8 @@ public class SetsAPITest {
     String key = "key";
     String regex = "^A.*";
     Random r = new Random();
-    List<String> list = new ArrayList<String>();
-    for (int i=0; i < X; i++) {
-      String m = Utils.getRandomStr(r, 10);
-      list.add(m);
-      int res = Sets.SADD(map, key, m);
-      assertEquals(1, res);
-    }
-    
+    List<String> list = loadData(key, X);
     Collections.sort(list);
-    
     // Check cardinality
     assertEquals(X, (int)Sets.SCARD(map, key));
     
@@ -312,6 +320,364 @@ public class SetsAPITest {
     total = scan(map, key, after, count, 100, regex);
     assertEquals(0, total);
     
+  }
+  
+  //@Ignore
+  @Test
+  public void testSetScannerSkipSmall() throws IOException {
+    System.out.println("Test Sets skip API call (small)");
+    // Load X elements
+    int X = 100;
+    String key = "key";
+    List<String> list = loadData(key, X);
+    
+    Collections.sort(list);
+    
+    long ptr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int size = key.length();
+    SetScanner scanner = Sets.getScanner(map, ptr, size, false);
+    // Skip edge cases
+    long skip = 0;
+    long pos = scanner.skipTo(skip);
+    assertEquals(skip, pos);
+    
+    long mPtr = scanner.memberAddress();
+    int mSize = scanner.memberSize();
+    String value = Utils.toString(mPtr, mSize);
+    String expected = list.get((int)skip);
+    assertEquals(expected, value);
+    
+    skip = 50;
+    pos = scanner.skipTo(skip);
+    assertEquals(skip, pos);
+    
+    mPtr = scanner.memberAddress();
+    mSize = scanner.memberSize();
+    value = Utils.toString(mPtr, mSize);
+    expected = list.get((int)skip);
+    assertEquals(expected, value);
+    
+    skip = X - 1;
+    pos = scanner.skipTo(skip);
+    assertEquals(skip, pos);
+    
+    mPtr = scanner.memberAddress();
+    mSize = scanner.memberSize();
+    value = Utils.toString(mPtr, mSize);
+    expected = list.get((int)skip);
+    assertEquals(expected, value);
+    scanner.close();
+    
+  }
+  
+  //@Ignore
+  @Test
+  public void testSetScannerSkipLarge() throws IOException {
+    System.out.println("Test Sets skip API call (large) ");
+    // Load X elements
+    int X = 100000;
+    String key = "key";
+    List<String> list = loadData(key, X);
+    
+    Collections.sort(list);
+    
+    long ptr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int size = key.length();
+    SetScanner scanner = Sets.getScanner(map, ptr, size, false);
+    // Skip edge cases
+    long skip = 0;
+    long pos = scanner.skipTo(skip);
+    assertEquals(skip, pos);
+    
+    long mPtr = scanner.memberAddress();
+    int mSize = scanner.memberSize();
+    String value = Utils.toString(mPtr, mSize);
+    String expected = list.get((int)skip);
+    assertEquals(expected, value);
+ 
+    skip = X/2 - 2;
+    pos = scanner.skipTo(skip);
+    assertEquals(skip, pos);
+    
+    mPtr = scanner.memberAddress();
+    mSize = scanner.memberSize();
+    value = Utils.toString(mPtr, mSize);
+    expected = list.get((int)skip);
+    assertEquals(expected, value);
+    
+    skip = X - 2;
+    pos = scanner.skipTo(skip);
+    assertEquals(skip, pos);
+    
+    mPtr = scanner.memberAddress();
+    mSize = scanner.memberSize();
+    value = Utils.toString(mPtr, mSize);
+    expected = list.get((int)skip);
+    assertEquals(expected, value);
+    
+    skip = X - 1;
+    pos = scanner.skipTo(skip);
+    assertEquals(skip, pos);
+    
+    mPtr = scanner.memberAddress();
+    mSize = scanner.memberSize();
+    value = Utils.toString(mPtr, mSize);
+    expected = list.get((int)skip);
+    assertEquals(expected, value);
+    scanner.close();
+    
+  }
+  
+  //@Ignore
+  @Test
+  public void testScannerSkipRandom() throws IOException {
+    System.out.println("Test Sets skip API call (Random) ");
+    // Load N elements
+    int N = 1000000;
+    int numIter = 1000;
+    String key = "key";
+    List<String> list = loadData(key, N);
+    
+    Collections.sort(list);
+    
+    long ptr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int size = key.length();
+    
+    Random r = new Random();
+    
+    long start = System.currentTimeMillis();
+    for(int i = 0; i < 1000; i++) {
+      SetScanner scanner = Sets.getScanner(map, ptr, size, false);
+      int skipTo = r.nextInt(N);
+      try {
+        long pos = scanner.skipTo(skipTo);
+        assertEquals(skipTo, (int) pos);
+        long mPtr = scanner.memberAddress();
+        int mSize = scanner.memberSize();
+        String value = Utils.toString(mPtr, mSize);
+        String expected = list.get((int)skipTo);
+        assertEquals(expected, value);
+      } finally {
+        if (scanner != null) {
+          scanner.close();
+        }
+      }
+      if (i % 100 == 0) {
+        System.out.println("Skipped " + i);
+      }
+    }
+    long end = System.currentTimeMillis();
+    System.out.println(numIter + " random skips for "+ N +" cardinality set time="+ (end - start)+"ms");
+  }
+  
+  
+  //@Ignore
+  @Test
+  public void testScannerSkipRandomSingleScanner() throws IOException {
+    System.out.println("Test Sets skip API call (Random Single Scanner) ");
+    // Load N elements
+    int N = 1000000;
+    int numIter = 10000;
+    String key = "key";
+    List<String> list = loadData(key, N);
+    
+    Collections.sort(list);
+    
+    long ptr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int size = key.length();
+        
+    long start = System.currentTimeMillis();
+    for(int i = 0; i < numIter; i++) {
+      SetScanner scanner = Sets.getScanner(map, ptr, size, false);
+      try {
+        long[] skips = Utils.randomDistinctArray(N, 10);
+        for (int k = 0; k < skips.length; k++) {
+          int skipTo = (int)skips[k];
+          long pos = scanner.skipTo(skipTo);
+          assertEquals(skipTo, (int) pos);
+          long mPtr = scanner.memberAddress();
+          int mSize = scanner.memberSize();
+          String value = Utils.toString(mPtr, mSize);
+          String expected = list.get((int)skipTo);
+          assertEquals(expected, value);
+        }
+      } finally {
+        if (scanner != null) {
+          scanner.close();
+        }
+      }
+      if (i % 100 == 0) {
+        System.out.println("Skipped " + i);
+      }
+    }
+    long end = System.currentTimeMillis();
+    System.out.println(numIter + " random skips x"+ 10 +" for "+ N +" cardinality set time="+ (end - start)+"ms");
+  }
+  
+ 
+  //@Ignore
+  @Test
+  public void testScannerRandomMembersEdgeCases() throws IOException {
+    System.out.println("Test Sets SRANDMEMBER API call (Edge cases)");
+    // Load N elements
+    int N = 10000;
+    String key = "key";
+    List<String> list = loadData(key, N);
+    
+    Collections.sort(list);
+    
+    List<String> result = Sets.SRANDMEMBER(map, key, 100, 1105);// Required size is 1104 for 100 elements
+    assertEquals(100, result.size());
+    
+    result = Sets.SRANDMEMBER(map, key, 100, 1104);// Required size is 1104 for 100 elements
+    assertEquals(100, result.size());
+    
+    result = Sets.SRANDMEMBER(map, key, 100, 1103);// Required size is 1093 for 99 elements
+    assertEquals(99, result.size());
+    
+    result = Sets.SRANDMEMBER(map, key, 100, 1092);// Required size is 1082 for 98 elements
+    assertEquals(98, result.size());
+    
+    result = Sets.SRANDMEMBER(map, key, 100, 100);// Required size is 92 for 8 elements
+    assertEquals(8, result.size());
+    
+    result = Sets.SRANDMEMBER(map, key, 100, 15);// Required size is 15 for 1 element
+    assertEquals(1, result.size());
+    
+    result = Sets.SRANDMEMBER(map, key, 100, 10);// Required size is 15 for 1 element
+    assertEquals(0, result.size());
+  }
+  
+  //@Ignore
+  @Test
+  public void testScannerRandomMembers() throws IOException {
+    System.out.println("Test Sets SRANDMEMBER API call");
+    // Load N elements
+    int N = 100000;
+    int numIter = 1000;
+    String key = "key";
+    List<String> list = loadData(key, N);
+    
+    Collections.sort(list);
+        
+    long start = System.currentTimeMillis();
+    for(int i = 0; i < numIter; i++) {
+      List<String> result = Sets.SRANDMEMBER(map, key, 10, 4096);
+      assertEquals(10, result.size());
+      assertTrue(unique(result));
+      assertTrue(list.containsAll(result));
+      if (i % 100 == 0) {
+        System.out.println("Skipped " + i);
+      }
+    }
+    long end = System.currentTimeMillis();
+    System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
+    
+    // Check negatives
+    start = System.currentTimeMillis();
+    for(int i = 0; i < numIter; i++) {
+      List<String> result = Sets.SRANDMEMBER(map, key, -10, 4096);
+      assertEquals(10, result.size());
+      assertTrue(list.containsAll(result));
+      if (i % 100 == 0) {
+        System.out.println("Skipped " + i);
+      }
+    }
+    end = System.currentTimeMillis();
+    System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
+  }
+  
+  //@Ignore
+  @Test
+  public void testScannerRandomMembersDeleteEdgeCases() throws IOException {
+    System.out.println("Test Sets SPOP API call (Edge cases)");
+    // Load N elements
+    int N = 10000;
+    String key = "key";
+    List<String> list = loadData(key, N);
+    
+    Collections.sort(list);
+    
+    List<String> result = Sets.SPOP(map, key, 100, 1105);// Required size is 1104 for 100 elements
+    assertEquals(100, result.size());
+    
+    result = Sets.SPOP(map, key, 100, 1104);// Required size is 1104 for 100 elements
+    assertEquals(100, result.size());
+    
+    result = Sets.SPOP(map, key, 100, 1103);// Required size is 1093 for 99 elements
+    assertEquals(99, result.size());
+    
+    result = Sets.SPOP(map, key, 100, 1092);// Required size is 1082 for 98 elements
+    assertEquals(98, result.size());
+    
+    result = Sets.SPOP(map, key, 100, 100);// Required size is 92 for 8 elements
+    assertEquals(8, result.size());
+    
+    result = Sets.SPOP(map, key, 100, 15);// Required size is 15 for 1 element
+    assertEquals(1, result.size());
+    
+    result = Sets.SPOP(map, key, 100, 10);// Required size is 15 for 1 element
+    assertEquals(0, result.size());
+  }
+  
+  //@Ignore
+  @Test
+  public void testScannerRandomMembersDelete() throws IOException {
+    System.out.println("Test Sets SPOP API call");
+    // Load N elements
+    int N = 100000;
+    int numIter = 100;
+    String key = "key";
+    List<String> list = loadData(key, N);
+    
+    Collections.sort(list);
+        
+    long start = System.currentTimeMillis();
+    for(int i = 0; i < numIter; i++) {
+      List<String> result = Sets.SPOP(map, key, 10, 4096);
+      assertEquals(10, result.size());
+      assertTrue(unique(result));
+      assertTrue(list.containsAll(result));
+      // verify that they were deleted
+      for (String s: result) {
+        int res = Sets.SISMEMBER(map, key, s);
+        assertEquals(0, res);
+      }
+      if (i % 100 == 0) {
+        System.out.println("Skipped " + i);
+      }
+    }
+    long end = System.currentTimeMillis();
+    System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
+    
+    // Check negatives
+    start = System.currentTimeMillis();
+    for(int i = 0; i < numIter; i++) {
+      List<String> result = Sets.SPOP(map, key, -10, 4096);
+      assertEquals(10, result.size());
+      assertTrue(list.containsAll(result));
+      // verify that they were deleted
+      for (String s: result) {
+        int res = Sets.SISMEMBER(map, key, s);
+        assertEquals(0, res);
+      }
+      if (i % 100 == 0) {
+        System.out.println("Skipped " + i);
+      }
+    }
+    end = System.currentTimeMillis();
+    System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
+  }
+  
+  private boolean unique(List<String> list) {
+    if (list.size() <= 1) return true;
+    Collections.sort(list);
+    for(int i = 1; i < list.size(); i++) {
+      if (list.get(i-1).equals(list.get(i))) {
+        return false;
+      }
+    }
+    return true; 
   }
   
   private int scan(BigSortedMap map, String key, String lastSeenMember, 

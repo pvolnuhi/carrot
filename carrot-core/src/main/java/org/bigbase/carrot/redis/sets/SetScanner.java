@@ -17,6 +17,12 @@ import org.bigbase.carrot.util.Utils;
  */
 public class SetScanner extends Scanner {
 
+  /*
+   * This is used to speed up reverse scanner.
+   * during initialization process of a next Value blob,
+   * when we seek last element, we calculate all offsets along the way
+   * from the beginning of a Value blob till the last element 
+   */
   static ThreadLocal<Long> offsetBuffer = new ThreadLocal<Long>() {
     @Override
     protected Long initialValue() {
@@ -441,28 +447,68 @@ public class SetScanner extends Scanner {
   }
   /**
    * Skips to position - works only forward
-   * @param pos position to skip
+   * @param pos position to skip (always less than cardinality)
    * @return current position (can be less than pos)
    */
   public long skipTo(long pos) {
     if (reverse) {
       throw new UnsupportedOperationException("skipTo");
     }
-    if (pos <= this.position) return this.position;
-    while (this.position < pos) {
-      try {
-        boolean res = next();
-        if (!res) break;
-      } catch (IOException e) {
-        // Should not throw
-      }
+    if (pos <= this.position) {
+      return this.position;
     }
+
+    while (this.position < pos) {
+      int left = this.valueNumber - this.pos;
+      if (left > pos - this.position) {
+        skipLocal((int)(this.pos + pos - this.position));
+        return this.position;
+      } else {
+        this.position += left;
+        try {
+          mapScanner.next();
+          if (mapScanner.hasNext()) {
+            this.valueAddress = mapScanner.valueAddress();
+            this.valueSize = mapScanner.valueSize();
+            this.valueNumber  = Commons.numElementsInValue(this.valueAddress);
+            this.pos = 0;
+            this.offset = NUM_ELEM_SIZE;
+          } else {
+            break;
+          }
+        } catch (IOException e) {
+        }
+      } 
+    }
+    this.memberSize = Utils.readUVInt(valueAddress + offset);
+    this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
     return this.position;
   }
   
-  private int skipToLocal(int pos) {
-    
-    return 0;
+  /**
+   * We do not check stop limit to improve performance
+   * because:
+   * 1. We now in advance cardinality of the set
+   * 2. We use this API only in direct scanner w/o start and stop
+   * @param pos position to search
+   * @return number of skipped elements
+   */
+  public int skipLocal(int pos) {
+    if (pos >= this.valueNumber || pos <= this.pos) {
+      // do nothing - return current
+      return this.pos;
+    }
+    while (this.pos < pos) {
+      int elSize = Utils.readUVInt(valueAddress + offset);
+      int elSizeSize = Utils.sizeUVInt(elSize);
+      this.offset += elSize + elSizeSize;
+      this.position++; 
+      this.pos++;
+      
+    }
+    this.memberSize = Utils.readUVInt(valueAddress + offset);
+    this.memberAddress = valueAddress + offset + Utils.sizeUVInt(this.memberSize);
+    return this.pos;
   }
   
   @Override
