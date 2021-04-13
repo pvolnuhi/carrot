@@ -109,32 +109,38 @@ public class HashScannerTest {
   private void allTests() throws IOException {
     long start = System.currentTimeMillis();
     setUp();
-    testEdgeConditions();
+    testDirectScannerPerformance();
     tearDown();
     setUp();
-    testSingleFullScanner();
+    testReverseScannerPerformance();
     tearDown();
-    setUp();
-    testSingleFullScannerReverse();
-    tearDown();
-    setUp();
-    testSinglePartialScanner();
-    tearDown();
-    setUp();
-    testSinglePartialScannerReverse();
-    tearDown();
-    setUp();
-    testSinglePartialScannerOpenStart();
-    tearDown();
-    setUp();
-    testSinglePartialScannerOpenEnd();
-    tearDown(); 
-    setUp();
-    testSinglePartialScannerReverseOpenStart();
-    tearDown();
-    setUp();
-    testSinglePartialScannerReverseOpenEnd();
-    tearDown();
+//    setUp();
+//    testEdgeConditions();
+//    tearDown();
+//    setUp();
+//    testSingleFullScanner();
+//    tearDown();
+//    setUp();
+//    testSingleFullScannerReverse();
+//    tearDown();
+//    setUp();
+//    testSinglePartialScanner();
+//    tearDown();
+//    setUp();
+//    testSinglePartialScannerReverse();
+//    tearDown();
+//    setUp();
+//    testSinglePartialScannerOpenStart();
+//    tearDown();
+//    setUp();
+//    testSinglePartialScannerOpenEnd();
+//    tearDown(); 
+//    setUp();
+//    testSinglePartialScannerReverseOpenStart();
+//    tearDown();
+//    setUp();
+//    testSinglePartialScannerReverseOpenEnd();
+//    tearDown();
     long end = System.currentTimeMillis();    
     System.out.println("\nRUN in " + (end -start) + "ms");
     
@@ -793,6 +799,72 @@ public class HashScannerTest {
     values.stream().forEach(x -> {UnsafeAccess.free(x.keyPtr); UnsafeAccess.free(x.valuePtr);});
 
   }
+  @Ignore
+  @Test
+  public void testDirectScannerPerformance() throws IOException {
+    int n = 5000000; // 5M elements
+    System.out.println("Test direct scanner performance "+ n + " elements");
+    Key key = getKey();
+    List<KeyValue> values = getKeyValues(n);
+    long start = System.currentTimeMillis();
+    loadData(key, values);
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+    " bytes per value. Time to load: "+(end -start)+"ms");
+    
+    HashScanner scanner = Hashes.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, false);
+    
+    start = System.currentTimeMillis();
+    long count = 0;
+    while(scanner.hasNext()) {
+      count++;
+      scanner.next();
+    }
+    scanner.close();
+    assertEquals(count, (long) n);
+    end = System.currentTimeMillis();
+    System.out.println("Scanned "+ n+" elements in "+ (end-start)+"ms");
+    // Free memory
+    UnsafeAccess.free(key.address);
+    values.stream().forEach(x -> {UnsafeAccess.free(x.keyPtr); UnsafeAccess.free(x.valuePtr);});
+  }  
+  
+  @Ignore
+  @Test
+  public void testReverseScannerPerformance() throws IOException {
+    int n = 5000000; // 5M elements
+    System.out.println("Test reverse scanner performance "+ n + " elements");
+    Key key = getKey();
+    List<KeyValue> values = getKeyValues(n);
+    long start = System.currentTimeMillis();
+    loadData(key, values);
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
+        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+    " bytes per value. Time to load: "+(end -start)+"ms");
+    
+    HashScanner scanner = Hashes.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, true);
+    
+    start = System.currentTimeMillis();
+    long count = 0;
+    
+    do {
+      count++;
+    } while(scanner.previous());
+    scanner.close();
+    assertEquals(count, (long) n);
+    
+    end = System.currentTimeMillis();
+    System.out.println("Scanned (reversed) "+ n+" elements in "+ (end-start)+"ms");
+    // Free memory
+    UnsafeAccess.free(key.address);
+    values.stream().forEach(x -> {UnsafeAccess.free(x.keyPtr); UnsafeAccess.free(x.valuePtr);});
+  }  
   
   
   private <T> List<T> copy(List<T> src) {

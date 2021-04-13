@@ -18,6 +18,24 @@ import org.bigbase.carrot.util.Utils;
 public class HashScanner extends Scanner{
   
   /*
+   * This is used to speed up reverse scanner.
+   * during initialization process of a next Value blob,
+   * when we seek last element, we calculate all offsets along the way
+   * from the beginning of a Value blob till the last element 
+   */
+  static ThreadLocal<Long> offsetBuffer = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      long ptr = UnsafeAccess.malloc(4096); // More than enough to keep reverse scanner offsets 
+      return ptr;
+    }
+  };
+  
+  /*
+   * Keeps index for offsetBuffer
+   */
+  int offsetIndex = 0;
+  /*
    * Base Map scanner
    */
   private BigSortedMapDirectMemoryScanner mapScanner;
@@ -47,6 +65,10 @@ public class HashScanner extends Scanner{
    */
   int valueSize;
   /*
+   * Number of members in a current value 
+   */
+  int valueNumber;
+  /*
    * Current offset in the value
    */
   int offset;
@@ -68,9 +90,9 @@ public class HashScanner extends Scanner{
    */
   long fieldValueAddress;
   /*
-   * Current position (index)
+   * Current global position (index)
    */
-  long pos = 1;
+  long position = 0;
   
   /*
    * Reverse scanner
@@ -166,12 +188,26 @@ public class HashScanner extends Scanner{
     this.disposeKeysOnClose = b;
   }
   
+  /**
+   * Get value number (number elements in a current value)
+   * @return value number
+   */
+  public int getValueNumber() {
+    return this.valueNumber;
+  }
+  
+  /**
+   *  Main initialization routine
+   */
+  
   private void init() throws IOException {
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
     if (this.valueAddress == -1) {
       throw new IOException("Empty scanner");
     }
+    this.valueNumber = Commons.numElementsInValue(this.valueAddress);
+
     if (reverse) {
       if (!searchLastMember()) {
         boolean result = previous();
@@ -219,6 +255,17 @@ public class HashScanner extends Scanner{
     }
     return false;
   }
+  
+  private final void setOffsetIndexValue(int index, short value) {
+    long ptr = offsetBuffer.get();
+    UnsafeAccess.putShort(ptr + Utils.SIZEOF_SHORT * index, value);
+  }
+  
+  private final int getOffsetByIndex(int index) {
+    long ptr = offsetBuffer.get();
+    return UnsafeAccess.toShort(ptr + Utils.SIZEOF_SHORT * index);
+  }
+  
   /**
    * Search last field in a current Value
    * @return true on success, false - otherwise
@@ -230,8 +277,11 @@ public class HashScanner extends Scanner{
     }
     this.valueAddress = mapScanner.valueAddress();
     this.valueSize = mapScanner.valueSize();
+    this.valueNumber = Commons.numElementsInValue(this.valueAddress);
+
     // check if it it is not empty
     this.offset = NUM_ELEM_SIZE;
+    this.offsetIndex = -1;    
     int prevOffset = 0;
     while (this.offset < this.valueSize) {
       int fSize = Utils.readUVInt(valueAddress + offset);
@@ -247,8 +297,8 @@ public class HashScanner extends Scanner{
         }
       }
       prevOffset = offset;
+      setOffsetIndexValue(++this.offsetIndex, (short)prevOffset);
       offset += fSize + vSize + fSizeSize + vSizeSize;
-      //*DEBUG*/ System.out.println("off="+ this.offset);
     }
     
     this.offset = prevOffset;
@@ -313,6 +363,8 @@ public class HashScanner extends Scanner{
       if (mapScanner.hasNext()) {
         this.valueAddress = mapScanner.valueAddress();
         this.valueSize = mapScanner.valueSize();
+        this.valueNumber = Commons.numElementsInValue(this.valueAddress);
+
         this.offset = NUM_ELEM_SIZE;
         updateFields();
         return true;
@@ -340,7 +392,7 @@ public class HashScanner extends Scanner{
       offset += fSize + vSize + fSizeSize + vSizeSize;
       if (offset < valueSize) {
         updateFields();
-        pos++;
+        position++;
         return true;
       }
     }
@@ -361,7 +413,9 @@ public class HashScanner extends Scanner{
         // empty set in K-V? Must be deleted
         mapScanner.next();
         continue;
-      } 
+      }
+      this.valueNumber = Commons.numElementsInValue(this.valueAddress);
+
       updateFields();
       if (this.stopFieldPtr > 0) {  
         if (Utils.compareTo(this.fieldAddress, this.fieldSize, 
@@ -369,11 +423,11 @@ public class HashScanner extends Scanner{
           this.offset = 0;
           return false;
         } else {
-          pos++;
+          position++;
           return true;
         }
       } else {
-        pos++;
+        position++;
         return true;
       }
     }
@@ -418,7 +472,7 @@ public class HashScanner extends Scanner{
    * @return position
    */
   public long getPosition() {
-    return this.pos;
+    return this.position;
   }
   
   /**
@@ -427,8 +481,8 @@ public class HashScanner extends Scanner{
    * @return current position (can be less than pos)
    */
   public long skipTo(long pos) {
-    if (pos <= this.pos) return this.pos;
-    while(this.pos < pos) {
+    if (pos <= this.position) return this.position;
+    while(this.position < pos) {
       try {
         boolean res = next();
         if (!res) break;
@@ -436,7 +490,7 @@ public class HashScanner extends Scanner{
         // Should not throw
       }
     }
-    return this.pos;
+    return this.position;
   }
   
   @Override
@@ -481,19 +535,21 @@ public class HashScanner extends Scanner{
     if (!reverse) {
       throw new UnsupportedOperationException("previous");
     }
-    if (this.offset > NUM_ELEM_SIZE) {
-      int off = NUM_ELEM_SIZE;
-      while (off < this.offset) {
-        int fSize = Utils.readUVInt(this.valueAddress + off);
-        int fSizeSize = Utils.sizeUVInt(fSize);
-        int vSize = Utils.readUVInt(this.valueAddress + off + fSizeSize);
-        int vSizeSize = Utils.sizeUVInt(vSize);
-        if (off + fSize + vSize + fSizeSize + vSizeSize >= this.offset) {
-          break;
-        }
-        off += fSize + vSize + fSizeSize + vSizeSize;
-      }
-      this.offset = off;
+    if (this.offset > NUM_ELEM_SIZE && this.offsetIndex > 0) {
+//      int off = NUM_ELEM_SIZE;
+//      while (off < this.offset) {
+//        int fSize = Utils.readUVInt(this.valueAddress + off);
+//        int fSizeSize = Utils.sizeUVInt(fSize);
+//        int vSize = Utils.readUVInt(this.valueAddress + off + fSizeSize);
+//        int vSizeSize = Utils.sizeUVInt(vSize);
+//        if (off + fSize + vSize + fSizeSize + vSizeSize >= this.offset) {
+//          break;
+//        }
+//        off += fSize + vSize + fSizeSize + vSizeSize;
+//      }
+//      this.offset = off;
+      this.offsetIndex--;
+      this.offset = getOffsetByIndex(this.offsetIndex);
       updateFields();
       
       if (this.startFieldPtr > 0) {

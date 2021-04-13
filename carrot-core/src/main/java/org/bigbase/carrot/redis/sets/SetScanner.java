@@ -556,15 +556,6 @@ public class SetScanner extends Scanner {
       throw new UnsupportedOperationException("previous");
     }
     if (this.offset > NUM_ELEM_SIZE && this.offsetIndex > 0) {
-//      int off = NUM_ELEM_SIZE;
-//      while (off < this.offset) {
-//        int mSize = Utils.readUVInt(this.valueAddress + off);
-//        int mSizeSize = Utils.sizeUVInt(mSize);
-//        if (off + mSize + mSizeSize >= this.offset) {
-//          break;
-//        }
-//        off += mSize + mSizeSize;
-//      }
       this.offsetIndex--;
       this.offset = getOffsetByIndex(this.offsetIndex);
       //this.offset = off;

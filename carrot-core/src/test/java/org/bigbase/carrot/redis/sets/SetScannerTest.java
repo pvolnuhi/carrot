@@ -838,7 +838,7 @@ public class SetScannerTest {
     System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
         ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
-    " bytes per value. Time to load: "+(end -start)+"ms");
+    " bytes per value. Time to load: "+(end - start)+"ms");
     
     SetScanner scanner = Sets.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, false);
     
@@ -852,6 +852,9 @@ public class SetScannerTest {
     assertEquals(count, (long) n);
     end = System.currentTimeMillis();
     System.out.println("Scanned "+ n+" elements in "+ (end-start)+"ms");
+    // Free memory
+    UnsafeAccess.free(key.address);
+    values.stream().forEach(x -> UnsafeAccess.free(x.address));
   }  
   
   @Ignore
@@ -883,6 +886,9 @@ public class SetScannerTest {
     
     end = System.currentTimeMillis();
     System.out.println("Scanned (reversed) "+ n+" elements in "+ (end-start)+"ms");
+    // Free memory
+    UnsafeAccess.free(key.address);
+    values.stream().forEach(x -> UnsafeAccess.free(x.address));
   }  
   
   

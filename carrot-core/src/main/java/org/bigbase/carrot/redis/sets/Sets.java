@@ -1225,7 +1225,6 @@ public class Sets {
   
   /**
    * 
-   * TODO: regex 
    * TODO: regex flavors 
    * TODO: regex speed
    * TODO: Always put last seen member into the result
@@ -1309,6 +1308,8 @@ public class Sets {
             UnsafeAccess.putInt(buffer, c);
             lastPtr +=  mSize + mSizeSize;
           }
+        } else {
+          break;
         }
         ptr += mSize + mSizeSize;
         scanner.next();
@@ -1322,7 +1323,6 @@ public class Sets {
         UnsafeAccess.copy(arena + mSizeSize, lastPtr + mSizeSize, mSize);
       }
       scanner.close();
-      //TODO: add last seen size 
       return ptr - buffer + lastSeenSize;
     } catch (IOException e) {
       // Will never be thrown

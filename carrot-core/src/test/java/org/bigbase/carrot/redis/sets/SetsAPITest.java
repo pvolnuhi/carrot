@@ -15,7 +15,6 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class SetsAPITest {
@@ -23,11 +22,6 @@ public class SetsAPITest {
   int valSize = 8;
   long n = 1000;
 
-  
-  static {
-    //UnsafeAccess.debug = true;
-  }
-  
   private List<String> loadData(String key, int n) {
     List<String> list = new ArrayList<String>();
     Random r = new Random();
