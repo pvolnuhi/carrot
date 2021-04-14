@@ -10,11 +10,11 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Pair;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -52,6 +52,79 @@ public class HashesAPITest {
     }
     return list;
   }
+  
+  //@Ignore
+  @Test
+  public void runAllNoCompression() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();      
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();      
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  @Ignore
+  @Test
+  public void runAllCompressionLZ4HC() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  private void allTests() throws IOException {
+    setUp();
+    testHashGetAllAPI();
+    tearDown();
+    setUp();
+    testHashKeysAPI();
+    tearDown();
+    setUp();
+    testHashMultiGet();
+    tearDown();
+    setUp();
+    testHashSetNonExistent();
+    tearDown();
+    setUp();
+    testHashValueLength();
+    tearDown();
+    setUp();
+    testHashValuesAPI();
+    tearDown();
+    setUp();
+    testScannerRandomMembers();
+    tearDown();
+    setUp();
+    testScannerRandomMembersEdgeCases();
+    tearDown();    
+    setUp();
+    testSscanNoRegex();
+    tearDown();
+    setUp();
+    testSscanWithRegex();
+    tearDown();
+  }
+
   
   @Ignore
   @Test
@@ -354,7 +427,7 @@ public class HashesAPITest {
     return total;
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerRandomMembersEdgeCases() throws IOException {
     System.out.println("Test Hashes HRANDFIELD API call (Edge cases)");
@@ -409,7 +482,7 @@ public class HashesAPITest {
     assertEquals(0, result.size());
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerRandomMembers() throws IOException {
     System.out.println("Test Hashes HRANDFIELD API call");
@@ -474,7 +547,9 @@ public class HashesAPITest {
       assertEquals(10, result.size());
       for (Pair<String> p: result) {
         assertTrue(list.contains(p.getFirst()));
+        //*DEBUG*/System.out.println(p.getFirst());
       }
+      //System.out.println();
       if (i % 100 == 0) {
         System.out.println("Skipped " + i);
       }
@@ -500,12 +575,10 @@ public class HashesAPITest {
   }
   
   
-  @Before
   public void setUp() {
     map = new BigSortedMap(100000000);
   }
   
-  @After
   public void tearDown() {
     // Dispose
     map.dispose();

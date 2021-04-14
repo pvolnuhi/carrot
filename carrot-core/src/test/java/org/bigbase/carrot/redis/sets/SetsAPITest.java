@@ -11,10 +11,11 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class SetsAPITest {
@@ -38,6 +39,88 @@ public class SetsAPITest {
   }
   
   //@Ignore
+  @Test
+  public void runAllNoCompression() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();      
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  //@Ignore
+  @Test
+  public void runAllCompressionLZ4() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    System.out.println();
+    for (int i = 0; i < 100; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();      
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  @Ignore
+  @Test
+  public void runAllCompressionLZ4HC() throws IOException {
+    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
+    System.out.println();
+    for (int i = 0; i < 10; i++) {
+      System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
+      allTests();
+      BigSortedMap.printMemoryAllocationStats();
+      UnsafeAccess.mallocStats.printStats();
+    }
+  }
+  
+  private void allTests() throws IOException {
+    setUp();
+    testSimpleCalls();
+    tearDown();
+    setUp();
+    testMoveOperation();
+    tearDown();
+    setUp();
+    testMultipleMembersOperation();
+    tearDown();
+    setUp();
+    testScannerRandomMembers();
+    tearDown();
+    setUp();
+    testScannerRandomMembersDelete();
+    tearDown();
+    setUp();
+    testScannerRandomMembersEdgeCases();
+    tearDown();
+    setUp();
+    testScannerRandomMembersDeleteEdgeCases();
+    tearDown();
+    setUp();
+    testScannerSkipRandom();
+    tearDown();
+    setUp();
+    testScannerSkipRandomSingleScanner();
+    tearDown();
+    setUp();
+    testSetScannerSkipSmall();
+    tearDown();
+    setUp();
+    testSetScannerSkipLarge();
+    tearDown();
+    setUp();
+    testSscanNoRegex();
+    tearDown();
+    setUp();
+    testSscanWithRegex();
+    tearDown();
+    
+  }
+  
+  @Ignore
   @Test
   public void testSimpleCalls() throws IOException {
     System.out.println("Test Sets ADD/ISMEMBER/MEMBERS API calls");
@@ -115,7 +198,7 @@ public class SetsAPITest {
     
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testMoveOperation() {
     System.out.println("Test Sets SMOVE API call");
@@ -161,7 +244,7 @@ public class SetsAPITest {
 
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testMultipleMembersOperation() {
     System.out.println("Test Sets SMISMEMBER API call");
@@ -200,7 +283,7 @@ public class SetsAPITest {
     
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testSscanNoRegex() {
     System.out.println("Test Sets SSCAN API call w/o regex pattern");
@@ -263,7 +346,7 @@ public class SetsAPITest {
     return total;
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testSscanWithRegex() {
     System.out.println("Test Sets SSCAN API call with regex pattern");
@@ -316,7 +399,7 @@ public class SetsAPITest {
     
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testSetScannerSkipSmall() throws IOException {
     System.out.println("Test Sets skip API call (small)");
@@ -364,7 +447,7 @@ public class SetsAPITest {
     
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testSetScannerSkipLarge() throws IOException {
     System.out.println("Test Sets skip API call (large) ");
@@ -422,7 +505,7 @@ public class SetsAPITest {
     
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerSkipRandom() throws IOException {
     System.out.println("Test Sets skip API call (Random) ");
@@ -465,7 +548,7 @@ public class SetsAPITest {
   }
   
   
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerSkipRandomSingleScanner() throws IOException {
     System.out.println("Test Sets skip API call (Random Single Scanner) ");
@@ -509,7 +592,7 @@ public class SetsAPITest {
   }
   
  
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerRandomMembersEdgeCases() throws IOException {
     System.out.println("Test Sets SRANDMEMBER API call (Edge cases)");
@@ -542,7 +625,7 @@ public class SetsAPITest {
     assertEquals(0, result.size());
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerRandomMembers() throws IOException {
     System.out.println("Test Sets SRANDMEMBER API call");
@@ -581,7 +664,7 @@ public class SetsAPITest {
     System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerRandomMembersDeleteEdgeCases() throws IOException {
     System.out.println("Test Sets SPOP API call (Edge cases)");
@@ -614,7 +697,7 @@ public class SetsAPITest {
     assertEquals(0, result.size());
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testScannerRandomMembersDelete() throws IOException {
     System.out.println("Test Sets SPOP API call");
@@ -676,12 +759,10 @@ public class SetsAPITest {
     return total;
   }
   
-  @Before
   public void setUp() {
     map = new BigSortedMap(100000000);
   }
   
-  @After
   public void tearDown() {
     // Dispose
     map.dispose();
