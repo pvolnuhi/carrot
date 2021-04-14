@@ -712,6 +712,8 @@ public class Sets {
     for(i=0; i < returnValue.length; i++) {
       returnValue[i] = UnsafeAccess.toByte(buffer + i);
     }
+    UnsafeAccess.free(keyPtr);
+    Arrays.stream(elemPtrs).forEach(x -> UnsafeAccess.free(x));
     return returnValue;
   }
   
@@ -819,17 +821,18 @@ public class Sets {
     int keySize = key.length();
     
     long result = SPOP(map, keyPtr, keySize, buffer, bufSize, count) ;
-    UnsafeAccess.free(keyPtr);
-    UnsafeAccess.free(buffer);
     List<String> list = new ArrayList<String>();
+    int total = UnsafeAccess.toInt(buffer);
     long ptr = buffer + Utils.SIZEOF_INT;
-    for (int i = 0; i < result; i++) {
+    for (int i = 0; i < total; i++) {
       int mSize = Utils.readUVInt(ptr);
       int mSizeSize = Utils.sizeUVInt(mSize);
       String s = Utils.toString(ptr + mSizeSize, mSize);
       list.add(s);
       ptr += mSize + mSizeSize;
     }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(buffer);
     return list;
   }
   /**
@@ -1013,7 +1016,7 @@ public class Sets {
     SetScanner scanner = null;
     try {
       KeysLocker.readLock(k);
-      int total = (int) SCARD(map, keyPtr, keySize);
+      long total =  SCARD(map, keyPtr, keySize);
       if (total == 0) {
         return 0; // Empty set or does not exists
       }
@@ -1058,17 +1061,18 @@ public class Sets {
     int keySize = key.length();
     
     long result = SRANDMEMBER(map, keyPtr, keySize, buffer, bufSize, count) ;
-    UnsafeAccess.free(keyPtr);
-    UnsafeAccess.free(buffer);
     List<String> list = new ArrayList<String>();
+    int total = UnsafeAccess.toInt(buffer);
     long ptr = buffer + Utils.SIZEOF_INT;
-    for (int i = 0; i < result; i++) {
+    for (int i = 0; i < total; i++) {
       int mSize = Utils.readUVInt(ptr);
       int mSizeSize = Utils.sizeUVInt(mSize);
       String s = Utils.toString(ptr + mSizeSize, mSize);
       list.add(s);
       ptr += mSize + mSizeSize;
     }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(buffer);
     return list;
   }
   /**
@@ -1077,30 +1081,27 @@ public class Sets {
    * @param index array of random indexes to read
    * @param bufferPtr buffer 
    * @param bufferSize buffer size
-   * @return
+   * @return full serialized size required
    */
   private static long readByIndex(SetScanner scanner, long[] index, long bufferPtr, int bufferSize) {
-    long ptr = bufferPtr + Utils.SIZEOF_INT;
     
+    long ptr = bufferPtr + Utils.SIZEOF_INT;
     UnsafeAccess.putInt(bufferPtr, 0);
-
     for (int i = 0; i < index.length; i++) {
-      long pos = scanner.skipTo(index[i]);
+      scanner.skipTo(index[i]);
       int eSize = scanner.memberSize();
       int eSizeSize = Utils.sizeUVInt(eSize);
-      if (ptr + eSize + eSizeSize > bufferPtr + bufferSize) {
-        return i; // OOM
+      if (ptr + eSize + eSizeSize <= bufferPtr + bufferSize) {
+        long ePtr = scanner.memberAddress();
+        // Write size
+        Utils.writeUVInt(ptr, eSize);
+        // Copy member
+        UnsafeAccess.copy(ePtr,  ptr + eSizeSize, eSize);
+        UnsafeAccess.putInt(bufferPtr, i + 1);
       }
-      long ePtr = scanner.memberAddress();
-      // Write size
-      Utils.writeUVInt(ptr, eSize);
-      // Copy member
-      UnsafeAccess.copy(ePtr,  ptr + eSizeSize, eSize);
       ptr += eSize + eSizeSize;   
-      UnsafeAccess.putInt(bufferPtr, i + 1);
     }
-    UnsafeAccess.putInt(bufferPtr, index.length);
-    return index.length;
+    return ptr - bufferPtr;
   }
   
   /**
@@ -1217,7 +1218,9 @@ public class Sets {
       ptr += size + sizeSize;
     }
     UnsafeAccess.free(keyPtr);
-    UnsafeAccess.free(lastSeenPtr);
+    if (lastSeenPtr > 0) {
+      UnsafeAccess.free(lastSeenPtr);
+    }
     UnsafeAccess.free(buffer);
     return list;
   }

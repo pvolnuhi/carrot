@@ -93,7 +93,10 @@ public class HashScanner extends Scanner{
    * Current global position (index)
    */
   long position = 0;
-  
+  /*
+   * Position at current value 
+   */
+  int pos = 0;  
   /*
    * Reverse scanner
    */
@@ -367,6 +370,7 @@ public class HashScanner extends Scanner{
 
         this.offset = NUM_ELEM_SIZE;
         updateFields();
+        position++; pos = 0;
         return true;
       } else {
         return false;
@@ -392,7 +396,7 @@ public class HashScanner extends Scanner{
       offset += fSize + vSize + fSizeSize + vSizeSize;
       if (offset < valueSize) {
         updateFields();
-        position++;
+        position++; pos++;
         return true;
       }
     }
@@ -423,11 +427,11 @@ public class HashScanner extends Scanner{
           this.offset = 0;
           return false;
         } else {
-          position++;
+          position++; pos = 0;
           return true;
         }
       } else {
-        position++;
+        position++; pos = 0;
         return true;
       }
     }
@@ -476,21 +480,75 @@ public class HashScanner extends Scanner{
   }
   
   /**
-   * Skips to position
-   * @param pos position to skip
+   * Get local (in current value) position
+   * @return position
+   */
+  public int getPos() {
+    return this.pos;
+  }
+  
+  /**
+   * Skips to position - works only forward
+   * @param pos position to skip (always less than cardinality)
    * @return current position (can be less than pos)
    */
   public long skipTo(long pos) {
-    if (pos <= this.position) return this.position;
-    while(this.position < pos) {
-      try {
-        boolean res = next();
-        if (!res) break;
-      } catch (IOException e) {
-        // Should not throw
-      }
+    if (reverse) {
+      throw new UnsupportedOperationException("skipTo");
     }
+    if (pos <= this.position) {
+      return this.position;
+    }
+    while (this.position < pos) {
+      int left = this.valueNumber - this.pos;
+      if (left > pos - this.position) {
+        skipLocal((int)(this.pos + pos - this.position));
+        return this.position;
+      } else {
+        this.position += left;
+        try {
+          mapScanner.next();
+          if (mapScanner.hasNext()) {
+            this.valueAddress = mapScanner.valueAddress();
+            this.valueSize = mapScanner.valueSize();
+            this.valueNumber  = Commons.numElementsInValue(this.valueAddress);
+            this.pos = 0;
+            this.offset = NUM_ELEM_SIZE;
+          } else {
+            break;
+          }
+        } catch (IOException e) {
+        }
+      } 
+    }
+    updateFields();
     return this.position;
+  }
+  
+  /**
+   * We do not check stop limit to improve performance
+   * because:
+   * 1. We now in advance cardinality of the set
+   * 2. We use this API only in direct scanner w/o start and stop
+   * @param pos position to search
+   * @return number of skipped elements
+   */
+  public int skipLocal(int pos) {
+    if (pos >= this.valueNumber || pos <= this.pos) {
+      // do nothing - return current
+      return this.pos;
+    }
+    while (this.pos < pos) {
+      int fSize = Utils.readUVInt(valueAddress + offset);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = Utils.readUVInt(valueAddress + offset + fSizeSize);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      this.offset += fSize + vSize + fSizeSize + vSizeSize;
+      this.position++; 
+      this.pos++;
+    }
+    updateFields();
+    return this.pos;
   }
   
   @Override
@@ -536,22 +594,9 @@ public class HashScanner extends Scanner{
       throw new UnsupportedOperationException("previous");
     }
     if (this.offset > NUM_ELEM_SIZE && this.offsetIndex > 0) {
-//      int off = NUM_ELEM_SIZE;
-//      while (off < this.offset) {
-//        int fSize = Utils.readUVInt(this.valueAddress + off);
-//        int fSizeSize = Utils.sizeUVInt(fSize);
-//        int vSize = Utils.readUVInt(this.valueAddress + off + fSizeSize);
-//        int vSizeSize = Utils.sizeUVInt(vSize);
-//        if (off + fSize + vSize + fSizeSize + vSizeSize >= this.offset) {
-//          break;
-//        }
-//        off += fSize + vSize + fSizeSize + vSizeSize;
-//      }
-//      this.offset = off;
       this.offsetIndex--;
       this.offset = getOffsetByIndex(this.offsetIndex);
       updateFields();
-      
       if (this.startFieldPtr > 0) {
         int result = Utils.compareTo(this.fieldAddress, this.fieldSize, 
           this.startFieldPtr, this.startFieldSize);
@@ -561,7 +606,6 @@ public class HashScanner extends Scanner{
       }
       return true;
     }
-    
     boolean result = mapScanner.previous();
     if (result) {
       return searchLastMember();

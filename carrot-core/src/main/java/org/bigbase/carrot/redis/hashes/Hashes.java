@@ -452,15 +452,42 @@ public class Hashes {
   }
 
   /**
-   * Add field-value to a set defined by key if not exists
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field filed name
+   * @param value value
+   * @return 1 - OK, 0 - field exists already
+   */
+  
+  public static int HSETNX (BigSortedMap map, String key, String field, String value) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSze = field.length();
+    long valPtr = UnsafeAccess.allocAndCopy(value, 0, value.length());
+    int valSize = value.length();
+    
+    int result = HSETNX(map, keyPtr, keySize, fieldPtr, fieldSze, valPtr, valSize);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    UnsafeAccess.free(valPtr);
+    return result;
+  }
+  
+  
+  /**
+   * Sets field in the hash stored at key to value, only if field does not yet exist. 
+   * If key does not exist, a new key holding a hash is created. If field already 
+   * exists, this operation has no effect.
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
    * @param valuePtr value address
    * @param valueSize value size
-   * @return true if success, false is map is full
+   * @return 1 if success, 0 if field exists
    */
-  public static boolean HSETNX(BigSortedMap map, long keyPtr, int keySize, 
+  public static int HSETNX(BigSortedMap map, long keyPtr, int keySize, 
       long fieldPtr, int fieldSize, long valuePtr, int valueSize) {
     
     Key k = getKey(keyPtr, keySize);
@@ -475,7 +502,7 @@ public class Hashes {
       set.setFieldValue(valuePtr, valueSize);
       set.setOptions(MutationOptions.NX);
       // version?    
-      return map.execute(set);
+      return map.execute(set) == false? 0: 1;
     } finally {
       writeUnlock(k);
     }
@@ -863,6 +890,43 @@ public class Hashes {
   }
   
   /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param fields list of fields
+   * @param bufSize recommended buffer size
+   * @return list of values or empty list
+   */
+  public static List<String> HMGET(BigSortedMap map, String key, String[] fields, int bufSize){
+    List<String> list = new ArrayList<String>();
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long buffer = UnsafeAccess.malloc(bufSize);
+    long fieldPtrs[] = new long[fields.length];
+    int fieldSizes[] = new int[fields.length];
+    for(int i=0; i < fields.length; i++) {
+      fieldPtrs[i] = UnsafeAccess.allocAndCopy(fields[i], 0, fields[i].length());
+      fieldSizes[i] = fields[i].length();
+    }
+    long size = HMGET(map, keyPtr, keySize, fieldPtrs, fieldSizes, buffer, bufSize);
+    if (size > bufSize) {
+      return list; // empty list
+    }
+    int total = UnsafeAccess.toInt(buffer);
+    long ptr = buffer + Utils.SIZEOF_INT;
+    for(int i = 0; i < total; i++) {
+      int len = UnsafeAccess.toInt(ptr);
+      if (len < 0) {
+        list.add(null);
+      } else {
+        list.add(Utils.toString(ptr + Utils.SIZEOF_INT, len));
+      }
+      ptr += Utils.SIZEOF_INT + (len > 0? len:0);
+    }
+    return list;
+  }
+  
+  /**
    * Returns the values associated with the specified fields in the hash stored at key.
    * For every field that does not exist in the hash, a nil value is returned. Because 
    * non-existing keys are treated as empty hashes, running HMGET against a non-existing key will 
@@ -871,7 +935,7 @@ public class Hashes {
    * Array reply: list of values associated with the given fields, in the same order as they are requested. 
    * 
    * Serialized buffer format:
-   * [NUM_VALUES] - 8 bytes
+   * [NUM_VALUES] - 4 bytes
    * [VALUE]+
    * [VALUE] :
    *   [SIZE] 4 bytes
@@ -893,46 +957,38 @@ public class Hashes {
    
   public static long HMGET (BigSortedMap map, long keyPtr, int keySize, long[] fieldPtrs, int[] fieldSizes,
       long valueBuf, int valueBufSize) {
+   
     Key k = getKey(keyPtr, keySize);
-    HashScanner scanner = null;
+    long ptr = valueBuf + Utils.SIZEOF_INT;
+    long buf = valueArena.get();
+    int bufSize = valueArenaSize.get();
+    int count = 0;
     try {
-      readLock(k);
-      scanner = getScanner(map, keyPtr, keySize, false);
-      if (scanner == null) {        
-        return -1;
-      }
-      long ptr = valueBuf + Utils.SIZEOF_LONG;
-      
-      long count = 0;
-      long totalSize = 0;
-      try {
-        while(scanner.hasNext()) {
-          long vptr = scanner.fieldValueAddress();
-          int size = scanner.fieldValueSize();
+      KeysLocker.readLock(k);  
+      for (int i = 0; i < fieldPtrs.length; i++) {
+        long fieldPtr = fieldPtrs[i];
+        int fieldSize = fieldSizes[i];
+        int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, buf, bufSize);
+        if (size > bufSize) {
+          checkValueArena(size);
+          buf = valueArena.get();
+          bufSize = size;
+          // size == -1 - nil
+          size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, buf, bufSize);
+        }
+        if (ptr + Utils.SIZEOF_INT + (size > 0? size:0) <= valueBuf + valueBufSize) {
           count++;
-          totalSize += size + Utils.SIZEOF_INT;
-          if (ptr + Utils.SIZEOF_INT + size < valueBuf + valueBufSize) {
-            // copy
-            UnsafeAccess.putInt(ptr, size);
-            UnsafeAccess.copy(vptr, ptr + Utils.SIZEOF_INT, size);
+          UnsafeAccess.putInt(ptr, size);
+          if (size > 0) {
+            UnsafeAccess.copy(buf, ptr + Utils.SIZEOF_INT, size);
           }
-          ptr += size + Utils.SIZEOF_INT;
-          scanner.next();         
+          UnsafeAccess.putInt(valueBuf, count);
         }
-      } catch (IOException e) {
-        // It does not throw this exception
+        ptr += Utils.SIZEOF_INT + (size > 0? size: 0);
       }
-      UnsafeAccess.putLong(valueBuf, count);
-      return totalSize;
+      return ptr - valueBuf;
     } finally {
-      if (scanner != null) {
-        try {
-          scanner.close();
-        } catch (IOException e) {
-          // It does not throw this exception
-        }
-      }
-      readUnlock(k);
+      KeysLocker.readUnlock(k);
     }
   }
   
@@ -1041,6 +1097,24 @@ public class Hashes {
     } finally {
       writeUnlock(k);
     }
+  }
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field field 
+   * @return size of a value or -1
+   */
+  public static int HSTRLEN(BigSortedMap map, String key, String field) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSize = field.length();
+    int result = HSTRLEN(map, keyPtr, keySize, fieldPtr, fieldSize);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    return result;
   }
   /**
    * Returns the string length of the value associated with field in the hash stored at key. 
@@ -1234,6 +1308,39 @@ public class Hashes {
   }
   
   /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param bufSize buffer size
+   * @return list of field value pairs
+   */
+  public static List<Pair<String>> HGETALL(BigSortedMap map, String key, int bufSize){
+    
+    List<Pair<String>> list = new ArrayList<Pair<String>> ();
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long buffer = UnsafeAccess.malloc(bufSize);
+    long result = HGETALL(map, keyPtr, keySize, buffer, bufSize);
+    if (result > bufSize) {
+      return list;
+    }
+    int total = UnsafeAccess.toInt(buffer);
+    long ptr = buffer + Utils.SIZEOF_INT;
+    for (int i = 0; i < total; i++) {
+      int fSize = Utils.readUVInt(ptr);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = Utils.readUVInt(ptr + fSizeSize);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      String first = Utils.toString(ptr + fSizeSize + vSizeSize, fSize);
+      String second = Utils.toString(ptr + fSize + fSizeSize + vSizeSize, vSize);
+      list.add(new Pair<String>(first, second));
+      ptr += + fSize + fSizeSize + vSize + vSizeSize;
+    }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(buffer);
+    return list;
+  }
+  /**
    * Available since 2.0.0.
    * Time complexity: O(N) where N is the size of the hash.
    * Returns all fields and values of the hash stored at key. In the returned value, every field name 
@@ -1259,13 +1366,11 @@ public class Hashes {
       if (scanner == null) {
         return 0;
       }
- 
       long ptr = buffer + Utils.SIZEOF_INT;
       int c = 0;
       while(scanner.hasNext()) {
         long fPtr = scanner.fieldAddress();
         int fSize = scanner.fieldSize();
-        //*DEBUG*/ System.out.println("ptr="+fPtr + " " + Utils.toString(fPtr, fSize));
         int fSizeSize = Utils.sizeUVInt(fSize);
         long vPtr = scanner.fieldValueAddress();
         int vSize = scanner.fieldValueSize();
@@ -1282,7 +1387,7 @@ public class Hashes {
         scanner.next();
       }
       UnsafeAccess.putInt(buffer,  c);
-      return ptr - buffer - Utils.SIZEOF_INT;
+      return ptr - buffer;
     } catch (IOException e) {
 
    } finally {
@@ -1341,14 +1446,75 @@ public class Hashes {
         ptr += fSize + fSizeSize;
         scanner.next();
       }
-      UnsafeAccess.putInt(bufferSize,  c);
-      return ptr - buffer - Utils.SIZEOF_INT;
+      UnsafeAccess.putInt(buffer,  c);
+      return ptr - buffer;
     } catch (IOException e) {
 
    } finally {
       KeysLocker.readUnlock(key);
     }
     return 0; 
+  }
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param bufSize buffer size
+   * @return list of keys
+   */
+  public static List<String> HKEYS(BigSortedMap map, String key, int bufSize)
+  {
+    List<String> list = new ArrayList<String>();
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long buffer = UnsafeAccess.malloc(bufSize);
+    long result = HKEYS(map, keyPtr, keySize, buffer, bufSize) ;
+    if (result > bufSize) {
+      return list;
+    }
+    int total = UnsafeAccess.toInt(buffer);
+    long ptr = buffer + Utils.SIZEOF_INT;
+    for (int i = 0; i < total; i++) {
+      int size = Utils.readUVInt(ptr);
+      int sizeSize = Utils.sizeUVInt(size);
+      String s = Utils.toString(ptr + sizeSize, size);
+      list.add(s);
+      ptr += size + sizeSize;
+    }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(buffer);
+    return list;
+  }
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param bufSize buffer size
+   * @return list of values
+   */
+  public static List<String> HVALS(BigSortedMap map, String key, int bufSize)
+  {
+    List<String> list = new ArrayList<String>();
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long buffer = UnsafeAccess.malloc(bufSize);
+    long result = HVALS(map, keyPtr, keySize, buffer, bufSize) ;
+    if (result > bufSize) {
+      return list;
+    }
+    int total = UnsafeAccess.toInt(buffer);
+    long ptr = buffer + Utils.SIZEOF_INT;
+    for (int i = 0; i < total; i++) {
+      int size = Utils.readUVInt(ptr);
+      int sizeSize = Utils.sizeUVInt(size);
+      String s = Utils.toString(ptr + sizeSize, size);
+      list.add(s);
+      ptr += size + sizeSize;
+    }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(buffer);
+    return list;
   }
   
   /**
@@ -1366,7 +1532,7 @@ public class Hashes {
    * @return total serialized size of the response, if greater then bufferSize 
    *         the call must be retried with the appropriately sized buffer
    */
-  public static long HVALUES(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) 
+  public static long HVALS(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) 
   {
     Key key = getKey(keyPtr, keySize);
     HashScanner scanner = null;
@@ -1394,8 +1560,8 @@ public class Hashes {
         ptr += vSize + vSizeSize;
         scanner.next();
       }
-      UnsafeAccess.putInt(bufferSize,  c);
-      return ptr - buffer - Utils.SIZEOF_INT;
+      UnsafeAccess.putInt(buffer,  c);
+      return ptr - buffer;
     } catch (IOException e) {
 
    } finally {
@@ -1403,6 +1569,156 @@ public class Hashes {
     }
     return 0; 
   }
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param count count to return
+   * @param withValues with values?
+   * @param bufSize buffer size
+   * @return list of K-V or K-K
+   */
+  public static List<Pair<String>> HRANDFIELD(BigSortedMap map, String key, int count, 
+      boolean withValues, int bufSize)
+  {
+    List<Pair<String>> list = new ArrayList<Pair<String>>();
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long bufferPtr = UnsafeAccess.malloc(bufSize);
+    
+    long result = HRANDFIELD(map, keyPtr, keySize, count, withValues, bufferPtr, bufSize);
+    int total = UnsafeAccess.toInt(bufferPtr);
+    long ptr = bufferPtr + Utils.SIZEOF_INT;
+    for (int i = 0; i < total; i++) {
+      int fSize = Utils.readUVInt(ptr);
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = (withValues)? Utils.readUVInt(ptr + fSizeSize): 0;
+      int vSizeSize = (withValues)? Utils.sizeUVInt(vSize): 0;
+      long fPtr = ptr + fSizeSize + vSizeSize;
+      String s1 = Utils.toString(fPtr, fSize);
+      if (withValues) {
+        list.add(new Pair<String>(s1,s1));
+      } else {
+        long vPtr = fPtr + fSize;
+        String s2 = Utils.toString(vPtr, vSize);
+        list.add( new Pair<String>(s1,s2));
+      }
+      ptr += fSize + vSize + fSizeSize + vSizeSize;
+    }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(bufferPtr);
+    return list;
+  }
+  
+  /**
+   * When called with just the key argument, return a random field from the hash value stored at key.
+   * If the provided count argument is positive, return an array of distinct fields. The array's 
+   * length is either count or the hash's number of fields (HLEN), whichever is lower.
+   * If called with a negative count, the behavior changes and the command is allowed to return
+   * the same field multiple times. In this case, the number of returned fields is the absolute 
+   * value of the specified count. The optional WITHVALUES modifier changes the reply so it includes 
+   * the respective values of the randomly selected hash fields.
+   * 
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param count count to return
+   * @param withValues true - return fields with values
+   * @param buffer  buffer to keep response
+   * @param bufSize buffer size
+   * @return full serialized size of the response
+   */
+  public static long HRANDFIELD(BigSortedMap map, long keyPtr, int keySize, int count, 
+      boolean withValues, long bufferPtr, int bufferSize) {
+    
+    Key k = getKey(keyPtr, keySize);
+    boolean distinct = count > 0;
+    if (!distinct) {
+      count = -count;
+    }
+    HashScanner scanner = null;
+    try {
+      KeysLocker.readLock(k);
+      long total =  HLEN(map, keyPtr, keySize);
+      if (total == 0) {
+        return 0; // Empty hash or does not exists
+      }
+      long[] index = null;
+      if (distinct) {
+        if (count < total) {
+          index = Utils.randomDistinctArray(total, count);
+        } 
+      } else {
+        index = Utils.randomArray(total, count);
+      }
+      if (index == null) {
+        // Return all elements
+        return withValues? HGETALL(map, keyPtr, keySize, bufferPtr, bufferSize): 
+          HKEYS(map, keyPtr, keySize, bufferPtr, bufferSize);
+      }
+      scanner = getScanner(map, keyPtr, keySize, false);
+      long result = readByIndex(scanner, index, bufferPtr, bufferSize, withValues);
+      return result;
+    } finally {
+      if (scanner != null) {
+        try {
+          scanner.close();
+        } catch (IOException e) {
+          // Should not be here
+        }
+      }
+      KeysLocker.readUnlock(k);
+    }
+  }
+  
+  /**
+   * TODO: change return value to full serialized size
+   * Return number of written element
+   * @param scanner set scanner
+   * @param index array of random indexes to read
+   * @param bufferPtr buffer 
+   * @param bufferSize buffer size
+   * @return
+   */
+  private static long readByIndex(HashScanner scanner, long[] index, long bufferPtr, int bufferSize,
+      boolean withValues) {
+
+    long ptr = bufferPtr + Utils.SIZEOF_INT;
+    UnsafeAccess.putInt(bufferPtr, 0);
+
+    for (int i = 0; i < index.length; i++) {
+      scanner.skipTo(index[i]);
+      int fSize = scanner.fieldSize();
+      int fSizeSize = Utils.sizeUVInt(fSize);
+      int vSize = scanner.fieldValueSize();
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      int adv = fSize + fSizeSize + (withValues ? (vSize + vSizeSize) : 0);
+      if (ptr + adv <= bufferPtr + bufferSize) {
+        long fPtr = scanner.fieldAddress();
+        if (!withValues) {
+          // Write size
+          Utils.writeUVInt(ptr, fSize);
+          // Write field
+          UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
+        } else {
+          long vPtr = scanner.fieldValueAddress();
+          // Write field size
+          Utils.writeUVInt(ptr, fSize);
+          // Write value size
+          Utils.writeUVInt(ptr + fSizeSize, vSize);
+          // Write field
+          UnsafeAccess.copy(fPtr, ptr + fSizeSize + vSizeSize, fSize);
+          // Write value
+          UnsafeAccess.copy(vPtr, ptr + fSizeSize + vSizeSize + fSize, vSize);
+        }
+        UnsafeAccess.putInt(bufferPtr, i + 1);
+      }
+      ptr += adv;
+    }
+    return ptr - bufferPtr;
+  }
+  
   /**
    * TODO: pattern matching
    * Create scanner from  a cursor, which defined by pairs of last 
@@ -1627,14 +1943,8 @@ public class Hashes {
       int fSize = Utils.readUVInt(valuePtr + off);
       int skip = Utils.sizeUVInt(fSize);
       int vSize = Utils.readUVInt(valuePtr + off + skip);
-      skip+= Utils.sizeUVInt(vSize);
-//      if (DEBUG) {
-//        System.out.println(Utils.toString(fieldPtr, fieldSize) + " - " + 
-//            Utils.toString(valuePtr + off + skip, fSize));
-//      }
+      skip += Utils.sizeUVInt(vSize);
       if (Utils.compareTo(fieldPtr, fieldSize, valuePtr + off + skip, fSize) <= 0) {
-//        if (DEBUG) System.out.println("off=" + off + " valueSize=" + valueSize + " el count=" + 
-//            UnsafeAccess.toShort(valuePtr));
         return valuePtr + off;
       }
       off+= skip + fSize + vSize;

@@ -1322,6 +1322,22 @@ public class Utils {
     return total;
   }
   
+  /**
+   * Checks if list has all unique members. List must be sorted.
+   * @param list
+   * @return true/false
+   */
+  public static boolean unique(List<String> list) {
+    if (list.size() <= 1) return true;
+    Collections.sort(list);
+    for(int i = 1; i < list.size(); i++) {
+      if (list.get(i-1).equals(list.get(i))) {
+        return false;
+      }
+    }
+    return true; 
+  }
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

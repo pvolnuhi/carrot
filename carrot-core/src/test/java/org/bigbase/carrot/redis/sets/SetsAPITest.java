@@ -558,7 +558,7 @@ public class SetsAPITest {
     for(int i = 0; i < numIter; i++) {
       List<String> result = Sets.SRANDMEMBER(map, key, 10, 4096);
       assertEquals(10, result.size());
-      assertTrue(unique(result));
+      assertTrue(Utils.unique(result));
       assertTrue(list.containsAll(result));
       if (i % 100 == 0) {
         System.out.println("Skipped " + i);
@@ -630,7 +630,7 @@ public class SetsAPITest {
     for(int i = 0; i < numIter; i++) {
       List<String> result = Sets.SPOP(map, key, 10, 4096);
       assertEquals(10, result.size());
-      assertTrue(unique(result));
+      assertTrue(Utils.unique(result));
       assertTrue(list.containsAll(result));
       // verify that they were deleted
       for (String s: result) {
@@ -662,18 +662,7 @@ public class SetsAPITest {
     end = System.currentTimeMillis();
     System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
   }
-  
-  private boolean unique(List<String> list) {
-    if (list.size() <= 1) return true;
-    Collections.sort(list);
-    for(int i = 1; i < list.size(); i++) {
-      if (list.get(i-1).equals(list.get(i))) {
-        return false;
-      }
-    }
-    return true; 
-  }
-  
+    
   private int scan(BigSortedMap map, String key, String lastSeenMember, 
       int count, int bufferSize, String regex)
   {

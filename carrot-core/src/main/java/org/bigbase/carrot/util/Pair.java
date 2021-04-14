@@ -17,4 +17,14 @@ public class Pair<T> {
   public T getSecond() {
     return second;
   }
+  
+  @SuppressWarnings("unchecked")
+  @Override
+  public boolean equals(Object o) {
+    if (o == null || !(o instanceof Pair)) {
+      return false;
+    }
+    Pair<T> p = (Pair<T>) o;
+    return first.equals(p.first) && second.equals(p.second);
+  }
 }
