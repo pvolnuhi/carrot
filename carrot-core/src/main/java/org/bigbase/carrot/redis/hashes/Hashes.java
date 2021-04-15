@@ -645,8 +645,6 @@ public class Hashes {
     }
   }
   
-  
-  
   /**
    * Available since 2.0.0. Atomic operation
    * Time complexity: O(N) where N is the number of fields to be removed.
@@ -701,6 +699,24 @@ public class Hashes {
   }
   
   /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field hash field
+   * @return 1 - deleted, 0 - does not exist
+   */
+  public static int HDEL(BigSortedMap map, String key, String field) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSize = field.length();
+    int result = HDEL(map, keyPtr, keySize, fieldPtr, fieldSize);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    return result;
+  }
+  
+  /**
    * HDEL for single field ( zero object allocation)
    * @param map sorted map storage
    * @param keyPtr hash key address
@@ -733,6 +749,34 @@ public class Hashes {
     } finally {
       writeUnlock(k);
     }
+  }
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field hash field
+   * @param bufSize buffer size
+   * @return deleted value or null
+   */
+  
+  public static String HDEL(BigSortedMap map, String key, String field, int bufSize) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSize = field.length();
+    long buffer = UnsafeAccess.malloc(bufSize);
+    int size = HDEL(map, keyPtr, keySize, fieldPtr, fieldSize, buffer, bufSize);
+    String result = null;
+    if (size <= bufSize && size > 0) {
+      int vSize = Utils.readUVInt(buffer);
+      int vSizeSize = Utils.sizeUVInt(vSize);
+      result = Utils.toString(buffer + vSizeSize, size - vSizeSize);
+    }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    UnsafeAccess.free(buffer);
+    return result;
   }
   
   /**
@@ -776,6 +820,24 @@ public class Hashes {
   }
   
   /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field hash field
+   * @return 1 - exists, 0 - does not
+   */
+  public static int HEXISTS(BigSortedMap map, String key, String field) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSize = field.length();
+    
+    int result = HEXISTS(map, keyPtr, keySize, fieldPtr, fieldSize);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    return result;
+  }
+  /**
    * Returns if field is an existing field in the hash stored at key.
    * Return value
    * Integer reply, specifically:
@@ -802,6 +864,32 @@ public class Hashes {
     } finally {
       readUnlock(k);
     }
+  }
+  
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field hash field
+   * @param bufSize buffer size
+   * @return value or null
+   */
+  public static String HGET(BigSortedMap map, String key, String field, int bufSize) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSize = field.length();
+    long buffer = UnsafeAccess.malloc(bufSize);
+    int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, buffer, bufSize);
+    String result = null;
+    if (size <= bufSize && size > 0) {
+      result = Utils.toString(buffer, size);
+    }
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    UnsafeAccess.free(buffer);
+    
+    return result;
   }
   
   /**
@@ -993,6 +1081,26 @@ public class Hashes {
   }
   
   /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field hash field
+   * @param incr increment
+   * @return new value
+   * @throws OperationFailedException
+   */
+  public static long HINCRBY(BigSortedMap map, String key, String field, long incr) 
+      throws OperationFailedException {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSize = field.length();
+    long result = HINCRBY(map, keyPtr, keySize, fieldPtr, fieldSize, incr);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    return result;
+  }
+  /**
    * Increments the number stored at field in the hash stored at key by increment. 
    * If key does not exist, a new key holding a hash is created. If field does not 
    * exist the value is set to 0 before the operation is performed.
@@ -1041,7 +1149,26 @@ public class Hashes {
     }
   }
   
-
+  /**
+   * For testing only
+   * @param map sorted map storage
+   * @param key hash key
+   * @param field hash field
+   * @param incr increment
+   * @return new value
+   * @throws OperationFailedException
+   */
+  public static double HINCRBYFLOAT(BigSortedMap map, String key, String field, double incr) 
+      throws OperationFailedException {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
+    int keySize = key.length();
+    long fieldPtr = UnsafeAccess.allocAndCopy(field, 0, field.length());
+    int fieldSize = field.length();
+    double result = HINCRBYFLOAT(map, keyPtr, keySize, fieldPtr, fieldSize, incr);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(fieldPtr);
+    return result;
+  }
   
   /**
    * Increment the specified field of a hash stored at key, and representing a floating point 

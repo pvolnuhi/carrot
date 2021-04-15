@@ -1,6 +1,7 @@
 package org.bigbase.carrot.redis.hashes;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.util.Random;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
+import org.bigbase.carrot.redis.OperationFailedException;
 import org.bigbase.carrot.util.Pair;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -94,6 +96,21 @@ public class HashesAPITest {
   
   private void allTests() throws IOException {
     setUp();
+    testHashIncrementFloat();
+    tearDown();
+    setUp();
+    testHashIncrement();
+    tearDown();
+    setUp();
+    testHashExists();
+    tearDown();
+    setUp();
+    testHashGet();
+    tearDown();
+    setUp();
+    testHashDelete();
+    tearDown();
+    setUp();
     testHashGetAllAPI();
     tearDown();
     setUp();
@@ -124,7 +141,193 @@ public class HashesAPITest {
     testSscanWithRegex();
     tearDown();
   }
+  
+  @Ignore
+  @Test
+  public void testHashExists() {
+    System.out.println("Test Hashes HEXISTS API call");
+    int X = 1000;
+    String key = "key";
+    List<String> list = loadDataRandomSize(key, X);    
+    Collections.sort(list);
+    // Check cardinality
+    assertEquals(X, (int)Hashes.HLEN(map, key));
+    Random r = new Random();
+    for (String f : list) {
+      int res = Hashes.HEXISTS(map, key, f);
+      assertEquals(1, res);
+    }
+    // Check non-existing fields
+    for (int i = 0; i < 1000; i++) {
+      String v = Utils.getRandomStr(r, 10);
+      int res = Hashes.HEXISTS(map, key, v);
+      assertEquals(0, res);
+    }
+    // Check other keys  
+    for (String f : list) {
+      String k = Utils.getRandomStr(r, 10);
+      int res = Hashes.HEXISTS(map, k, f);
+      assertEquals(0, res);
+    }
+  }
+  
+  @Ignore
+  @Test
+  public void testHashGet() {
+    System.out.println("Test Hashes HGET API call");
+    int X = 1000;
+    String key = "key";
+    List<String> list = loadDataRandomSize(key, X);    
+    Collections.sort(list);
+    // Check cardinality
+    assertEquals(X, (int)Hashes.HLEN(map, key));
+    Random r = new Random();
+    for (String f : list) {
+      String res = Hashes.HGET(map, key, f, 200);
+      assertEquals(f, res);
+    }
+    // Check non-existing fields
+    for (int i = 0; i < 1000; i++) {
+      String v = Utils.getRandomStr(r, 10);
+      String res = Hashes.HGET(map, key, v, 200);
+      assertNull(res);
+    }
+    // Check other keys  
+    for (String f : list) {
+      String k = Utils.getRandomStr(r, 10);
+      String res = Hashes.HGET(map, k, f, 200);
+      assertNull(res);
+    }
+    
+    // Check small buffer
+    for (String f : list) {
+      String res = Hashes.HGET(map, key, f, 4);
+      assertNull(res);
+    }
+  }
+  
+  @Ignore
+  @Test
+  public void testHashIncrementFloat() throws OperationFailedException {
+    int N = 10000;
+    System.out.println("Test Hashes HINCRBYFLOAT API call");
+    List<String> keys = new ArrayList<String>();
+    String field = "field";
+    Random r = new Random();
+    for(int i = 0; i < N ; i++) {
+      String key = Utils.getRandomStr(r, 10);
+      keys.add(key);
+      double value = Hashes.HINCRBYFLOAT(map, key, field, 1);
+      assertEquals(1d, value);
+    }
+    
+    for(String key: keys) {
+      double value = Hashes.HINCRBYFLOAT(map, key, field, 10);
+      assertEquals(11d, value);
+      value = Hashes.HINCRBYFLOAT(map, key, field, 100);
+      assertEquals(111d, value);
+      value = Hashes.HINCRBYFLOAT(map, key, field, 0);
+      assertEquals(111d, value);      
+      value = Hashes.HINCRBYFLOAT(map, key, field, -100);
+      assertEquals(11d, value);
+      value = Hashes.HDEL(map, key, field);
+      assertEquals(1d, value);
+    }
+    
+  }
+  @Ignore
+  @Test
+  public void testHashIncrement() throws OperationFailedException {
+    int N = 10000;
+    System.out.println("Test Hashes HINCRBY API call");
+    List<String> keys = new ArrayList<String>();
+    String field = "field";
+    Random r = new Random();
+    for(int i = 0; i < N ; i++) {
+      String key = Utils.getRandomStr(r, 10);
+      keys.add(key);
+      long value = Hashes.HINCRBY(map, key, field, 1);
+      assertEquals(1L, value);
+    }
+    
+    for(String key: keys) {
+      long value = Hashes.HINCRBY(map, key, field, 10);
+      assertEquals(11L, value);
+      value = Hashes.HINCRBY(map, key, field, 100);
+      assertEquals(111L, value);
+      value = Hashes.HINCRBY(map, key, field, 0);
+      assertEquals(111L, value);      
+      value = Hashes.HINCRBY(map, key, field, -100);
+      assertEquals(11L, value);
+      value = Hashes.HDEL(map, key, field);
+      assertEquals(1L, value);
+    }
+    
+  }
+  
+  @Ignore
+  @Test
+  public void testHashDelete() {
+    System.out.println("Test Hashes HDEL API call");
+    int X = 1000;
+    String key = "key";
+    List<String> list = loadDataRandomSize(key, X);    
+    Collections.sort(list);
+    // Check cardinality
+    assertEquals(X, (int)Hashes.HLEN(map, key));
+    Random r = new Random();
+    // Delete - return previous value
+    for (String f : list) {
+      String res = Hashes.HDEL(map, key, f, 200);
+      assertEquals(f, res);
+    }
+    // Check do not exists
+    for (String f : list) {
+      int res = Hashes.HEXISTS(map, key, f);
+      assertEquals(0, res);
+    }
+    
+    list = loadDataRandomSize(key, X);    
+    Collections.sort(list);
+    // Check cardinality
+    assertEquals(X, (int)Hashes.HLEN(map, key));
+    // Delete 
+    for (String f : list) {
+      int res = Hashes.HDEL(map, key, f);
+      assertEquals(1, res);
+    }
 
+    // Check do not exists
+    for (String f : list) {
+      int res = Hashes.HEXISTS(map, key, f);
+      assertEquals(0, res);
+    }
+    
+    list = loadDataRandomSize(key, X);    
+    Collections.sort(list);
+    // Check cardinality
+    assertEquals(X, (int)Hashes.HLEN(map, key));
+    
+    // Check non-existing fields
+    for (int i = 0; i < 1000; i++) {
+      String v = Utils.getRandomStr(r, 10);
+      String res = Hashes.HDEL(map, key, v, 200);
+      assertNull(res);
+    }
+    
+    // Check other keys  
+    for (String f : list) {
+      String k = Utils.getRandomStr(r, 10);
+      String res = Hashes.HDEL(map, k, f, 200);
+      assertNull(res);
+    }
+    
+    // Check small buffer
+    for (String f : list) {
+      String res = Hashes.HDEL(map, key, f, 4);
+      assertNull(res);
+    }
+  }
   
   @Ignore
   @Test
