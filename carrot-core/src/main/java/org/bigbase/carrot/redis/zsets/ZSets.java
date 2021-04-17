@@ -343,21 +343,25 @@ public class ZSets {
       int maxCompactSize = conf.getMaximumZSetCompactSize();
       boolean compactMode = count < maxCompactSize;      
       // Step one, find and remove existing members
-      removeFromSet(map, keyPtr, keySize, memberPtrs, memberSizes, compactMode);
       for (int i = 0; i < toAdd; i++) {
+        boolean existed = 
+            removeIfExistsWithOptions(map, keyPtr, keySize, memberPtrs[i], memberSizes[i], compactMode, options);
+        if (existed && options == MutationOptions.NX || !existed && options == MutationOptions.XX) {
+          continue;
+        }
         int kSize = buildKeyForSet(keyPtr, keySize, memberPtrs[i], memberSizes[i], scores[i]);  
         
         SetAdd add = setAdd.get();
         add.reset();
         add.setKeyAddress(keyArena.get());
         add.setKeySize(kSize);
-        add.setMutationOptions(options);
+        //add.setMutationOptions(options);
         // version?
-        if (map.execute(add)) {
-          inserted += add.getInserted();
-          if (changed) {
-            updated += add.getUpdated();
-          }
+        map.execute(add); 
+        if (!existed) {
+          inserted++;
+        } else if (changed) {
+          updated++;
         }
       }
       // Next update zset count
@@ -378,82 +382,100 @@ public class ZSets {
       KeysLocker.writeUnlock(k);
     }
   }
-   
-  private static int removeFromSet(BigSortedMap map, long keyPtr, int keySize, long[] memberPtrs,
-      int[] memberSizes, boolean compactMode)
-  {
-    int removed = 0;
+  
+  /**
+   * Removes element only if exists and options == NONE, XX
+   * @param map sorted map storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param memberPtr member name address
+   * @param memberSize member size
+   * @param compactMode compact mode
+   * @param options mutation options
+   * @return true if element exists, false otherwise
+   */
+  private static boolean removeIfExistsWithOptions(BigSortedMap map, long keyPtr, int keySize,
+      long memberPtr, int memberSize, boolean compactMode, MutationOptions options) {
+    boolean exists = false;
     if (compactMode) {
-      return removeDirectlyFromSet(map, keyPtr, keySize, memberPtrs, memberSizes);
+      return removeDirectlyFromSetWithOptions(map, keyPtr, keySize, memberPtr, memberSize, options);
     } else {
+      checkValueArena(memberSize + Utils.SIZEOF_DOUBLE);
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
       // get key from hash
-      for(int i = 0; i < memberPtrs.length; i++) {
-        long size = Hashes.HGET(map, keyPtr, keySize, memberPtrs[i], memberSizes[i], 
-          valueBuf, valueBufSize);
-        // valueArena size is > 8 bytes - result size
-        if (size < 0) {
-          // not found
-          continue;
-        }
+      long size = Hashes.HGET(map, keyPtr, keySize, memberPtr, memberSize, valueBuf, valueBufSize);
+      // valueArena size is > 8 bytes - result size
+      if (size < 0) {
+        // not found
+        return exists;
+      }
+      if (options != MutationOptions.NX) {
         // Copy member field
-        UnsafeAccess.copy(memberPtrs[i], valueBuf + Utils.SIZEOF_LONG, memberSizes[i]);
+        UnsafeAccess.copy(memberPtr, valueBuf + Utils.SIZEOF_DOUBLE, memberSize);
         // Delete
-        int res = Sets.SREM(map, keyPtr, keySize, valueBuf,Utils.SIZEOF_LONG + memberSizes[i]);
-        assert(res == 1);
-        removed++;
+        int res = Sets.SREM(map, keyPtr, keySize, valueBuf, Utils.SIZEOF_DOUBLE + memberSize);
+        assert (res == 1);
       }
+      exists = true;
     }
-    return removed;
+    return exists;
   }
-  
-  private static int removeDirectlyFromSet(BigSortedMap map, long keyPtr, int keySize,
-      long[] memberPtrs, int[] memberSizes) {
+  /**
+   * Removes element directly from Set with options
+   * @param map sorted map storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param memberPtr member address
+   * @param memberSize member size
+   * @param options mutation options
+   * @return true - element exists , false -otherwise
+   */
+  private static boolean removeDirectlyFromSetWithOptions(BigSortedMap map, long keyPtr, int keySize,
+      long memberPtr, int memberSize, MutationOptions options) {
 
-    int removed = 0;
-    // get key from hash
-    for (int i = 0; i < memberPtrs.length; i++) {
-      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);  
-      if (scanner == null) {
-        return 0;
+    boolean exists = false;
+    SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);
+    if (scanner == null) {
+      return false;
+    }
+    try {
+      long ptr = 0;
+      int size = 0;
+      while (scanner.hasNext()) {
+        long mPtr = scanner.memberAddress();
+        int mSize = scanner.memberSize();
+        if (Utils.compareTo(mPtr + Utils.SIZEOF_DOUBLE, mSize - Utils.SIZEOF_DOUBLE, memberPtr,
+          memberSize) == 0) {
+          ptr = mPtr;
+          size = mSize;
+          scanner.close();
+          scanner = null;
+          break;
+        }
+        scanner.next();
       }
-      try {
-          long ptr = 0;
-          int size = 0;
-          while (scanner.hasNext()) {
-            long mPtr = scanner.memberAddress();
-            int mSize = scanner.memberSize();
-            if (Utils.compareTo(mPtr + Utils.SIZEOF_LONG, mSize - Utils.SIZEOF_LONG, 
-              memberPtrs[i], memberSizes[i]) == 0) {
-              ptr = mPtr;
-              size = mSize;
-              scanner.close();
-              scanner = null;
-              break;
-            }
-            scanner.next();
-          }
-          if (ptr > 0) {
-            checkValueArena(size);
-            UnsafeAccess.copy(ptr, valueArena.get(), size);
-            int res = Sets.SREM(map, keyPtr, keySize, valueArena.get(), size);
-            assert(res == 1);
-            removed++;
-          }
-      } catch (IOException e) {
-      } finally {
-        if (scanner != null) {
-          try {
-            scanner.close();
-          } catch (IOException e) {
-          }
+      if (ptr > 0) {
+        exists = true;
+        if (options != MutationOptions.NX) {
+          checkValueArena(size);
+          UnsafeAccess.copy(ptr, valueArena.get(), size);
+          int res = Sets.SREM(map, keyPtr, keySize, valueArena.get(), size);
+          assert (res == 1);
+        }
+      }
+    } catch (IOException e) {
+    } finally {
+      if (scanner != null) {
+        try {
+          scanner.close();
+        } catch (IOException e) {
         }
       }
     }
-    return removed;
+
+    return exists;
   }
-  
 
   /**
    * For testing only
@@ -607,7 +629,7 @@ public class ZSets {
       set.setKeyAddress(keyArena.get());
       set.setKeySize(kSize);
       set.setFieldValue(valuePtr, valueSize);
-      set.setOptions(options);
+      //set.setOptions(options);
       // version?
       if (map.execute(set)) {
         count ++;
@@ -3875,8 +3897,8 @@ public class ZSets {
   * @return score or NULL
   */
  
- public static Double ZSCORE (BigSortedMap map, long keyPtr, int keySize, long memberPtr, int memberSize)
- {
+ public static Double ZSCORE(BigSortedMap map, long keyPtr, int keySize, long memberPtr,
+     int memberSize) {
    Key key = getKey(keyPtr, keySize);
    try {
      KeysLocker.readLock(key);
@@ -3887,29 +3909,32 @@ public class ZSets {
        // Scan Set to search member
        // TODO: Reverse search?
        SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);
+       if (scanner == null) {
+         return null;
+       }
        try {
-         while(scanner.hasNext()) {
+         while (scanner.hasNext()) {
            long ptr = scanner.memberAddress();
            int size = scanner.memberSize();
            // First 8 bytes of a member is double score
-           int res = Utils.compareTo(ptr + Utils.SIZEOF_DOUBLE, size - Utils.SIZEOF_DOUBLE, 
+           int res = Utils.compareTo(ptr + Utils.SIZEOF_DOUBLE, size - Utils.SIZEOF_DOUBLE,
              memberPtr, memberSize);
            if (res == 0) {
              return Utils.lexToDouble(ptr);
            }
            scanner.next();
-        }
-      } catch (IOException e) {
-      } finally {
-        try {
-          scanner.close();
-        } catch (IOException e) {
-        }
-      }
-      return null;
+         }
+       } catch (IOException e) {
+       } finally {
+         try {
+           scanner.close();
+         } catch (IOException e) {
+         }
+       }
+       return null;
      } else {
        // Get score from Hash
-       int size = Hashes.HGET(map, keyPtr, keySize, memberPtr, memberSize, valueArena.get(), 
+       int size = Hashes.HGET(map, keyPtr, keySize, memberPtr, memberSize, valueArena.get(),
          valueArenaSize.get());
        if (size < 0) return null;
        return Utils.lexToDouble(valueArena.get());

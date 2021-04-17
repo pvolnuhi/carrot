@@ -302,12 +302,14 @@ public class ZSetsAPITest {
       assertNotNull(score);
       score = r.nextDouble() * r.nextInt();
       long res = ZSets.ZADD(map, key,  new String[] {p.getFirst()}, new double[] {score}, false);
-      assertEquals(1, (int)res);
+      assertEquals(0, (int)res);
       Double newScore = ZSets.ZSCORE(map, key, p.getFirst());
       assertNotNull(newScore);
       assertEquals(score, newScore);
     }
     
+    card = ZSets.ZCARD(map, key);
+    assertEquals(numMembers, (int)card);
     // ZADDNX
     
     for(Pair<String> p: data) {
@@ -317,7 +319,8 @@ public class ZSetsAPITest {
       long res = ZSets.ZADDNX(map, key,  new String[] {p.getFirst()}, new double[] {score}, false);
       assertEquals(0, (int)res);
     }
-    
+    card = ZSets.ZCARD(map, key);
+    assertEquals(numMembers, (int)card);
     // Delete set
     boolean result = ZSets.DELETE(map, key);
     assertTrue(result);
@@ -337,7 +340,7 @@ public class ZSetsAPITest {
       Double score = ZSets.ZSCORE(map, key, p.getFirst());
       assertNotNull(score);
       score = r.nextDouble() * r.nextInt();
-      long res = ZSets.ZADDXX(map, key,  new String[] {p.getFirst()}, new double[] {score}, false);
+      long res = ZSets.ZADDXX(map, key,  new String[] {p.getFirst()}, new double[] {score}, true);
       assertEquals(1, (int)res);
     }
     
@@ -348,7 +351,7 @@ public class ZSetsAPITest {
     // Try loading again with ZADDXX
     for(Pair<String> p: data) {
       double score = r.nextDouble() * r.nextInt();
-      long res = ZSets.ZADDXX(map, key,  new String[] {p.getFirst()}, new double[] {score}, false);
+      long res = ZSets.ZADDXX(map, key,  new String[] {p.getFirst()}, new double[] {score}, true);
       assertEquals(0, (int)res);
       Double newScore = ZSets.ZSCORE(map, key, p.getFirst());
       assertNull(newScore);

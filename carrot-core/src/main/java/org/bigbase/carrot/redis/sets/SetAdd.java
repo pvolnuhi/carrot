@@ -156,7 +156,9 @@ public class SetAdd extends Operation{
       // and return
       // Set does not exist yet
       // Insert new set KV
-      insertFirstKVandElement(elementPtr, elementSize);
+      if (options != MutationOptions.XX) {
+        insertFirstKVandElement(elementPtr, elementSize);
+      }
       return true;
     }
     // check prefix
@@ -170,7 +172,9 @@ public class SetAdd extends Operation{
       setKeySize) != 0) {
       // Set does not exist yet
       // Insert new set KV
-      insertFirstKVandElement(elementPtr, elementSize);
+      if (options != MutationOptions.XX) {
+        insertFirstKVandElement(elementPtr, elementSize);
+      }
       return true;
     }
     // Set exists
@@ -182,12 +186,25 @@ public class SetAdd extends Operation{
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
     boolean append = addr == (valueAddress + valueSize);
     
-    if (!append && Sets.compareElements(addr, elementPtr, elementSize) == 0) {
-      // Can not insert, because it is already there
-      updated++;
-      return false;
+    if (!append) {
+      // Check updates
+      if (Sets.compareElements(addr, elementPtr, elementSize) == 0) {
+        // Can not insert, because it is already there
+        if (options == MutationOptions.NX) {
+          return true;
+        }
+        // else increment updated
+        updated++;
+      } else if (options == MutationOptions.XX) {
+        // does not exists but we have XX (update existing only)
+        return true;
+      } else {
+        // do insert
+        inserted++;
+      }
+    } else {
+      inserted++;
     }
-    inserted++;
     // found
     int elemSizeSize = Utils.sizeUVInt(elementSize);
     int toAdd = elemSizeSize + elementSize;
@@ -210,6 +227,11 @@ public class SetAdd extends Operation{
       return true;
     } else if (!canSplit(valueAddress)){
       // We can't split existing KV , so insert new one
+      //TODO: what happens if it is UPDATE?
+      // THIS IS THE ISSUE
+      // Old Key must be updated with new Value if UPDATE = true and canSplit == FALSE (means only 1 set element
+      // in a Value)
+      // It seems that existing code will work, bu we need a test case
       insertNewKVandElement(elementPtr, elementSize);
       return true;
     } else {

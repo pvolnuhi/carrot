@@ -131,9 +131,13 @@ public class HashSet extends Operation{
         Utils.compareTo(keyAddress, setKeySize, foundKeyAddress, 
       setKeySize) != 0) {
       // Set does not exist yet
-      // Insert new set KV
-      insertFirstKVandFieldValue(fieldPtr, fieldSize);
-      return true;
+      // Insert new set KV if opts != XX
+      if (opts != MutationOptions.XX) {
+        insertFirstKVandFieldValue(fieldPtr, fieldSize);
+        return true;
+      } else {
+        return false;
+      }
     }
     // Set exists
     long valueAddress = DataBlock.valueAddress(foundRecordAddress);
@@ -169,6 +173,8 @@ public class HashSet extends Operation{
       return true;
     } else if (!canSplit(valueAddress)){
       // We can't split existing KV , so insert new one
+      //TODO: UPDATE == true (exists == true)
+      // WRONG CODE
       insertNewKVandFieldValue(fieldPtr, fieldSize);
       return true;
     } else {
