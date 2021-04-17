@@ -178,7 +178,7 @@ public class TestUtils {
   @Test
   public void testDoubleToLex() {
     Random r = new Random();
-    int N = 10000;
+    int N = 100;
     double[] arr = new double[N];
     long ptr = UnsafeAccess.malloc( N * Utils.SIZEOF_LONG);
     for(int i = 0; i < N ; i++) {
@@ -203,7 +203,7 @@ public class TestUtils {
       double d = Utils.lexToDouble(keys.get(i).address);
       assertEquals(arr[i], d);
     }
-   //keys.stream().map(x-> Utils.lexToDouble(x.address)).forEach(System.out::println);
+   keys.stream().map(x-> Utils.lexToDouble(x.address)).forEach(System.out::println);
     
   }
   

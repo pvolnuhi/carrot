@@ -268,6 +268,18 @@ public class Sets {
     return result;
   }
   
+  
+  /**
+   * Not in Redis API
+   * Calculates number of elements between start member (inclusive) and stop member
+   * (exclusive). When both": start and stop member are nulls this call is 
+   * equivalent to SCARD
+   */
+  
+  public static long SCOUNT(BigSortedMap map, long keyPtr, int keySize, long startPtr, int startSize, 
+      long stopPtr, int stopSize) {
+    return 0;
+  }
   /**
    * Available since 1.0.0.
    * Time complexity: O(N) where N is the total number of elements in all given sets.
@@ -1225,7 +1237,23 @@ public class Sets {
     return list;
   }
   
-  
+  /**
+   * Default (w/o offset) SSCAN
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param lastSeenMemberPtr last seen member address
+   * @param lastSeenMemberSize last seen member size
+   * @param count count
+   * @param buffer buffer to stotre result
+   * @param bufferSize buffer size
+   * @param regex pattern
+   * @return full serialized size of the response
+   */
+  public static long SSCAN(BigSortedMap map, long keyPtr, int keySize, long lastSeenMemberPtr,
+      int lastSeenMemberSize, int count, long buffer, int bufferSize, String regex) {
+    return SSCAN(map, keyPtr, keySize, lastSeenMemberPtr, lastSeenMemberSize, count, buffer, bufferSize, regex, 0);
+  }
   /**
    * 
    * TODO: regex flavors 
@@ -1259,7 +1287,7 @@ public class Sets {
    *         must be retried with the appropriately sized buffer
    */
   public static long SSCAN(BigSortedMap map, long keyPtr, int keySize, long lastSeenMemberPtr,
-      int lastSeenMemberSize, int count, long buffer, int bufferSize, String regex) {
+      int lastSeenMemberSize, int count, long buffer, int bufferSize, String regex, int regexOffset) {
     Key key = getKey(keyPtr, keySize);
     SetScanner scanner = null;
     try {
@@ -1304,7 +1332,7 @@ public class Sets {
           long arena = valueArena.get();
           Utils.writeUVInt(arena, mSize);
           UnsafeAccess.copy(mPtr, arena + mSizeSize, mSize);
-          if (regex == null || Utils.matches(mPtr, mSize, regex)) {
+          if (regex == null || Utils.matches(mPtr + regexOffset, mSize - regexOffset, regex)) {
             c++;
             Utils.writeUVInt(ptr, mSize);
             UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);

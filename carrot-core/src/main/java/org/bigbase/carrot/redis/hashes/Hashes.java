@@ -752,6 +752,18 @@ public class Hashes {
   }
   
   /**
+   * Not in Redis API
+   * Calculates number of elements between start member (inclusive) and stop member
+   * (exclusive). When both": start and stop member are nulls this call is 
+   * equivalent to HLEN
+   */
+  
+  public static long HCOUNT(BigSortedMap map, long keyPtr, int keySize, long startPtr, int startSize, 
+      long stopPtr, int stopSize) {
+    return 0;
+  }
+  
+  /**
    * For testing only
    * @param map sorted map storage
    * @param key hash key

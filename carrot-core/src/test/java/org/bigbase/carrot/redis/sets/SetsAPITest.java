@@ -51,7 +51,7 @@ public class SetsAPITest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
@@ -78,6 +78,10 @@ public class SetsAPITest {
   }
   
   private void allTests() throws IOException {
+    
+    setUp();
+    testCardinalityPerformance();
+    tearDown();
     setUp();
     testSimpleCalls();
     tearDown();
@@ -333,6 +337,29 @@ public class SetsAPITest {
     assertEquals(0, total);
     
   }
+  
+  @Ignore
+  @Test
+  public void testCardinalityPerformance() {
+    System.out.println("Test Sets SCARD API call performance");
+    // Load X elements
+    int X = 200000;
+    String key = "key";
+    Random r = new Random();
+    List<String> list = loadData(key, X);
+    
+    long total = 0;
+    long start = System.currentTimeMillis();
+    for(int i = 0; i < 1000; i++) {
+      long card = Sets.SCARD(map, key);
+      assertEquals(X, (int)card);
+      total += card;
+    }
+    long end = System.currentTimeMillis();
+    
+    System.out.println("total="+ total+" time for "+ (1000 * X) +"="+ (end -start)+"ms");
+  }
+  
   
   private int countMatches(List<String> list, int startIndex, String regex)
   {
@@ -760,7 +787,7 @@ public class SetsAPITest {
   }
   
   public void setUp() {
-    map = new BigSortedMap(100000000);
+    map = new BigSortedMap(1000000000);
   }
   
   public void tearDown() {
