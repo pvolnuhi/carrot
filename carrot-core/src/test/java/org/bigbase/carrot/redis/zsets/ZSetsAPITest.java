@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -356,6 +357,84 @@ public class ZSetsAPITest {
       Double newScore = ZSets.ZSCORE(map, key, p.getFirst());
       assertNull(newScore);
     }
+  }
+  
+  @Ignore
+  @Test
+  public void testZCOUNT() {
+    System.out.println("Test ZCOUNT API");
+    Random r = new Random();
+    int numMembers = 10000;
+    String key = "key";
+    List<Pair<String>> data = loadData(key, numMembers); 
+    long card = ZSets.ZCARD(map, key);
+    assertEquals(numMembers, (int)card);
+    
+    Collections.sort(data, new Comparator<Pair<String>>() {
+      @Override
+      public int compare(Pair<String> o1, Pair<String> o2) {
+        double d1 = Double.parseDouble(o1.getSecond());
+        double d2  = Double.parseDouble(o2.getSecond());
+        if (d1 < d2) return -1;
+        if (d1 > d2) return 1;
+        return 0;
+      }
+    });
+    
+    // 1. test both inclusive: start and end
+    for (int i=0; i < 1000; i++) {
+      int id1 = r.nextInt(data.size());
+      int id2 = r.nextInt(data.size());
+      int start, stop;
+      if (id1 < id2) {
+        start = id1;
+        stop = id2;
+      } else {
+        start = id2;
+        stop = id1;
+      }
+      double min = Double.parseDouble(data.get(start).getSecond());
+      double max = Double.parseDouble(data.get(stop).getSecond());
+
+      int expected = stop - start + 1; // both are inclusive
+      long count = ZSets.ZCOUNT(map, key, min, true, max, true);
+      assertEquals(expected, count);
+    }
+    // 2. test both non-inclusive
+    for (int i=0; i < 1000; i++) {
+      int id1 = r.nextInt(data.size());
+      int id2 = r.nextInt(data.size());
+      int start, stop;
+      if (id1 < id2) {
+        start = id1;
+        stop = id2;
+      } else {
+        start = id2;
+        stop = id1;
+      }
+      double min = Double.parseDouble(data.get(start).getSecond());
+      double max = Double.parseDouble(data.get(stop).getSecond());
+
+      int expected = stop - start -1; // both are inclusive
+      if (expected < 0) expected = 0;
+      long count = ZSets.ZCOUNT(map, key, min, false, max, false);
+      assertEquals(expected, count);
+    }
+    
+    // 3. test start inclusive end non-inclusive
+    
+    // 4. test start non-inclusive, end - inclusive
+    
+    // Test Edges
+    
+    // Both start and stop are out of range () less than minimum - all 4 inclusive combos
+    // Both start and stop are greater than maximum score 
+    // Start is less than minimum score and stop is in the range
+    // Start is in the range and stop is greater than maximum score
+    // Start is less than minimum and
+    
+    
+    
   }
   
   public void setUp() {
