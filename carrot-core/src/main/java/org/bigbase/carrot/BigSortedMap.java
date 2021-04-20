@@ -10,6 +10,7 @@ import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -157,6 +158,31 @@ public class BigSortedMap {
     return count;
   }
 
+  public static long dumpRecords(BigSortedMap map) {
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    long count = 0;
+    if (scanner == null) {
+      return 0;
+    }
+    try {
+      while (scanner.hasNext()) {
+        count++;
+        long ptr = scanner.keyAddress();
+        int size = scanner.keySize();
+        System.out.println(Bytes.toHex(ptr, size));
+        scanner.next();
+      }
+    } catch (IOException e) {
+      return -1;
+    } finally {
+      try {
+        scanner.close();
+      } catch (IOException e) {
+      }
+    }
+    return count;
+  }
+  
   public static void memoryStats() {
     System.out.println("            Total : " + getTotalAllocatedMemory());
     System.out.println(" Data Blocks Size : " + getTotalBlockDataSize());
@@ -349,43 +375,8 @@ public class BigSortedMap {
     IndexBlock b = new IndexBlock(maxIndexBlockSize);
     b.setFirstIndexBlock();
     map.put(b, b);
-//    for(int i =0; i < locks.length; i++) {
-//      locks[i] = new ReentrantLock();
-//    }
   }
   
-  /**
-   * TODO: Locking index blocks in BSM and in Scanners
-   * MUST be the same code
-   * Lock on index block
-   * @param b index block to lock on
-   */
-//  private void lock(IndexBlock b) throws RetryOperationException {
-//    int i = (int) (b.hashCode() % locks.length);
-//    ReentrantLock lock = locks[i];
-//    lock.lock();
-//    if (!b.isValid()) {
-//      throw new RetryOperationException();
-//    }
-//  }
-//  /**
-//   * Unlock lock
-//   * @param b index block
-//   */
-//  private void unlock(IndexBlock b) {
-//    if (b == null) return;
-//    int i = (int) (b.hashCode() % locks.length);
-//    ReentrantLock lock = locks[i];
-//    if (lock.isHeldByCurrentThread()) {
-//      lock.unlock();
-//    } else {
-//    	System.out.println("Unexpected unlock attempt");
-//    	//TODO
-//    	Thread.dumpStack();
-//    	System.exit(-1);
-//    }
-//  }
-
   private void ensureBlock() {
     if (keyBlock.get() != null) {
       return;
@@ -1304,7 +1295,7 @@ public class BigSortedMap {
           return incr;
         } else if (size != Utils.SIZEOF_DOUBLE) {
           //TODO
-          return Double.MIN_VALUE;
+          return -Double.MAX_VALUE;
         }
         long value = UnsafeAccess.toLong(valueBuf);
         double val = Double.longBitsToDouble(value);
@@ -1392,8 +1383,10 @@ public class BigSortedMap {
     while(true) {
       try {
         return new BigSortedMapScanner(this, start, stop, snapshotId);
-      }catch (RetryOperationException e) {
+      } catch (RetryOperationException e) {
         continue;
+      } catch(IllegalArgumentException ee) {
+        return null;
       }
     }
   }
@@ -1409,8 +1402,10 @@ public class BigSortedMap {
     while(true) {
       try {
         return new BigSortedMapScanner(this, start, stop, snapshotId, true);
-      }catch (RetryOperationException e) {
+      } catch (RetryOperationException e) {
         continue;
+      } catch(IllegalArgumentException ee) {
+        return null;
       }
     }
   }
@@ -1432,10 +1427,10 @@ public class BigSortedMap {
           stopRowPtr, stopRowLength, snapshotId); 
       } catch (RetryOperationException e) {
         continue;
-      } catch (IOException ee) {
+      } catch (IOException | IllegalArgumentException e) {
         // Legitimate exception
         return null;
-      }
+      } 
     }
   }
   
@@ -1457,9 +1452,9 @@ public class BigSortedMap {
           stopRowPtr, stopRowLength, snapshotId, false, reverse); 
       } catch (RetryOperationException e) {
         continue;
-      } catch (IOException ee) {
+      } catch (IOException | IllegalArgumentException ee) {
         return null;
-      }
+      } 
     }
   }
   
@@ -1480,7 +1475,7 @@ public class BigSortedMap {
           stopRowPtr, stopRowLength, snapshotId, true, false); 
       } catch (RetryOperationException e) {
         continue;
-      } catch (IOException ee) {
+      } catch (IOException | IllegalArgumentException ee) {
         return null;
       }
     }
@@ -1504,7 +1499,7 @@ public class BigSortedMap {
           stopRowPtr, stopRowLength, snapshotId, true, reverse); 
       } catch (RetryOperationException e) {
         continue;
-      } catch (IOException ee) {
+      } catch (IOException | IllegalArgumentException ee) {
         return null;
       }
     }

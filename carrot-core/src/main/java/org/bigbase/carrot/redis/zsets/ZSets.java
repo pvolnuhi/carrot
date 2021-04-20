@@ -757,6 +757,8 @@ public class ZSets {
    * Note: the command has a complexity of just O(log(N)) because it uses elements ranks (see ZRANK) to 
    * get an idea of the range. Because of this there is no need to do a work proportional to the size
    *  of the range.
+   * -inf = -Double.MAX_VALUE
+   * +inf =  Double.MAX_VALUE; 
    * @param map sorted map storage
    * @param keyPtr sorted set key address
    * @param keySize sorted set key size
@@ -768,20 +770,24 @@ public class ZSets {
       boolean minInclusive, double max, boolean maxInclusive) {
 
     Key k = getKey(keyPtr, keySize);
-    if (maxInclusive && max < Double.MAX_VALUE) {
-      // TODO Maximum Double value?
-      max += Double.MIN_NORMAL; // Increase max by a bit
-    }
-    long count = 1;
+    long count = 0;
     long startPtr = 0, stopPtr = 0;
     try {
       KeysLocker.readLock(k);
-      startPtr =UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + Utils.SIZEOF_DOUBLE);
-      int startSize = buildKeyForSet(keyPtr, keySize, 0, 0, min, startPtr);
       
-      stopPtr =UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + Utils.SIZEOF_DOUBLE);
-      int stopSize = buildKeyForSet(keyPtr, keySize, 0, 0, max, startPtr);
+      startPtr = UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
+      Utils.doubleToLex(startPtr, min);
+      int startSize = Utils.SIZEOF_DOUBLE;
       
+      stopPtr =UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
+      Utils.doubleToLex(stopPtr, max);
+      int stopSize = Utils.SIZEOF_DOUBLE;
+      if (maxInclusive && max < Double.MAX_VALUE) {
+        stopPtr =Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
+      }
+      if (!minInclusive && min > -Double.MAX_VALUE) {
+        startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+      }      
       // TODO: can be optimized for speed: see Sets SCOUNT
       SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, 
         stopPtr, stopSize, false);
@@ -1015,11 +1021,13 @@ public class ZSets {
    */
   public static long ZLEXCOUNT(BigSortedMap map, long keyPtr, int keySize, long startPtr,
       int startSize, boolean startInclusive, long endPtr, int endSize, boolean endInclusive) {
-    if (endInclusive) {
-      //TODO: edge case
-      //TODO: dispose endPtr
-      endPtr = Utils.prefixKeyEnd(endPtr, endSize);
+    if (endInclusive && endPtr > 0) {
+      endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
     }
+    if (!startInclusive && startPtr > 0) {
+      startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+    }
+    
     Key key = getKey(keyPtr, keySize);
     long count = 0;
     HashScanner hashScanner = null;
@@ -1029,16 +1037,6 @@ public class ZSets {
       hashScanner =
           Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
       if (hashScanner != null) {
-        if (!startInclusive) {
-          if (startPtr > 0 && hashScanner.hasNext()) {
-            long ptr = hashScanner.fieldAddress();
-            int size = hashScanner.fieldSize();
-            if (Utils.compareTo(startPtr, startSize, ptr, size) != 0) {
-              count++;
-            }
-            hashScanner.next();
-          }
-        }
         while (hashScanner.hasNext()) {
           count++;
           hashScanner.next();
@@ -1053,9 +1051,10 @@ public class ZSets {
           mPtr += Utils.SIZEOF_DOUBLE;
           // Discard score part
           mSize -= Utils.SIZEOF_DOUBLE;
-          int res1 = Utils.compareTo(mPtr, mSize, startPtr, startSize);
-          int res2 = Utils.compareTo(mPtr, mSize, endPtr, endSize);
-          if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+          int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
+          int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
+          //if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+          if (res2 < 0 && res1 >= 0) {
             count++;
           } else if (res2 >= 0) {
             break;
@@ -1093,7 +1092,7 @@ public class ZSets {
     long buffer = UnsafeAccess.malloc(bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
     long result = ZPOPMAX(map, keyPtr, keySize, count, buffer, bufSize);
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     int total = UnsafeAccess.toInt(buffer);
@@ -1145,7 +1144,7 @@ public class ZSets {
   public static long ZPOPMAX(BigSortedMap map, long keyPtr, int keySize, int count, long buffer, int bufferSize)
   {
     
-    //TODO We decrease cardinality, so MUST check compact mode
+    if (count <= 0) return 0L;
     Key key = getKey(keyPtr, keySize);
     long ptr = buffer + Utils.SIZEOF_INT;
     try {
@@ -1155,6 +1154,9 @@ public class ZSets {
         return 0;
       }
       int c = 0;
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
+
       do {
         long mPtr = scanner.memberAddress();
         int mSize = scanner.memberSize();
@@ -1162,8 +1164,7 @@ public class ZSets {
         if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
           // Write to buffer
           Utils.writeUVInt(ptr, mSize);
-          ptr += mSizeSize;
-          UnsafeAccess.copy(mPtr, ptr, mSize);
+          UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
           c++;
           // Write number of elements
           UnsafeAccess.putInt(buffer, c);
@@ -1188,17 +1189,27 @@ public class ZSets {
       while (n++ < c) {
         int mSize = Utils.readUVInt(ptr);
         int mSizeSize = Utils.sizeUVInt(mSize);
-        Sets.SREM(map, keyPtr, keySize, ptr + mSizeSize, mSize);
+        int res = Sets.SREM(map, keyPtr, keySize, ptr + mSizeSize, mSize);
+        assert(res == 1);
         if (normalMode) {
           // For Hash storage we do not use first 8 bytes (score)
-          Hashes.HDEL(map, keyPtr, keySize, ptr + mSizeSize + Utils.SIZEOF_DOUBLE,
+          res = Hashes.HDEL(map, keyPtr, keySize, ptr + mSizeSize + Utils.SIZEOF_DOUBLE,
             mSize - Utils.SIZEOF_DOUBLE);
+          assert(res == 1);
         }
         ptr += mSize + mSizeSize;
       }
       //Update count
       if (c > 0) {
         ZINCRCARD(map, keyPtr, keySize, -c);
+      }
+      cardinality -= c;
+      // Check if card = 0
+      if (cardinality == 0) {
+        boolean res =  DELETE(map, keyPtr, keySize);
+        assert(res == true);
+      } else if (cardinality < RedisConf.getInstance().getMaximumZSetCompactSize()) {
+        convertToCompactMode(map, keyPtr, keySize);
       }
     } catch (IOException e) {
       // Ignore this - should never be here
@@ -1222,13 +1233,13 @@ public class ZSets {
     long buffer = UnsafeAccess.malloc(bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
     long result = ZPOPMIN(map, keyPtr, keySize, count, buffer, bufSize);
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     int total = UnsafeAccess.toInt(buffer);
     long ptr = buffer + Utils.SIZEOF_INT;
     
-    for (int i=0; i < total; i++) {
+    for (int i = 0; i < total; i++) {
       int mSize = Utils.readUVInt(ptr);
       int mSizeSize = Utils.sizeUVInt(mSize);
       double score = Utils.lexToDouble(ptr + mSizeSize);
@@ -1272,41 +1283,40 @@ public class ZSets {
   public static long ZPOPMIN(BigSortedMap map, final long keyPtr, final int keySize,
       final int count, final long buffer, final int bufferSize) {
     
-    //TODO We decrease cardinality, so MUST check compact mode
-
+    if (count <=0 ) return 0L;
+    
     Key key = getKey(keyPtr, keySize);
     long ptr = buffer + Utils.SIZEOF_INT;
     try {
       KeysLocker.writeLock(key);
-      // Reverse scanner
-      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false, true);
+      // Direct scanner
+      SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
         return 0;
       }
       int c = 0;
-      while(scanner.hasNext())  {
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
+      while(scanner.hasNext()) {
         long mPtr = scanner.memberAddress();
         int mSize = scanner.memberSize();
         int mSizeSize = Utils.sizeUVInt(mSize);
         if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
           // Write to buffer
           Utils.writeUVInt(ptr, mSize);
-          ptr += mSizeSize;
-          UnsafeAccess.copy(mPtr, ptr, mSize);
+          UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
+          // Write number of elements
+          c++;
+          UnsafeAccess.putInt(buffer, c);
         }
         ptr += mSize + mSizeSize;
-        c++;
-        // Write number of elements
-        UnsafeAccess.putInt(buffer, c);
         if (c == count) {
           break;
         }
         scanner.next();
-      } while(scanner.previous());
-     
+      };
       // Close scanner
       scanner.close();
-
       if (ptr > buffer + bufferSize) {
         return ptr - buffer;
       }
@@ -1318,16 +1328,26 @@ public class ZSets {
       while (n++ < c) {
         int mSize = Utils.readUVInt(ptr);
         int mSizeSize = Utils.sizeUVInt(mSize);
-        Sets.SREM(map, keyPtr, keySize, ptr + mSizeSize, mSize);
+        int res = Sets.SREM(map, keyPtr, keySize, ptr + mSizeSize, mSize);
+        assert(res == 1);
         if (normalMode) {
           // For Hash storage we do not use first 8 bytes (score)
-          Hashes.HDEL(map, keyPtr, keySize, ptr + mSizeSize + Utils.SIZEOF_DOUBLE,
+          res = Hashes.HDEL(map, keyPtr, keySize, ptr + mSizeSize + Utils.SIZEOF_DOUBLE,
             mSize - Utils.SIZEOF_DOUBLE);
+          assert(res == 1);
         }
         ptr += mSize + mSizeSize;
       }
       if (c > 0) {
         ZINCRCARD(map, keyPtr, keySize, -c);
+      }
+      cardinality -= c;
+      // Check if card = 0
+      if (cardinality == 0) {
+        boolean res =  DELETE(map, keyPtr, keySize);
+        assert(res == true);
+      } else if (cardinality < RedisConf.getInstance().getMaximumZSetCompactSize()) {
+        convertToCompactMode(map, keyPtr, keySize);
       }
     } catch (IOException e) {
       // Ignore this - should never be here
@@ -1355,7 +1375,7 @@ public class ZSets {
     long buffer = UnsafeAccess.malloc(bufSize);
     long result = ZRANGE(map, keyPtr, keySize, start, end, withScores, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -1450,8 +1470,14 @@ public class ZSets {
         end = cardinality - 1;
       }
       scanner = Sets.getScanner(map, keyPtr, keySize, false);
-      long counter= 0;
+      if (scanner == null) {
+        return 0;
+      }
+      long counter = 0;
       ptr = buffer + Utils.SIZEOF_INT;
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
+      // TODO: optimize using Scanner skipTo API 
       while(scanner.hasNext()) {
         if (counter > end) break;
         if (counter >= start && counter <= end) {
@@ -1469,8 +1495,6 @@ public class ZSets {
         counter++;
         scanner.next();
       }
-     
-      
     } catch (IOException e) {
     } finally {
       if (scanner != null) {
@@ -1511,7 +1535,7 @@ public class ZSets {
     long result = ZRANGEBYLEX(map, keyPtr, keySize, startPtr, startSize, startInclusive, endPtr, 
       endSize, endInclusive, offset, limit, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -1602,18 +1626,22 @@ public class ZSets {
       long offset, long limit, long buffer, int bufferSize) {
     
     if (endInclusive && endPtr > 0) {
-      endPtr = Utils.prefixKeyEnd(endPtr, endSize);
+      endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
+    }
+    if (!startInclusive && startPtr > 0) {
+      startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
     }
     Key key = getKey(keyPtr, keySize);
     SetScanner setScanner = null;
     long ptr = 0;
     int counter = 0;
-    long cardinality = 0;
-    if (offset < 0) {
-      cardinality = ZCARD(map, keyPtr, keySize);
-      if (cardinality == 0) {
-        return 0;
-      }
+    long cardinality = ZCARD(map, keyPtr, keySize);
+    if (cardinality == 0) {
+      return 0;
+    }
+    if (offset >= cardinality) {
+      return 0;
+    } else if (offset < 0) {
       offset += cardinality;
       if (offset < 0) {
         offset = 0;
@@ -1626,6 +1654,9 @@ public class ZSets {
 
       KeysLocker.readLock(key);
       ptr = buffer + Utils.SIZEOF_INT;
+      // make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
+      //TODO: Optimize using SetScanner.skipTo API
       setScanner = Sets.getScanner(map, keyPtr, keySize, false);
       if (setScanner == null) {
         return 0;
@@ -1645,9 +1676,10 @@ public class ZSets {
         int mSize = setScanner.memberSize();
         mPtr += Utils.SIZEOF_DOUBLE;
         mSize -= Utils.SIZEOF_DOUBLE;
-        int res1 = Utils.compareTo(mPtr, mSize, startPtr, startSize);
-        int res2 = Utils.compareTo(mPtr, mSize, endPtr, endSize);
-        if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+        int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
+        int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize); 
+        //if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+        if (res2 < 0 && res1 >= 0) {  
           int mSizeSize = Utils.sizeUVInt(mSize);
           if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
             counter++;
@@ -1692,7 +1724,7 @@ public class ZSets {
     long result = ZRANGEBYLEX(map, keyPtr, keySize, startPtr, startSize, startInclusive, endPtr, 
       endSize, endInclusive, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -1739,7 +1771,10 @@ public class ZSets {
       boolean startInclusive, long endPtr, int endSize, boolean endInclusive, long buffer, int bufferSize)
   {
     if (endInclusive && endPtr > 0) {
-      endPtr = Utils.prefixKeyEnd(endPtr, endSize);
+      endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
+    }
+    if (!startInclusive && startPtr > 0) {
+      startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
     }
     Key key = getKey(keyPtr, keySize);
     HashScanner hashScanner = null;
@@ -1747,7 +1782,8 @@ public class ZSets {
     long ptr = 0;
     int count = 0;
     ptr = buffer + Utils.SIZEOF_INT;
-
+    // Make sure first 4 bytes does not contain garbage
+    UnsafeAccess.putInt(buffer, 0);
     try {
       KeysLocker.readLock(key);
       hashScanner =
@@ -1759,12 +1795,13 @@ public class ZSets {
           int fSize = hashScanner.fieldSize();
           int fSizeSize = Utils.sizeUVInt(fSize);
           if (ptr + fSize + fSizeSize <= buffer + bufferSize) {
-            if (count == 0 && !startInclusive && startPtr > 0) {
-              if (Utils.compareTo(fPtr, fSize, startPtr, startSize) == 0) {
-                hashScanner.next();
-                continue;
-              }
-            }
+            //TODO: do we need this code?
+//            if (count == 0 && !startInclusive && startPtr > 0) {
+//              if (Utils.compareTo(fPtr, fSize, startPtr, startSize) == 0) {
+//                hashScanner.next();
+//                continue;
+//              }
+//            }
             count++;
             Utils.writeUVInt(ptr, fSize);
             UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
@@ -1777,22 +1814,27 @@ public class ZSets {
       } else {
         // Run through the Set
         setScanner = Sets.getScanner(map, keyPtr, keySize, false);
+        if (setScanner == null) {
+          return 0;
+        }
         while (setScanner.hasNext()) {
           long mPtr = setScanner.memberAddress();
           int mSize = setScanner.memberSize();
           mPtr += Utils.SIZEOF_DOUBLE;
           mSize -= Utils.SIZEOF_DOUBLE;
-          int res1 = Utils.compareTo(mPtr, mSize, startPtr, startSize);
-          int res2 = Utils.compareTo(mPtr, mSize, endPtr, endSize);
-          if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+          int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
+          int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
+          //if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+          if (res2 < 0 && res1 >= 0) {  
             int mSizeSize = Utils.sizeUVInt(mSize);
             if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
-              if (count == 0 && !startInclusive && startPtr > 0) {
-                if (Utils.compareTo(mPtr, mSize, startPtr, startSize) == 0) {
-                  setScanner.next();
-                  continue;
-                }
-              }
+              //TODO: do we need this code?
+//              if (count == 0 && !startInclusive && startPtr > 0) {
+//                if (Utils.compareTo(mPtr, mSize, startPtr, startSize) == 0) {
+//                  setScanner.next();
+//                  continue;
+//                }
+//              }
               count++;
               Utils.writeUVInt(ptr, mSize);
               UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
@@ -1847,7 +1889,7 @@ public class ZSets {
     long result = ZRANGEBYSCORE(map, keyPtr, keySize, minScore, minInclusive, maxScore, 
       maxInclusive, offset, limit, withScores, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -1898,6 +1940,8 @@ public class ZSets {
    * By default, the interval specified by min and max is closed (inclusive). It is possible to 
    * specify an open interval (exclusive) by prefixing the score with the character (.
    * 
+   * -inf = -Double.MAX_VALUE
+   * +inf = Double.MAX_VALUE
    * @param map sorted map storage
    * @param keyPtr sorted set key address
    * @param keySize sorted set key size
@@ -1925,7 +1969,7 @@ public class ZSets {
       // TODO Maximum Double value?
       maxScore += Double.MIN_NORMAL; // Increase max by a bit
     }
-    if (!minInclusive && minScore > Double.MIN_VALUE) {
+    if (!minInclusive && minScore > -Double.MAX_VALUE) {
        minScore += Double.MIN_NORMAL;
     }
     if (offset < 0) {
@@ -1948,6 +1992,8 @@ public class ZSets {
       }
       long ptr = buffer + Utils.SIZEOF_INT;
       long off = 0;
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
       try {
         while (scanner.hasNext()) {
           if (off >= offset && off <= (offset + limit)) {
@@ -2015,7 +2061,7 @@ public class ZSets {
     long result = ZRANGEBYSCORE(map, keyPtr, keySize, minScore, minInclusive, maxScore, 
       maxInclusive, withScores, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -2065,7 +2111,7 @@ public class ZSets {
       // TODO Maximum Double value?
       maxScore += Double.MIN_NORMAL; // Increase max by a bit
     }
-    if (!minInclusive && minScore > Double.MIN_VALUE) {
+    if (!minInclusive && minScore > -Double.MAX_VALUE) {
       minScore += Double.MIN_NORMAL;
     }
     int count = 0;
@@ -2083,6 +2129,8 @@ public class ZSets {
         return 0;
       }
       long ptr = buffer + Utils.SIZEOF_INT;
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
       try {
         while(scanner.hasNext()) {
           int mSize = scanner.memberSize();
@@ -2157,7 +2205,8 @@ public class ZSets {
    */
   public static long ZRANK(BigSortedMap map, long keyPtr, int keySize, long memberPtr,
       int memberSize) {
-    long rank = -1;
+    if (memberPtr <= 0) return -1;
+    long rank = 0;
     Key key = getKey(keyPtr, keySize);
     // TODO this operation can be optimized
     // Use hash to retrieve score?
@@ -2242,7 +2291,9 @@ public class ZSets {
     try {
       KeysLocker.writeLock(key);
       long cardinality = ZCARD(map, keyPtr, keySize);
-      if (cardinality == 0) return 0;
+      if (cardinality == 0) {
+        return 0;
+      }
       int maxCompactModeSize = RedisConf.getInstance().getMaximumZSetCompactSize();
       boolean normalMode =  maxCompactModeSize <= cardinality;
       if (normalMode) {
@@ -2482,8 +2533,11 @@ public class ZSets {
     //TODO: FIXME   later optimize range deletion in a HashScanner
     //TODO We decrease cardinality, so MUST check compact mode
 
-    if (endInclusive) {
-      endPtr = Utils.prefixKeyEnd(endPtr, endSize);
+    if (endInclusive && endPtr > 0) {
+      endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
+    }
+    if (!startInclusive && startPtr > 0) {
+      startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
     }
     Key key = getKey(keyPtr, keySize);
     HashScanner hashScanner = null;
@@ -2495,10 +2549,12 @@ public class ZSets {
       hashScanner =
           Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
       if (hashScanner != null) {
-        if (!startInclusive) {
-          hashScanner.hasNext();
-          hashScanner.next();
-        }
+//        if (!startInclusive) {
+//          hashScanner.hasNext();
+//          hashScanner.next();
+//        }
+        
+        //TODO: WRONG CODE
         while (hashScanner.hasNext()) {
           count++;
           // TODO - deleteAll
@@ -2508,13 +2564,16 @@ public class ZSets {
       }
       // Run through the Set
       setScanner = Sets.getScanner(map, keyPtr, keySize, false);
+      if (setScanner == null) {
+        return 0;
+      }
       while (setScanner.hasNext()) {
         long mPtr = setScanner.memberAddress();
         int mSize = setScanner.memberSize();
         mPtr += Utils.SIZEOF_DOUBLE;
         mSize -= Utils.SIZEOF_DOUBLE;
-        int res1 = Utils.compareTo(mPtr, mSize, startPtr, startSize);
-        int res2 = Utils.compareTo(mPtr, mSize, endPtr, endSize);
+        int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
+        int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
         if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
           setScanner.delete();
         }
@@ -2744,7 +2803,7 @@ public class ZSets {
     long buffer = UnsafeAccess.malloc(bufSize);
     long result = ZREVRANGE(map, keyPtr, keySize, start, end, withScores, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -2821,30 +2880,31 @@ public class ZSets {
       if (end >= cardinality) {
         end = cardinality - 1;
       }
+      // Reverse scanner
       scanner = Sets.getScanner(map, keyPtr, keySize, false, true);
       if (scanner == null) {
         return 0;
       }
-      long counter = 0;
+      long counter = cardinality - 1;
       ptr = buffer + Utils.SIZEOF_INT;
-      while(scanner.hasPrevious()) {
-        if (counter > end) break;
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
+      do {
+        if (counter < start) break;
         if (counter >= start && counter <= end) {
           int mSize = withScores? scanner.memberSize(): scanner.memberSize() - Utils.SIZEOF_DOUBLE;
           int mSizeSize = Utils.sizeUVInt(mSize);
           int adv = mSize + mSizeSize;
-          if (ptr + adv < buffer + bufferSize) {
+          if (ptr + adv <= buffer + bufferSize) {
             long mPtr = withScores? scanner.memberAddress(): scanner.memberAddress() + Utils.SIZEOF_DOUBLE;
             Utils.writeUVInt(ptr, mSize);
             UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
+            UnsafeAccess.putInt(buffer, (int)(end - counter + 1));
           }
           ptr += adv;
         }
-        counter++;
-        scanner.previous();
-      }
-      UnsafeAccess.putInt(buffer, (int)(counter - start));
-      
+        counter--;
+      } while(scanner.previous());
     } catch (IOException e) {
     } finally {
       if (scanner != null) {
@@ -2885,7 +2945,7 @@ public class ZSets {
     long result = ZREVRANGEBYLEX(map, keyPtr, keySize, startPtr, startSize, startInclusive, endPtr, 
       endSize, endInclusive, offset, limit, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -2959,12 +3019,14 @@ public class ZSets {
 
      KeysLocker.readLock(key);
      ptr = buffer + Utils.SIZEOF_INT;
+     // make sure first 4 bytes does not contain garbage
+     UnsafeAccess.putInt(buffer, 0);
      setScanner = Sets.getScanner(map, keyPtr, keySize, false, true);
      if (setScanner == null) {
        return 0;
      }
      long pos = cardinality -1;
-     while (setScanner.hasPrevious()) {
+     do {
        if (pos == offset) {
          break;
        }
@@ -2978,8 +3040,8 @@ public class ZSets {
        int mSize = setScanner.memberSize();
        mPtr += Utils.SIZEOF_DOUBLE;
        mSize -= Utils.SIZEOF_DOUBLE;
-       int res1 = Utils.compareTo(mPtr, mSize, startPtr, startSize);
-       int res2 = Utils.compareTo(mPtr, mSize, endPtr, endSize);
+       int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
+       int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
        if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
          int mSizeSize = Utils.sizeUVInt(mSize);
          if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
@@ -2991,8 +3053,7 @@ public class ZSets {
          }
          ptr += mSize + mSizeSize;
        }
-       setScanner.previous();
-     }
+     } while(setScanner.previous());
    } catch (IOException e) {
    } finally {
      KeysLocker.readUnlock(key);
@@ -3025,7 +3086,7 @@ public class ZSets {
    long result = ZREVRANGEBYLEX(map, keyPtr, keySize, startPtr, startSize, startInclusive, endPtr, 
      endSize, endInclusive, buffer, bufSize);
    List<Pair<String>> list = new ArrayList<Pair<String>>();
-   if (result > bufSize) {
+   if (result > bufSize || result <= 0) {
      return list;
    }
    
@@ -3075,14 +3136,14 @@ public class ZSets {
    long ptr = 0;
    int count = 0;
    ptr = buffer + Utils.SIZEOF_INT;
-
+   // Make sure first 4 bytes does not contain garbage
+   UnsafeAccess.putInt(buffer, 0);
    try {
      KeysLocker.readLock(key);
      hashScanner =
          Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false, true);
      if (hashScanner != null) {
-  
-       while (hashScanner.hasPrevious()) {
+       do {
          long fPtr = hashScanner.fieldAddress();
          int fSize = hashScanner.fieldSize();
          int fSizeSize = Utils.sizeUVInt(fSize);
@@ -3095,17 +3156,20 @@ public class ZSets {
          }
          ptr += fSize + fSizeSize;
          hashScanner.previous();
-       }
+       } while(hashScanner.previous());
      } else {
        // Run through the Set
        setScanner = Sets.getScanner(map, keyPtr, keySize, false, true);
-       while (setScanner.hasPrevious()) {
+       if (setScanner == null) {
+         return 0;
+       }
+       do {
          long mPtr = setScanner.memberAddress();
          int mSize = setScanner.memberSize();
          mPtr += Utils.SIZEOF_DOUBLE;
          mSize -= Utils.SIZEOF_DOUBLE;
-         int res1 = Utils.compareTo(mPtr, mSize, startPtr, startSize);
-         int res2 = Utils.compareTo(mPtr, mSize, endPtr, endSize);
+         int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
+         int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
          if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
            int mSizeSize = Utils.sizeUVInt(mSize);
            if (ptr + mSize + mSizeSize <= buffer+bufferSize) {
@@ -3117,8 +3181,7 @@ public class ZSets {
            }
            ptr += mSize + mSizeSize;
          }
-         setScanner.previous();
-       }
+       } while(setScanner.previous());
      }
    } catch (IOException e) {
    } finally {
@@ -3165,7 +3228,7 @@ public class ZSets {
    long result = ZREVRANGEBYSCORE(map, keyPtr, keySize, minScore, minInclusive, maxScore, 
      maxInclusive, offset, limit, withScores, buffer, bufSize);
    List<Pair<String>> list = new ArrayList<Pair<String>>();
-   if (result > bufSize) {
+   if (result > bufSize || result <= 0) {
      return list;
    }
    
@@ -3204,6 +3267,8 @@ public class ZSets {
    * The elements having the same score are returned in reverse lexicographical order.
    * Apart from the reversed ordering, ZREVRANGEBYSCORE is similar to ZRANGEBYSCORE.
    * 
+   * -inf = -Double.MAX_VALUE
+   * +inf = Double.MAX_VALUE
    * @param map sorted map storage
    * @param keyPtr sorted set key address
    * @param keySize sorted set key size
@@ -3227,7 +3292,7 @@ public class ZSets {
       // TODO Maximum Double value?
       maxScore += Double.MIN_NORMAL; // Increase max by a bit
     }
-    if (!minInclusive && minScore > Double.MIN_VALUE) {
+    if (!minInclusive && minScore > -Double.MAX_VALUE) {
       minScore += Double.MIN_NORMAL;
     }
     long cardinality = ZCARD(map, keyPtr, keySize);
@@ -3253,8 +3318,10 @@ public class ZSets {
       }
       long ptr = buffer + Utils.SIZEOF_INT;
       long off = cardinality -1;
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
       try {
-        while (scanner.hasPrevious()) {
+        do {
           if (off >= offset && off <= (offset + limit)) {
             int mSize = scanner.memberSize();
             long mPtr = scanner.memberAddress();
@@ -3271,14 +3338,13 @@ public class ZSets {
                 Utils.writeUVInt(ptr, mSize);
                 UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
                 // Update count
-                UnsafeAccess.putInt(bufferSize, count);
+                UnsafeAccess.putInt(buffer, count);
               }
               ptr += mSize + mSizeSize;
             }
           }
           off--;
-          scanner.previous();
-        }
+        } while(scanner.previous());
       } catch (IOException e) {
         // Should not be here
       } finally {
@@ -3319,7 +3385,7 @@ public class ZSets {
     long result = ZREVRANGEBYSCORE(map, keyPtr, keySize, minScore, minInclusive, maxScore, 
       maxInclusive, withScores, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     
@@ -3380,7 +3446,7 @@ public class ZSets {
       // TODO Maximum Double value?
       maxScore += Double.MIN_NORMAL; // Increase max by a bit
     }
-    if (!minInclusive && minScore > Double.MIN_VALUE) {
+    if (!minInclusive && minScore > -Double.MAX_VALUE) {
       minScore += Double.MIN_NORMAL; // Increase min by a bit
     }
     int count = 0;
@@ -3399,6 +3465,8 @@ public class ZSets {
         return 0;
       }
       long ptr = buffer + Utils.SIZEOF_INT;
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
       try {
         while(scanner.hasPrevious()) {
           int mSize = scanner.memberSize();
@@ -3410,11 +3478,11 @@ public class ZSets {
           int mSizeSize = Utils.sizeUVInt(mSize);
           count++;
 
-          if (ptr + mSize + mSizeSize < buffer + bufferSize) {
+          if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
             Utils.writeUVInt(ptr, mSize);
             UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
             // Update count
-            UnsafeAccess.putInt(bufferSize,  count);
+            UnsafeAccess.putInt(buffer,  count);
           }
           ptr += mSize + mSizeSize;
           scanner.previous();
@@ -3478,7 +3546,7 @@ public class ZSets {
   */
  public static long ZREVRANK(BigSortedMap map, long keyPtr, int keySize, long memberPtr, int memberSize) {
    // TODO: Optimize
-   long rank = -1;
+   long rank = 0;
    Key key = getKey(keyPtr, keySize);
    // TODO this operation can be optimized
    SetScanner scanner = null;
@@ -3489,7 +3557,6 @@ public class ZSets {
        return -1;
      }
      do {
-       rank++;
        long mPtr = scanner.memberAddress();
        int mSize = scanner.memberSize();
        // First 8 bytes - score, skip it
@@ -3497,6 +3564,7 @@ public class ZSets {
          memberPtr, memberSize) == 0) {
          return rank;
        }
+       rank++;
      } while (scanner.previous());
    } catch (IOException e) {
    } finally {
@@ -4107,7 +4175,7 @@ public class ZSets {
     long buffer = UnsafeAccess.malloc(bufSize);
     long result = ZRANDMEMBER(map, keyPtr, keySize, count, withScores, buffer, bufSize);
     List<Pair<String>> list = new ArrayList<Pair<String>>();
-    if (result > bufSize) {
+    if (result > bufSize || result <= 0) {
       return list;
     }
     

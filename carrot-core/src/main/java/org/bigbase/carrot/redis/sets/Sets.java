@@ -1465,8 +1465,16 @@ public class Sets {
         return null;
       }
     }
-    long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldStartSize);
+    
+    // Special handling when fieldStartPtr == 0 (from beginning)
+    long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + 
+      (fieldStartSize == 0? 1: fieldStartSize));
     int startPtrSize = buildKey(keyPtr, keySize, fieldStartPtr, fieldStartSize, startPtr);
+    if (fieldStartSize == 0) {
+      startPtrSize += 1;
+      UnsafeAccess.putByte(startPtr + startPtrSize - 1, (byte) 0);
+    }
+    
     long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldStopSize);
     int stopPtrSize = buildKey(keyPtr, keySize, fieldStopPtr, fieldStopSize, stopPtr);
     
@@ -1474,7 +1482,7 @@ public class Sets {
       stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopPtrSize);
     }
     
-    if (/*reverse &&*/ fieldStartPtr > 0) {
+    if (fieldStartPtr > 0) {
       // Get floorKey
       long size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
       if (size < 0) {
@@ -1485,11 +1493,15 @@ public class Sets {
         // One more time
         size = map.floorKey(startPtr, startPtrSize, valueArena.get(), valueArenaSize.get());
       }
-      // free start key
-      UnsafeAccess.free(startPtr);
-      startPtr = UnsafeAccess.malloc(size);
-      UnsafeAccess.copy(valueArena.get(), startPtr, size);
-      startPtrSize = (int)size;
+      // check first 5 + keySize bytes
+      if (size > 0 && Utils.compareTo(startPtr, keySize + Utils.SIZEOF_INT + Utils.SIZEOF_BYTE, 
+        valueArena.get(), keySize + Utils.SIZEOF_INT + Utils.SIZEOF_BYTE) == 0) {
+        // free start key
+        UnsafeAccess.free(startPtr);
+        startPtr = UnsafeAccess.malloc(size);
+        UnsafeAccess.copy(valueArena.get(), startPtr, size);
+        startPtrSize = (int)size;
+      }
     }
 
     //TODO do not use thread local in scanners - check it
