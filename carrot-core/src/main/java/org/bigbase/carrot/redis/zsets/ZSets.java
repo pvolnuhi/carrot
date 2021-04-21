@@ -1145,6 +1145,7 @@ public class ZSets {
   {
     
     if (count <= 0) return 0L;
+    
     Key key = getKey(keyPtr, keySize);
     long ptr = buffer + Utils.SIZEOF_INT;
     try {
