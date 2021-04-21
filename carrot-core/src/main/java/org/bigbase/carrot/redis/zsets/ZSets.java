@@ -1651,7 +1651,6 @@ public class ZSets {
       limit = Long.MAX_VALUE / 2; // VERY LARGE
     }
     try {
-
       KeysLocker.readLock(key);
       ptr = buffer + Utils.SIZEOF_INT;
       // make sure first 4 bytes does not contain garbage
@@ -1678,7 +1677,6 @@ public class ZSets {
         mSize -= Utils.SIZEOF_DOUBLE;
         int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
         int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize); 
-        //if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
         if (res2 < 0 && res1 >= 0) {  
           int mSizeSize = Utils.sizeUVInt(mSize);
           if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
@@ -1689,11 +1687,19 @@ public class ZSets {
             UnsafeAccess.putInt(buffer, counter);
           }
           ptr += mSize + mSizeSize;
+        } else if (res2 >= 0) {
+          break;
         }
         setScanner.next();
       }
     } catch (IOException e) {
     } finally {
+      if (setScanner != null) {
+        try {
+          setScanner.close();
+        } catch (IOException e) {
+        }
+      }
       KeysLocker.readUnlock(key);
     }
     return ptr - buffer;
@@ -1795,13 +1801,6 @@ public class ZSets {
           int fSize = hashScanner.fieldSize();
           int fSizeSize = Utils.sizeUVInt(fSize);
           if (ptr + fSize + fSizeSize <= buffer + bufferSize) {
-            //TODO: do we need this code?
-//            if (count == 0 && !startInclusive && startPtr > 0) {
-//              if (Utils.compareTo(fPtr, fSize, startPtr, startSize) == 0) {
-//                hashScanner.next();
-//                continue;
-//              }
-//            }
             count++;
             Utils.writeUVInt(ptr, fSize);
             UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
@@ -1824,17 +1823,9 @@ public class ZSets {
           mSize -= Utils.SIZEOF_DOUBLE;
           int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
           int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
-          //if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
           if (res2 < 0 && res1 >= 0) {  
             int mSizeSize = Utils.sizeUVInt(mSize);
             if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
-              //TODO: do we need this code?
-//              if (count == 0 && !startInclusive && startPtr > 0) {
-//                if (Utils.compareTo(mPtr, mSize, startPtr, startSize) == 0) {
-//                  setScanner.next();
-//                  continue;
-//                }
-//              }
               count++;
               Utils.writeUVInt(ptr, mSize);
               UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
@@ -1842,6 +1833,8 @@ public class ZSets {
               UnsafeAccess.putInt(buffer, count);
             }
             ptr += mSize + mSizeSize;
+          } else if (res2 >= 0) {
+            break;
           }
           setScanner.next();
         }
@@ -2995,9 +2988,11 @@ public class ZSets {
      long buffer, int bufferSize)
  {
    if (endInclusive && endPtr > 0) {
-     endPtr = Utils.prefixKeyEnd(endPtr, endSize);
+     endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
    }
-   //TODO: startPtr == 0 handling
+   if (!startInclusive && startPtr > 0) {
+     startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+   }
    Key key = getKey(keyPtr, keySize);
    SetScanner setScanner = null;
    long ptr = 0;
@@ -3016,33 +3011,31 @@ public class ZSets {
      limit = Long.MAX_VALUE / 2; // VERY LARGE
    }
    try {
-
      KeysLocker.readLock(key);
      ptr = buffer + Utils.SIZEOF_INT;
      // make sure first 4 bytes does not contain garbage
      UnsafeAccess.putInt(buffer, 0);
+     // Reverse scanner
      setScanner = Sets.getScanner(map, keyPtr, keySize, false, true);
      if (setScanner == null) {
        return 0;
      }
-     long pos = cardinality -1;
+     long pos = cardinality - 1;
      do {
-       if (pos == offset) {
+       if (pos < offset) {
          break;
        }
-       if (pos > offset + limit) {
-         setScanner.previous();
+       if (pos >= offset + limit) {
          pos--;
          continue;
        }
-       pos--;
        long mPtr = setScanner.memberAddress();
        int mSize = setScanner.memberSize();
        mPtr += Utils.SIZEOF_DOUBLE;
        mSize -= Utils.SIZEOF_DOUBLE;
        int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
        int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
-       if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+       if (res2 < 0 && res1 >= 0) {  
          int mSizeSize = Utils.sizeUVInt(mSize);
          if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
            counter++;
@@ -3052,10 +3045,19 @@ public class ZSets {
            UnsafeAccess.putInt(buffer, counter);
          }
          ptr += mSize + mSizeSize;
+       } else if (res1 < 0) {
+         break;
        }
+       pos--;
      } while(setScanner.previous());
    } catch (IOException e) {
    } finally {
+     if (setScanner != null) {
+       try {
+        setScanner.close();
+      } catch (IOException e) {
+      }
+     }
      KeysLocker.readUnlock(key);
    }
    return ptr - buffer;
@@ -3128,7 +3130,10 @@ public class ZSets {
      boolean startInclusive, long endPtr, int endSize, boolean endInclusive,  long buffer, int bufferSize)
  {
    if (endInclusive && endPtr > 0) {
-     endPtr = Utils.prefixKeyEnd(endPtr, endSize);
+     endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
+   }
+   if (!startInclusive && startPtr > 0) {
+     startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
    }
    Key key = getKey(keyPtr, keySize);
    HashScanner hashScanner = null;
@@ -3140,6 +3145,7 @@ public class ZSets {
    UnsafeAccess.putInt(buffer, 0);
    try {
      KeysLocker.readLock(key);
+     // Reverse scanner
      hashScanner =
          Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false, true);
      if (hashScanner != null) {
@@ -3155,7 +3161,6 @@ public class ZSets {
            UnsafeAccess.putInt(buffer, count);
          }
          ptr += fSize + fSizeSize;
-         hashScanner.previous();
        } while(hashScanner.previous());
      } else {
        // Run through the Set
@@ -3170,9 +3175,9 @@ public class ZSets {
          mSize -= Utils.SIZEOF_DOUBLE;
          int res1 = startPtr == 0? 1: Utils.compareTo(mPtr, mSize, startPtr, startSize);
          int res2 = endPtr == 0? -1: Utils.compareTo(mPtr, mSize, endPtr, endSize);
-         if (res2 < 0 && ((res1 >= 0 && startInclusive) || (res1 > 0 && !startInclusive))) {
+         if (res2 < 0 && res1 >= 0) {  
            int mSizeSize = Utils.sizeUVInt(mSize);
-           if (ptr + mSize + mSizeSize <= buffer+bufferSize) {
+           if (ptr + mSize + mSizeSize <= buffer + bufferSize) {
              count++;
              Utils.writeUVInt(ptr, mSize);
              UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
@@ -3180,12 +3185,13 @@ public class ZSets {
              UnsafeAccess.putInt(buffer, count);
            }
            ptr += mSize + mSizeSize;
+         } else if (res1 < 0){
+           break;
          }
        } while(setScanner.previous());
      }
    } catch (IOException e) {
    } finally {
-
      try {
        if (hashScanner != null) {
          hashScanner.close();
@@ -3195,10 +3201,9 @@ public class ZSets {
        }
      } catch (IOException e) {
      }
-
      KeysLocker.readUnlock(key);
    }
-   return ptr - buffer - Utils.SIZEOF_INT;
+   return ptr - buffer;
  }
  
  /**
@@ -3222,7 +3227,6 @@ public class ZSets {
    
    long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length());
    int keySize = key.length();
- 
    
    long buffer = UnsafeAccess.malloc(bufSize);
    long result = ZREVRANGEBYSCORE(map, keyPtr, keySize, minScore, minInclusive, maxScore, 
