@@ -1498,11 +1498,12 @@ public class ZSets {
       if (scanner == null) {
         return 0;
       }
-      long counter = 0;
+      long counter = start;
       ptr = buffer + Utils.SIZEOF_INT;
       // Make sure first 4 bytes does not contain garbage
       UnsafeAccess.putInt(buffer, 0);
-      // TODO: optimize using Scanner skipTo API 
+      // skip to start
+      scanner.skipTo(start);
       while(scanner.hasNext()) {
         if (counter > end) break;
         if (counter >= start && counter <= end) {
@@ -2796,6 +2797,8 @@ public class ZSets {
       return 0;
     } else if (startRank > stopRank) {
       return 0;
+    } else if (startRank >= cardinality) {
+      return 0;
     }
     
     long deleted = 0;
@@ -2819,8 +2822,11 @@ public class ZSets {
       if (scanner == null) {
         return 0;
       }
-      long cc = 0;
+      long cc = startRank;
       int count = 0;
+      
+      scanner.skipTo(startRank);
+      
       while (scanner.hasNext() && (cc <= stopRank)) {
         long mPtr = 0;
         int mSize = 0;
