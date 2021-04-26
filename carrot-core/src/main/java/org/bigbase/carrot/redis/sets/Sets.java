@@ -1314,47 +1314,33 @@ public class Sets {
       long ptr = buffer + Utils.SIZEOF_INT;
       // Clear first 4 bytes
       UnsafeAccess.putInt(buffer, 0);
-      // Clear first 4 bytes of value arena
-      UnsafeAccess.putInt(valueArena.get(), 0);
-      int lastSeenSize = 0;
-      long lastPtr = ptr;
       while (scanner.hasNext() && c <= count) {
         long mPtr = scanner.memberAddress();
         int mSize = scanner.memberSize();
         int mSizeSize = Utils.sizeUVInt(mSize);
-        if (mSize + mSizeSize > lastSeenSize) {
-          lastSeenSize = mSize + mSizeSize;
-        }
-        if ((ptr + 2 *(mSize + mSizeSize)/* to add lastSeenSize*/  
+        // This is possible that bufferSize < 2 * (mSize + mSizeSize)
+        // to handle this situation we need to check both: return value, which is 4 (> 0)
+        // and total , which is 0
+        if ((ptr + 2 * (mSize + mSizeSize)/* to add lastSeenSize*/  
             <= buffer + bufferSize)) {
-          // Update last seen
-          checkValueArena(mSize + mSizeSize);
-          long arena = valueArena.get();
-          Utils.writeUVInt(arena, mSize);
-          UnsafeAccess.copy(mPtr, arena + mSizeSize, mSize);
           if (regex == null || Utils.matches(mPtr + regexOffset, mSize - regexOffset, regex)) {
             c++;
             Utils.writeUVInt(ptr, mSize);
             UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
             UnsafeAccess.putInt(buffer, c);
-            lastPtr +=  mSize + mSizeSize;
+            ptr +=  mSize + mSizeSize;
           }
+          // write last seen
+          Utils.writeUVInt(ptr, mSize);
+          UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
+          UnsafeAccess.putInt(buffer, c);
         } else {
           break;
         }
-        ptr += mSize + mSizeSize;
         scanner.next();
       }
-        // Write last seen member
-      long arena = valueArena.get();
-      int mSize = Utils.readUVInt(arena);
-      int mSizeSize = Utils.sizeUVInt(mSize);
-      if (mSize > 0) {
-        Utils.writeUVInt(lastPtr, mSize);
-        UnsafeAccess.copy(arena + mSizeSize, lastPtr + mSizeSize, mSize);
-      }
       scanner.close();
-      return ptr - buffer + lastSeenSize;
+      return ptr - buffer;
     } catch (IOException e) {
       // Will never be thrown
     } finally {

@@ -1285,7 +1285,7 @@ public class Utils {
     int start = 'A';
     int stop = 'Z';
     StringBuffer sb = new StringBuffer(size);
-    for (int i=0; i < size; i++) {
+    for (int i = 0; i < size; i++) {
       int v = r.nextInt(stop - start) + start;
       sb.append((char)v);
     }
@@ -1327,7 +1327,7 @@ public class Utils {
    * @param list
    * @return true/false
    */
-  public static boolean unique(List<String> list) {
+  public static <T extends Comparable<? super T>> boolean unique(List<T> list) {
     if (list.size() <= 1) return true;
     Collections.sort(list);
     for(int i = 1; i < list.size(); i++) {

@@ -30,6 +30,9 @@ public class SetsAPITest {
       String m = Utils.getRandomStr(r, 10);
       list.add(m);
       int res = Sets.SADD(map, key, m);
+      if (res == 0) {
+        /*DEBUG*/ System.out.println("Can not add "+ m + " it exists=" + Sets.SISMEMBER(map, key, m));
+      }
       assertEquals(1, res);
       if (i % 100000 == 0) {
         System.out.println("Loaded "+ i);
@@ -43,7 +46,7 @@ public class SetsAPITest {
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
       BigSortedMap.printMemoryAllocationStats();      
@@ -106,9 +109,11 @@ public class SetsAPITest {
     setUp();
     testScannerSkipRandom();
     tearDown();
+    
     setUp();
     testScannerSkipRandomSingleScanner();
     tearDown();
+    
     setUp();
     testSetScannerSkipSmall();
     tearDown();

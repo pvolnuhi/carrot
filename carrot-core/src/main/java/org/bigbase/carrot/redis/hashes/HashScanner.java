@@ -468,7 +468,7 @@ public class HashScanner extends Scanner{
    * @return field value size
    */
   public int fieldValueSize() {
-    return this.fieldSize;
+    return this.fieldValueSize;
   }
   
   /**

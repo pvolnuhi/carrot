@@ -16,7 +16,6 @@ import static org.bigbase.carrot.redis.Commons.setNumElements;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -29,20 +28,6 @@ import org.bigbase.carrot.util.Utils;
  */
 public class SetAdd extends Operation{
   
-  /*
-   * Mutation options
-   */
-  private MutationOptions options = MutationOptions.NONE;
-  
-  /*
-   * Number of new inserted (0, 1)
-   */
-  private int inserted = 0;
-  
-  /*
-   * Number of updated (0, 1) 
-   */
-  private int updated = 0;
   /*
    * Thread local key arena storage
    */
@@ -74,35 +59,7 @@ public class SetAdd extends Operation{
   public void reset() {
     super.reset();
     setFloorKey(true);
-    this.options = MutationOptions.NONE;
-    this.inserted = 0;
-    this.updated = 0;
-  }
-  
-  /**
-   * Returns number of inserted elements
-   * @return number
-   */
-  public int getInserted() {
-    return this.inserted;
-  }
-  
-  /**
-   * Returns number of updated elements
-   * @return number
-   */
-  public int getUpdated() {
-    return this.updated;
-  }
-  
-  /**
-   * Set mutation options
-   * @param options
-   */
-  public void setMutationOptions(MutationOptions options) {
-    this.options = options;
-  }
-  
+  }  
   
   /**
    * Checks key arena size
@@ -156,9 +113,7 @@ public class SetAdd extends Operation{
       // and return
       // Set does not exist yet
       // Insert new set KV
-      if (options != MutationOptions.XX) {
-        insertFirstKVandElement(elementPtr, elementSize);
-      }
+      insertFirstKVandElement(elementPtr, elementSize);
       return true;
     }
     // check prefix
@@ -172,9 +127,7 @@ public class SetAdd extends Operation{
       setKeySize) != 0) {
       // Set does not exist yet
       // Insert new set KV
-      if (options != MutationOptions.XX) {
-        insertFirstKVandElement(elementPtr, elementSize);
-      }
+      insertFirstKVandElement(elementPtr, elementSize);
       return true;
     }
     // Set exists
@@ -190,34 +143,19 @@ public class SetAdd extends Operation{
       // Check updates
       if (Sets.compareElements(addr, elementPtr, elementSize) == 0) {
         // Can not insert, because it is already there
-        if (options == MutationOptions.NX) {
-          return true;
-        }
-        // else increment updated
-        updated++;
-      } else if (options == MutationOptions.XX) {
-        // does not exists but we have XX (update existing only)
-        return true;
-      } else {
-        // do insert
-        inserted++;
-      }
-    } else {
-      inserted++;
+        /*DEBUG*/ System.out.println("SADD found existing ");
+        return false;
+      } 
     }
     // found
     int elemSizeSize = Utils.sizeUVInt(elementSize);
     int toAdd = elemSizeSize + elementSize;
-
     int newValueSize = valueSize + toAdd;
-    
     boolean needSplit = DataBlock.mustStoreExternally(foundKeySize, newValueSize);
 
     if (!needSplit) {
-
       Sets.checkValueArena(newValueSize);
       insertElement(valueAddress, valueSize, addr, elementPtr, elementSize); 
-    
       // set # of updates to 1
       this.updatesCount = 1;
       this.keys[0] = foundKeyAddress; // use the key we found
@@ -274,8 +212,7 @@ public class SetAdd extends Operation{
       this.keys[1] = kPtr;
       this.keySizes[1] = totalKeySize;
       this.values[1] = splitPos;
-      this.valueSizes[1] = rightValueSize;
-     
+      this.valueSizes[1] = rightValueSize;    
       return true;
     }
   }
@@ -329,7 +266,6 @@ public class SetAdd extends Operation{
     Utils.writeUVInt(vPtr + NUM_ELEM_SIZE, eSize);
     // Copy element
     UnsafeAccess.copy(ePtr, vPtr + NUM_ELEM_SIZE + eSizeSize, eSize);
-    inserted++;
     // set number of updates to 1
     this.updatesCount = 1;
     keys[0] = kPtr;

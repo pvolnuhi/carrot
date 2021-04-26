@@ -17,7 +17,7 @@ public class RedisConf {
    * Maximum size of ZSet in a compact representation
    * @return maximum size
    */
-  public int getMaximumZSetCompactSize() {
+  public int getMaxZSetCompactSize() {
     //TODO
     return 512;
   }
