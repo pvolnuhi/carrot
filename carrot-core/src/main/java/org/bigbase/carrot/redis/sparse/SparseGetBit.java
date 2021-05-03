@@ -38,7 +38,11 @@ public class SparseGetBit extends Operation {
       // sparse bitmap Key not found
       return true;
     }
-    
+    long foundChunkOffset = SparseBitmaps.getChunkOffsetFromKey(foundKeyPtr, foundKeySize);
+    if (this.offset >= foundChunkOffset + SparseBitmaps.BITS_PER_CHUNK) {
+      // Not found => =0
+      return true;
+    }
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     boolean isCompressed = SparseBitmaps.isCompressed(valuePtr);

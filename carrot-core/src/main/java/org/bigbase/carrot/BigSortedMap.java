@@ -1513,16 +1513,14 @@ public class BigSortedMap {
    */
   
   public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength) {
-    //TODO fix prefixKeyEnd
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
     if (endRowPtr == -1) {
-      return null;
+      endRowPtr = 0;
     }
-    
+    int endRowLength = endRowPtr == 0? 0: startRowLength;
     BigSortedMapDirectMemoryScanner scanner =
-        getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
-    //TODO: if this right?
-    if (scanner == null) {
+        getScanner(startRowPtr, startRowLength, endRowPtr, endRowLength);
+    if (scanner == null && endRowPtr > 0) {
       UnsafeAccess.free(endRowPtr);
       return null;
     }
@@ -1539,17 +1537,16 @@ public class BigSortedMap {
    */
   
   public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength, boolean reverse) {
-    //TODO fix prefixKeyEnd
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
     if (endRowPtr == -1) {
-      return null;
+      endRowPtr = 0;
     }
-    /*DEBUG*/ System.out.println("start key=" + Utils.toString(startRowPtr, startRowLength));
-    /*DEBUG*/ System.out.println("stop  key=" + Utils.toString(endRowPtr, startRowLength));
+    int endRowLength = endRowPtr == 0? 0: startRowLength;
+
     BigSortedMapDirectMemoryScanner scanner =
-        getScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
+        getScanner(startRowPtr, startRowLength, endRowPtr, endRowLength, reverse);
     //TODO: is this right?
-    if (scanner == null) {
+    if (scanner == null && endRowPtr > 0) {
       UnsafeAccess.free(endRowPtr);
       return null;
     }

@@ -472,6 +472,7 @@ public class Utils {
   }
   
   /**
+   * TODO: Test it
    * TODO: handle all 0xff key
    * Calculates end key for prefix scanner
    * @param start start key address
@@ -490,6 +491,7 @@ public class Utils {
         return end;
       }
     }
+    UnsafeAccess.free(end);
     return -1;
   }
   
@@ -592,14 +594,33 @@ public class Utils {
     return 0;
   }
   
+  private static byte[] BYTE_BITS = 
+      new byte[] {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
+  private static byte[] BYTE_LAST_BIT = 
+      new byte[] {-1 /*0*/, 3 /*1*/, 2 /*2*/, 3 /*3*/, 1 /*4*/, 3 /*5*/, 2 /*6*/, 3 /*7*/, 
+                   0 /*8*/, 3 /*9*/, 2 /*10*/, 3 /*11*/, 1 /*12*/, 3 /*13*/, 2 /*14*/, 3 /*15*/}; 
   /**
    * Counts set bits in a byte value
    * @param b value
    * @return number of set bits
    */
   public static int bitCount(byte b) {
-    final byte[] table = new byte[] {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
-    return table[b & 0xf] + table[b >>> 4];
+    return BYTE_BITS[b & 0xf] + BYTE_BITS[b >>> 4];
+  }
+  
+  
+  /*
+   * Get last bit set in a byte value
+   * @param b byte value
+   * @return offset of a last bit set
+   */
+  
+  public static int lastBitOffset(byte b) {
+    int lb = BYTE_LAST_BIT[ b & 0xF];
+    if (lb >= 0) {
+      return 4 + lb;
+    }
+    return BYTE_LAST_BIT[b >>> 4];
   }
   /**
    * Count bits in a short value
@@ -607,10 +628,37 @@ public class Utils {
    * @return number of bits set
    */
   public static int bitCount(short s) {
-    return bitCount( (byte)(s & 0xff)) + bitCount((byte)(s>>>8));
+    return bitCount( (byte)(s & 0xff)) + bitCount((byte)(s >>> 8));
   }
   
-  
+  /**
+   * Returns offset (0 - based) of a last bit set in a memory region
+   * @param ptr address of a memory region
+   * @param length length of a memory region
+   * @return offset or -1 if no set bit
+   */
+  public static int lastBitOffset(long ptr, int length) {
+    int n = length / Utils.SIZEOF_LONG;
+    int lastOffset = -1;
+    long _ptr = ptr;
+    int bitsInLong = 64;
+    for (int i = 0; i < n; i++) {
+      long v = UnsafeAccess.toLong(_ptr);
+      if (v == 0) continue;
+      int nz = Long.numberOfTrailingZeros(v);
+      lastOffset = i * bitsInLong + (64 - nz);
+      _ptr += Utils.SIZEOF_LONG;
+    }
+    int j = n * Utils.SIZEOF_LONG;
+    for (; j < length; j++) {
+      byte v = UnsafeAccess.toByte(_ptr);
+      if (v == 0) continue;
+      int off = lastBitOffset(v);
+      lastOffset = j + off;
+      _ptr += Utils.SIZEOF_BYTE;   
+    }
+    return lastOffset;
+  }
   
   /**
    * Murmur3hash implementation with native pointer.

@@ -45,8 +45,9 @@ public class SparseSetChunk extends Operation {
     int valueSize;
     this.updatesCount = 1; 
 
-    int popCount = (int) Utils.bitcount(ptr, SparseBitmaps.BYTES_PER_CHUNK);
+    int popCount = (int) Utils.bitcount(this.ptr, SparseBitmaps.BYTES_PER_CHUNK);
     if (SparseBitmaps.shouldCompress(popCount)) {
+      // we set newChunk = false to save thread local buffer
       int compSize = compress(ptr, popCount, false, buffer.get());
       valueSize = compSize + HEADER_SIZE;
       valuePtr = buffer.get();
@@ -69,6 +70,7 @@ public class SparseSetChunk extends Operation {
   public void reset() {
     super.reset();
     setFloorKey(true);
+    this.ptr = 0;
   }
   
   public void setChunkAddress(long ptr) {

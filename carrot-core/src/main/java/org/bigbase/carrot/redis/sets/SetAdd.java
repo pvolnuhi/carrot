@@ -143,7 +143,6 @@ public class SetAdd extends Operation{
       // Check updates
       if (Sets.compareElements(addr, elementPtr, elementSize) == 0) {
         // Can not insert, because it is already there
-        /*DEBUG*/ System.out.println("SADD found existing ");
         return false;
       } 
     }

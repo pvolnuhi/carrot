@@ -29,6 +29,9 @@ public class SparseLength extends Operation {
     }
     long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
+    long foundValuePtr = DataBlock.valueAddress(foundRecordAddress);
+    int foundValueSize = DataBlock.valueLength(foundRecordAddress);
+    
     if (Utils.compareTo(foundKeyPtr, foundKeySize - Utils.SIZEOF_LONG, 
       keyAddress, keySize - Utils.SIZEOF_LONG) != 0) {
       // Key not found - this is not a sparse bitmap key
@@ -36,11 +39,11 @@ public class SparseLength extends Operation {
     }
     long offset = SparseBitmaps.getChunkOffsetFromKey(foundKeyPtr, foundKeySize);
     // TODO: calculate precisely to the last bit set
-    this.strlen = offset/Utils.BITS_PER_BYTE + SparseBitmaps.BYTES_PER_CHUNK ;  
+    this.strlen = offset/Utils.BITS_PER_BYTE + (Utils.lastBitOffset(foundValuePtr + 
+      SparseBitmaps.HEADER_SIZE, foundValueSize - SparseBitmaps.HEADER_SIZE)/ Utils.BITS_PER_BYTE + 1) ;  
     return true;
   }
   
-
   @Override
   public void reset() {
     super.reset();

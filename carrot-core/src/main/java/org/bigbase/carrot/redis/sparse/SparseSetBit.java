@@ -39,14 +39,25 @@ public class SparseSetBit extends Operation {
     this.updatesCount = 0;
     boolean existKey = true;
     boolean newChunk = false;
+    long foundKeyPtr = 0;
+    int foundKeySize = 0;
     if (foundRecordAddress < 0) {
       existKey = false;
     } else {
-      long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-      int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-      if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
+      foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
+      foundKeySize = DataBlock.keyLength(foundRecordAddress);
+      if (foundKeySize <= Utils.SIZEOF_LONG || 
+          Utils.compareTo(foundKeyPtr, foundKeySize - Utils.SIZEOF_LONG, 
+            keyAddress, keySize - Utils.SIZEOF_LONG) != 0) {
         // Key not found - not a sparse bitmap key
         existKey = false;
+      }
+    }
+    if (existKey) {
+      long existOffsetFromKey = SparseBitmaps.getChunkOffsetFromKey(foundKeyPtr, foundKeySize);
+      if (existOffsetFromKey + SparseBitmaps.BITS_PER_CHUNK <= offset) {
+        // Yes, this is the wrong chunk
+        existKey = false; 
       }
     }
     if (!existKey && this.bit == 0) {
@@ -72,7 +83,7 @@ public class SparseSetBit extends Operation {
       valuePtr = UnsafeAccess.mallocZeroed(valueSize);
       this.updatesCount = 1; 
       newChunk = true;
-      // Update memory stats
+      // Update memory statistics
       BigSortedMap.totalAllocatedMemory.addAndGet(SparseBitmaps.CHUNK_SIZE);
     }
     this.oldBit = getsetbit(valuePtr, valueSize);
@@ -101,7 +112,7 @@ public class SparseSetBit extends Operation {
     long chunkOffset = this.offset / SparseBitmaps.BITS_PER_CHUNK;
     int off = (int)(this.offset - chunkOffset * SparseBitmaps.BITS_PER_CHUNK);
     int n = (int)(off / Utils.BITS_PER_BYTE);
-    int rem = (int)(off - ((long)n) * Utils.BITS_PER_BYTE);
+    int rem = (int)(off - n * Utils.BITS_PER_BYTE);
     byte b = UnsafeAccess.toByte(valuePtr + n + SparseBitmaps.HEADER_SIZE);
     oldBit = (b >>> (7 - rem)) & 1;
     if (this.bit == 1) {
