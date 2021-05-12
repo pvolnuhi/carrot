@@ -605,7 +605,7 @@ public class Utils {
    * @return number of set bits
    */
   public static int bitCount(byte b) {
-    return BYTE_BITS[b & 0xf] + BYTE_BITS[b >>> 4];
+    return BYTE_BITS[b & 0xf] + BYTE_BITS[(b & 0xff) >>> 4];
   }
   
   
@@ -620,7 +620,7 @@ public class Utils {
     if (lb >= 0) {
       return 4 + lb;
     }
-    return BYTE_LAST_BIT[b >>> 4];
+    return BYTE_LAST_BIT[(b & 0xff) >>> 4];
   }
   /**
    * Count bits in a short value
@@ -632,6 +632,7 @@ public class Utils {
   }
   
   /**
+   * TODO: test
    * Returns offset (0 - based) of a last bit set in a memory region
    * @param ptr address of a memory region
    * @param length length of a memory region
@@ -644,17 +645,19 @@ public class Utils {
     int bitsInLong = 64;
     for (int i = 0; i < n; i++) {
       long v = UnsafeAccess.toLong(_ptr);
-      if (v == 0) continue;
-      int nz = Long.numberOfTrailingZeros(v);
-      lastOffset = i * bitsInLong + (64 - nz);
+      if (v != 0) {
+        int nz = Long.numberOfTrailingZeros(v);
+        lastOffset = i * bitsInLong + (64 - nz - 1);
+      }
       _ptr += Utils.SIZEOF_LONG;
     }
     int j = n * Utils.SIZEOF_LONG;
     for (; j < length; j++) {
       byte v = UnsafeAccess.toByte(_ptr);
-      if (v == 0) continue;
-      int off = lastBitOffset(v);
-      lastOffset = j + off;
+      if (v != 0) {
+        int off = lastBitOffset(v);
+        lastOffset = j * Utils.BITS_PER_BYTE + off;
+      }
       _ptr += Utils.SIZEOF_BYTE;   
     }
     return lastOffset;
@@ -1048,10 +1051,11 @@ public class Utils {
   }
   
   /**
+   * TODO: test it
    * Bit count in a memory block
    * @param valuePtr start address
    * @param valueSize length of a block
-   * @return
+   * @return total number of bits set to 1
    */
   public static long bitcount(long valuePtr, int valueSize) {
     
@@ -1059,14 +1063,14 @@ public class Utils {
     int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
     long c = 0;
     long ptr = valuePtr;
-    for(int i=0; i < num8; i++) {
+    for(int i = 0; i < num8; i++) {
       long v = UnsafeAccess.toLong(ptr);
       c += Long.bitCount(v);
       ptr += Utils.SIZEOF_LONG;
     }
     int num4 = rem8 / Utils.SIZEOF_INT;
     int rem4 = rem8 - Utils.SIZEOF_INT * num4;
-    for(int i=0; i < num4; i++) {
+    for(int i = 0; i < num4; i++) {
       int v = UnsafeAccess.toInt(ptr);
       c += Integer.bitCount(v);
       ptr += Utils.SIZEOF_INT;
@@ -1075,11 +1079,12 @@ public class Utils {
     int num2 = rem4 / Utils.SIZEOF_SHORT;
     int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
     
-    for(int i=0; i < num2; i++) {
+    for(int i = 0; i < num2; i++) {
       short v = UnsafeAccess.toShort(ptr);
       c += Utils.bitCount(v);
       ptr += Utils.SIZEOF_SHORT;
     }
+    
     if (rem2 == 1) {
       byte v = UnsafeAccess.toByte(ptr);
       c += Utils.bitCount(v);
@@ -1087,6 +1092,7 @@ public class Utils {
     return c;
   }
   /** 
+   * TODO: test
    * Returns first position of the set bit ('1')
    * @param valuePtr memory address start
    * @param valueSize memory block length
@@ -1098,19 +1104,19 @@ public class Utils {
     int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
     long ptr = valuePtr;
     int pos = 0;
-    for(int i=0; i < num8; i++) {
+    for(int i = 0; i < num8; i++) {
       pos = firstBitSetLong(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
       ptr += Utils.SIZEOF_LONG;
     }
     int num4 = rem8 / Utils.SIZEOF_INT;
     int rem4 = rem8 - Utils.SIZEOF_INT * num4;
-    for(int i=0; i < num4; i++) {
+    for(int i = 0; i < num4; i++) {
       pos = firstBitSetInt(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
       ptr += Utils.SIZEOF_INT;
     }
@@ -1118,10 +1124,10 @@ public class Utils {
     int num2 = rem4 / Utils.SIZEOF_SHORT;
     int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
     
-    for(int i=0; i < num2; i++) {
+    for(int i = 0; i < num2; i++) {
       pos = firstBitSetShort(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
       ptr += Utils.SIZEOF_SHORT;
     }
@@ -1129,13 +1135,14 @@ public class Utils {
     if (rem2 == 1) {
       pos = firstBitSetByte(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
     }
     return -1;
   }
 
   /** 
+   * TODO: test
    * Returns first position of a unset bit
    * @param valuePtr memory address start
    * @param valueSize memory block length
@@ -1146,19 +1153,19 @@ public class Utils {
     int rem8 = valueSize - Utils.SIZEOF_LONG * num8;
     long ptr = valuePtr;
     int pos = 0;
-    for(int i=0; i < num8; i++) {
+    for(int i = 0; i < num8; i++) {
       pos = firstBitUnSetLong(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
       ptr += Utils.SIZEOF_LONG;
     }
     int num4 = rem8 / Utils.SIZEOF_INT;
     int rem4 = rem8 - Utils.SIZEOF_INT * num4;
-    for(int i=0; i < num4; i++) {
+    for(int i = 0; i < num4; i++) {
       pos = firstBitUnSetInt(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
       ptr += Utils.SIZEOF_INT;
     }
@@ -1166,10 +1173,10 @@ public class Utils {
     int num2 = rem4 / Utils.SIZEOF_SHORT;
     int rem2 = rem4 - Utils.SIZEOF_SHORT * num2;
     
-    for(int i=0; i < num2; i++) {
+    for(int i = 0; i < num2; i++) {
       pos = firstBitUnSetShort(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
       ptr += Utils.SIZEOF_SHORT;
     }
@@ -1177,7 +1184,7 @@ public class Utils {
     if (rem2 == 1) {
       pos = firstBitUnSetByte(ptr);
       if (pos >= 0) {
-        return (ptr - valuePtr) * Utils.SIZEOF_BYTE + pos;
+        return (ptr - valuePtr) * Utils.BITS_PER_BYTE + pos;
       }
     }    
     return -1;

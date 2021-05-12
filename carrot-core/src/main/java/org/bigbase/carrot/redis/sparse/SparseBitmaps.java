@@ -23,7 +23,7 @@ import org.bigbase.carrot.util.Utils;
  * This class provides sparse bitmap implementation. Sparse bitmap
  * are more memory efficient when population do not exceed 5-10%.
  * Bitmap storage allocation is done in chunks. Chunk size 4096 bytes.
- * Each chunk is stored in a compressed form. Compression codec is LZ4HC
+ * Each chunk is stored in a compressed form. Compression codec is LZ4
  * @author Vladimir Rodionov
  *
  */
@@ -376,21 +376,52 @@ public class SparseBitmaps {
    * @param keySize key size
    * @return true if - yes, false - otherwise
    */
-  public static boolean keyExists(BigSortedMap map, long keyPtr, int keySize) {
+  public static boolean EXISTS(BigSortedMap map, long keyPtr, int keySize) {
     int kSize = buildKey(keyPtr, keySize);
     keyPtr = keyArena.get();
-    Scanner scanner = map.getPrefixScanner(keyPtr, kSize);
-    boolean result = scanner == null? false: true;
-    if (scanner != null) {
-      try {
+    Scanner scanner = null;
+    try {
+      scanner = map.getPrefixScanner(keyPtr, kSize);
+      boolean result = scanner == null ? false : scanner.hasNext();
+      if (scanner != null) {
         scanner.close();
-      } catch (IOException e) {
       }
+      return result;
+    } catch (IOException e) {
     }
-    return result;
+    return false;
   }
   
   /**
+   * Delete sparse bitmap by Key
+   * @param map sorted map
+   * @param keyPtr key address
+   * @param keySize key size
+   * @return number of deleted K-Vs
+   */
+  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+    Key k = getKey(keyPtr, keySize);
+    try {
+      KeysLocker.writeLock(k);
+      int newKeySize = keySize + KEY_SIZE + Utils.SIZEOF_BYTE;
+      long kPtr = UnsafeAccess.malloc(newKeySize);
+      UnsafeAccess.putByte(kPtr, (byte)DataType.SBITMAP.ordinal());
+      UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
+      UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
+      
+      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
+      
+      UnsafeAccess.free(kPtr);
+      UnsafeAccess.free(endKeyPtr);
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+
+  }
+  
+  /**
+   * FIXME: TOO SLOW 
    * Count the number of set bits (population counting) in a string.
    * By default all the bytes contained in the string are examined. 
    * It is possible to specify the counting operation only in an interval 
@@ -423,6 +454,11 @@ public class SparseBitmaps {
       if (start < 0) {
         start = strlen + start;
       }
+      
+      if (start < 0) {
+        start = 0;
+      }
+      
       if (end != Commons.NULL_LONG &&  end < 0) {
         end = strlen + end;
       }
@@ -432,20 +468,17 @@ public class SparseBitmaps {
         end = Long.MAX_VALUE / Utils.BITS_PER_BYTE  - 1;
       }
       
-      if (end < start) {
+      if (end < start || end < 0) {
         return 0;
-      } else if (end < 0 || start < 0) {
-        return 0;
-      }
+      } 
       
       int kSize = buildKey(keyPtr, keySize, start * Utils.BITS_PER_BYTE);
       endKeyPtr = UnsafeAccess.malloc(kSize);
-      int endKeySize = buildKey(keyPtr, keySize, end * Utils.BITS_PER_BYTE, endKeyPtr);
-  
-      
+      int endKeySize = buildKey(keyPtr, keySize, (end) * Utils.BITS_PER_BYTE, endKeyPtr);
+      // WRONG      
+      endKeyPtr = Utils.prefixKeyEndNoAlloc(endKeyPtr, endKeySize);
       long total = 0;
       try {
-        
         scanner = map.getScanner(keyArena.get() /* start key ptr*/, kSize /* start key size*/, 
           endKeyPtr /* end key ptr */, endKeySize /* end key size*/);
         
@@ -459,10 +492,8 @@ public class SparseBitmaps {
           int keyLength = scanner.keySize();
           long offset = getChunkOffsetFromKey(keyAddress, keyLength) ;
           long offsetBytes = offset / Utils.BITS_PER_BYTE;
-          //TODO: test it
           boolean lastChunk = offsetBytes <= end && (offsetBytes + BYTES_PER_CHUNK) > end;
           boolean firstChunk = offsetBytes <= start; 
-          //TODO : this can be optimized for internal chunks
           if (firstChunk || lastChunk) {
             valueAddress = isCompressed(valueAddress)? decompress(valueAddress, 
               valueSize - HEADER_SIZE): valueAddress;
@@ -474,7 +505,7 @@ public class SparseBitmaps {
           scanner.next();
         }       
       } catch (IOException e) {
-      }
+      }      
       return total;
     } finally {
       if (scanner != null) {
@@ -529,13 +560,15 @@ public class SparseBitmaps {
    * @return true on success, false - otherwise
    */
   public static boolean setChunk(BigSortedMap map, long keyPtr, int keySize, long offset,
-      long chunkPtr) {
+      long chunkPtr, boolean before) {
     int kSize = buildKey(keyPtr, keySize, offset);
     SparseSetChunk setchunk = sparseSetchunk.get();
     setchunk.reset();
     setchunk.setKeyAddress(keyArena.get());
     setchunk.setKeySize(kSize);
     setchunk.setChunkAddress(chunkPtr);
+    setchunk.setBefore(before);
+    setchunk.setOffset((int)(offset - (offset/BYTES_PER_CHUNK) * BYTES_PER_CHUNK));
     return map.execute(setchunk);
   }
   
@@ -638,6 +671,8 @@ public class SparseBitmaps {
       KeysLocker.readLock(kk);
       long strlen = -1;
       boolean startSet = start != Commons.NULL_LONG;
+      boolean endSet = end != Commons.NULL_LONG;
+      
       if (start == Commons.NULL_LONG) {
         start = 0;
       }
@@ -647,59 +682,87 @@ public class SparseBitmaps {
       if (start < 0) {
         start = strlen + start;
       }
-      if (end != Commons.NULL_LONG &&  end < 0) {
-        end = strlen + end;
+      
+      if (start < 0) {
+        start = 0;
       }
       
-      if (end == Commons.NULL_LONG) {
+      if (end != Commons.NULL_LONG &&  end < 0) {
+        end = strlen + end;
+      } else if (end == Commons.NULL_LONG) {
         end = Long.MAX_VALUE / Utils.BITS_PER_BYTE - 1;
       }
       
-      if (end < start) {
-        return bit == 1? -1: strlen * Utils.BITS_PER_BYTE;
+      if (end < start || end < 0) {
+        return -1;
       }
       
       int kSize = buildKey(keyPtr, keySize, start * Utils.BITS_PER_BYTE);
       endKeyPtr = UnsafeAccess.malloc(kSize);
+      // end + 1 b/c end is inclusive
       int endKeySize = buildKey(keyPtr, keySize, end * Utils.BITS_PER_BYTE, endKeyPtr);
+      
+      //FIXME
+      endKeyPtr = Utils.prefixKeyEndNoAlloc(endKeyPtr, endKeySize);
+      
       scanner = map.getScanner(keyArena.get(), kSize, endKeyPtr, endKeySize);
       if (scanner == null) {
-        return 0;
+        // Special handling for unset bit
+        // scanner == null, but it does not mean that set is NULL
+        if (bit == 0 && EXISTS(map, keyPtr, keySize)) {
+          return start * Utils.BITS_PER_BYTE;
+        }
+        return endSet && bit == 0? 0: -1;
       }
       // TODO Check if bit == 0 and first chunk start not with 0 offset
+      boolean exists = false;
+      
       try {
         while(scanner.hasNext()) {
+          long keyAddress = scanner.keyAddress();
+          int keyLength = scanner.keySize();
+          long offset = SparseBitmaps.getChunkOffsetFromKey(keyAddress, keyLength) ;
+          if (offset > 0 && bit == 0 && !exists && !startSet) {
+            return 0;
+          }
+          // Again - edge case when we have a hole between start * Utils.BIT_PER_BYTE and offset
+          if (offset > start * Utils.BITS_PER_BYTE && bit == 0) {
+            return start * Utils.BITS_PER_BYTE;
+          }
+          exists = true;
           long valueAddress = scanner.valueAddress();
           int valueSize = scanner.valueSize();
           int bitsCount = SparseBitmaps.getBitCount(valueAddress);
-          if ((bit == 1 && bitsCount == 0) || 
+          if ((bit == 1 && bitsCount == 0) /*SHOULD NOT BE POSSIBLE*/ || 
               (bit == 0 && bitsCount == SparseBitmaps.BITS_PER_CHUNK)) {
             scanner.next();
             continue;
           }
-          long keyAddress = scanner.keyAddress();
-          int keyLength = scanner.keySize();
-          long offset = SparseBitmaps.getChunkOffsetFromKey(keyAddress, keyLength) ;
-          if (bit == 0 && (start * Utils.BITS_PER_BYTE < offset)) {
-            return start * Utils.BITS_PER_BYTE;
-          }
+
           valueAddress = isCompressed(valueAddress)? 
               SparseBitmaps.decompress(valueAddress, valueSize - HEADER_SIZE): valueAddress;
 
-          long pos = getPosition(valueAddress, bit, offset, start, end);
-          if (pos >= 0) return pos;
+          long pos = getPosition(valueAddress, bit, offset /*bits*/, start /*bytes*/, end /*bytes*/);
+          if (pos >= 0) {
+            return pos;
+          } 
           scanner.next();
         }
-        
       } catch (IOException e) {
       }
-      if (startSet && bit == 0) {
-        if (strlen < 0) {
+      if (!endSet && bit == 0) {
+        if (exists && strlen < 0) {
           strlen = SSTRLEN(map, keyPtr, keySize);
+        } else {
+          strlen = 0;
         }
         return strlen * Utils.BITS_PER_BYTE;
-      }
-      return -1;
+      } else if (bit == 0 /*&& EXISTS(map, keyPtr, keySize)*/) {
+        // endSet = true
+        return start * Utils.BITS_PER_BYTE;
+      } else {
+        return -1;
+      } 
     } finally {
       if (scanner != null) {
         try {
@@ -734,7 +797,7 @@ public class SparseBitmaps {
     long limit = valueAddress + CHUNK_SIZE;
     if ( end < Long.MAX_VALUE / Utils.BITS_PER_BYTE) {
       if (end * Utils.BITS_PER_BYTE < offset + BITS_PER_CHUNK) {
-        limit = valueAddress + (end - (offset / Utils.BITS_PER_BYTE));
+        limit = valueAddress + HEADER_SIZE + (end - (offset / Utils.BITS_PER_BYTE)) + 1;
       }
     }
     long ptr = valueAddress + HEADER_SIZE;
@@ -758,7 +821,7 @@ public class SparseBitmaps {
     long limit = valueAddress + SparseBitmaps.CHUNK_SIZE;
     if ( end < Long.MAX_VALUE / Utils.BITS_PER_BYTE) {
       if (end * Utils.BITS_PER_BYTE < offset + SparseBitmaps.BITS_PER_CHUNK) {
-        limit = valueAddress + (end - offset / Utils.BITS_PER_BYTE);
+        limit = valueAddress + SparseBitmaps.HEADER_SIZE + (end - offset / Utils.BITS_PER_BYTE) + 1;
       }
     }
     long ptr = valueAddress + SparseBitmaps.HEADER_SIZE;
@@ -772,7 +835,9 @@ public class SparseBitmaps {
     } else {
       position = Utils.bitposUnset(ptr, (int)(limit - ptr));
     }
-    if (position >= 0) position += offset;
+    if (position >= 0) {
+      position += (offset >= start * Utils.BITS_PER_BYTE)? offset: start * Utils.BITS_PER_BYTE;
+    }
     return position;
   }
 
@@ -792,70 +857,99 @@ public class SparseBitmaps {
    * @return size of a range, or -1, if key does not exists,
    *  if size > buferSize, the call must be repeated with appropriately sized buffer
    */
-  public static long SGETRANGE(BigSortedMap map, long keyPtr, int keySize , long start, long end, 
-      long bufferPtr, long bufferSize)
-  {
+  public static long SGETRANGE(BigSortedMap map, long keyPtr, int keySize, long start, long end,
+      long bufferPtr, int bufferSize) {
     Key kk = getKey(keyPtr, keySize);
     BigSortedMapDirectMemoryScanner scanner = null;
     long endKeyPtr = 0;
     try {
       KeysLocker.readLock(kk);
-      long strlen = -1;
+      long strlen = SSTRLEN(map, keyPtr, keySize);;
+      if (strlen == 0) {
+        return -1;
+      }
+      
       if (start == Commons.NULL_LONG) {
         start = 0;
       }
-      if (start < 0 || (end != Commons.NULL_LONG &&  end < 0)) {
-        strlen = SSTRLEN(map, keyPtr, keySize);
-      }
+      
       if (start < 0) {
         start = strlen + start;
       }
-      if (end != Commons.NULL_LONG &&  end < 0) {
+      
+      if (start < 0) {
+        start = 0;
+      }
+      
+      if (end != Commons.NULL_LONG && end < 0) {
         end = strlen + end;
       }
       
-      if (end == Commons.NULL_LONG) {
-        // TODO: is length in bytes?
-        end = strlen;
+      if (end == Commons.NULL_LONG || ((strlen > 0) && end >= strlen)) {
+        end = strlen - 1;
       }
       
-      if (end < start) {
+      if (end < start || end < 0) {
         return 0;
       }
-      
-      long rangeSize = end - start + 1; 
-      if(end - start + 1 > bufferSize) {
+
+      //FIXME: start is always correct (inside), end can be larger than bitmap
+      // so, this calculation is not correct in a general case
+      // To make it work we must guarantee that bufferSize > end-start + 1
+      long rangeSize = end - start + 1;
+      if (end - start + 1 > bufferSize) {
         return rangeSize; // Buffer is too small
       }
-      //TODO - FINISH
+
       int kSize = buildKey(keyPtr, keySize, start * Utils.BITS_PER_BYTE);
       endKeyPtr = UnsafeAccess.malloc(kSize);
       int endKeySize = buildKey(keyPtr, keySize, end * Utils.BITS_PER_BYTE, endKeyPtr);
+      // FIXME
+      endKeyPtr = Utils.prefixKeyEndNoAlloc(endKeyPtr, endKeySize);
+
       scanner = map.getScanner(keyArena.get(), kSize, endKeyPtr, endKeySize);
       if (scanner == null) {
-        return 0;
+        // Either we hit a hole of all 0's
+        // Or set does not exists
+        if (EXISTS(map, keyPtr, keySize)) {
+          return rangeSize; // yes - rangeSize - all are 0's
+        } else {
+          return -1; // set does not exists
+        }
       }
       long off = start;
       try {
-        while(scanner.hasNext()) {
+        // still can be empty
+        while (scanner.hasNext()) {
           long valueAddress = scanner.valueAddress();
           int valueSize = scanner.valueSize();
-          valueAddress = isCompressed(valueAddress)?SparseBitmaps.decompress(valueAddress, 
-            valueSize - SparseBitmaps.HEADER_SIZE): valueAddress;
+          valueAddress =
+              isCompressed(valueAddress) ? decompress(valueAddress, valueSize - HEADER_SIZE)
+                  : valueAddress;
           long keyAddress = scanner.keyAddress();
           int keyLength = scanner.keySize();
-          long offset = SparseBitmaps.getChunkOffsetFromKey(keyAddress, keyLength) ;
+          long offset = getChunkOffsetFromKey(keyAddress, keyLength);
           long bytesOffset = offset / Utils.BITS_PER_BYTE;
+          long toCopy = 0;
           if (bytesOffset > off) {
             UnsafeAccess.setMemory(bufferPtr + (off - start), bytesOffset - off, (byte) 0);
             off = bytesOffset;
+          } else if (bytesOffset < off) {
+            // First segment
+            toCopy = Math.min(end - off + 1, BYTES_PER_CHUNK - (off - bytesOffset));
+            UnsafeAccess.copy(valueAddress + HEADER_SIZE + off - bytesOffset,
+              bufferPtr + off - start, toCopy);
+            off += toCopy;
+            scanner.next();
+            continue;
           }
-          long toCopy = Math.min(end - off,  BYTES_PER_CHUNK);
+          // This handles last segment
+          toCopy = Math.min(end - off + 1, BYTES_PER_CHUNK);
           // Copy chunk
           UnsafeAccess.copy(valueAddress + HEADER_SIZE, bufferPtr + off - start, toCopy);
           off += toCopy;
           scanner.next();
-        }       
+        }
       } catch (IOException e) {
       }
       return rangeSize;
@@ -870,7 +964,7 @@ public class SparseBitmaps {
         UnsafeAccess.free(endKeyPtr);
       }
       KeysLocker.readUnlock(kk);
-    }   
+    }
   }
   
   /**
@@ -889,18 +983,16 @@ public class SparseBitmaps {
    * @return new size of key's value
    */
   
-  //TODO: FINISH IT
   public static long SSETRANGE(BigSortedMap map, long keyPtr, int keySize, long offset,
       long valuePtr, long valueSize) {
     Key kk = getKey(keyPtr, keySize);
 
     try {
       KeysLocker.writeLock(kk);
-      long strlen = SSTRLEN(map, keyPtr, keySize);
       int zeroPrefixSize = (int)(offset - (offset / BYTES_PER_CHUNK) * 
           BYTES_PER_CHUNK);
-      int zeroSuffixSize = (int)( offset - ((offset + valueSize) / BYTES_PER_CHUNK) * 
-          BYTES_PER_CHUNK);
+      int zeroSuffixSize = (int)((BYTES_PER_CHUNK + ((offset + valueSize) / BYTES_PER_CHUNK) * 
+          BYTES_PER_CHUNK) - (offset + valueSize));
       
       // set first chunk
       long ptr = buffer.get();
@@ -911,27 +1003,24 @@ public class SparseBitmaps {
 
       UnsafeAccess.copy(valuePtr, ptr + zeroPrefixSize, toCopy);
       
-      long off = (offset - zeroPrefixSize);
-      setChunk(map, keyPtr, keySize, off * Utils.BITS_PER_BYTE, ptr);
-      
-      off += BYTES_PER_CHUNK;
-      
+      // Overwrite first chunk
+      setChunk(map, keyPtr, keySize, offset * Utils.BITS_PER_BYTE, ptr, true);
+
+      long off = (offset / BYTES_PER_CHUNK) * BYTES_PER_CHUNK + BYTES_PER_CHUNK;
+
       while(off <= offset + valueSize - BYTES_PER_CHUNK) {
-        setChunk(map, keyPtr, keySize, off * Utils.BITS_PER_BYTE, valuePtr + (off - offset));
+        setChunk(map, keyPtr, keySize, off * Utils.BITS_PER_BYTE, valuePtr + (off - offset), true);
         off += BYTES_PER_CHUNK;
       }
       // Set last chunk
-      // set first chunk
       ptr = buffer.get();
       UnsafeAccess.setMemory(ptr + zeroSuffixSize, BYTES_PER_CHUNK - zeroSuffixSize, (byte)0);
       UnsafeAccess.copy(valuePtr + valueSize - zeroSuffixSize, ptr, zeroSuffixSize);
-      off = (offset + valueSize - zeroSuffixSize);
-      setChunk(map, keyPtr, keySize, off * Utils.BITS_PER_BYTE, ptr);
+      off = ((offset + valueSize)/ BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
+      setChunk(map, keyPtr, keySize, off * Utils.BITS_PER_BYTE, ptr, false);
       
-      long size = ((offset + valueSize)/BYTES_PER_CHUNK) * BYTES_PER_CHUNK + BYTES_PER_CHUNK;
-      if (size > strlen) {
-        return size;
-      }
+      long strlen = SSTRLEN(map, keyPtr, keySize);
+
       return strlen;
     } finally {
       KeysLocker.writeUnlock(kk);

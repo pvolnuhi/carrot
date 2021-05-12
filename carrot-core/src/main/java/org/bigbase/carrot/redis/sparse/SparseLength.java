@@ -38,7 +38,13 @@ public class SparseLength extends Operation {
       return true;
     }
     long offset = SparseBitmaps.getChunkOffsetFromKey(foundKeyPtr, foundKeySize);
-    // TODO: calculate precisely to the last bit set
+    boolean isCompressed = SparseBitmaps.isCompressed(foundValuePtr);
+    foundValuePtr = isCompressed? 
+        SparseBitmaps.decompress(foundValuePtr, foundValueSize - SparseBitmaps.HEADER_SIZE): 
+          foundValuePtr;
+    if (isCompressed) {
+      foundValueSize = SparseBitmaps.CHUNK_SIZE;
+    }
     this.strlen = offset/Utils.BITS_PER_BYTE + (Utils.lastBitOffset(foundValuePtr + 
       SparseBitmaps.HEADER_SIZE, foundValueSize - SparseBitmaps.HEADER_SIZE)/ Utils.BITS_PER_BYTE + 1) ;  
     return true;

@@ -204,10 +204,12 @@ public class SetsTest {
         }
       }
     };
-    runRead(1, run, toQuery);
-    runRead(2, run, toQuery);
-    runRead(4, run, toQuery);
-    runRead(8, run, toQuery);
+    //runRead(1, run, toQuery);
+    //runRead(2, run, toQuery);
+    //runRead(4, run, toQuery);
+    //runRead(8, run, toQuery);
+    runRead(16, run, toQuery);
+    
     System.out.println("Skip List Map Size=" + map.getMap().size());
     tearDown();
   }

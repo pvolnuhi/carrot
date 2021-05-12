@@ -207,81 +207,6 @@ public class TestUtils {
     
   }
   
-  @Ignore
-  @Test
-  public void twitterIdCompressionTest() {
-    
-    int n = 1000;
-    long src = UnsafeAccess.malloc(Utils.SIZEOF_LONG * n);
-    long dst = UnsafeAccess.malloc(Utils.SIZEOF_LONG * n + 100);
-    
-    for (int i = 0; i < n; i++) {
-      long id = nextId();
-      System.out.println(id + " : "+ Long.toBinaryString(id));
-      UnsafeAccess.putLong(src + i * Utils.SIZEOF_LONG, id);
-    }
-    
-    Codec codec = CodecFactory.getInstance().getCodec(CodecType.LZ4);
-    
-    int size = codec.compress(src, n * Utils.SIZEOF_LONG, dst, n * Utils.SIZEOF_LONG + 100);
-    
-    System.out.println("LZ4 Ratio=" + ((double)n * Utils.SIZEOF_LONG) / size);
-    
-  }
-  Random r = new Random();
-  long epoch = 1288834974657L;
-  
-  private long nextId() {
-    int worker = r.nextInt(32);
-    int datacenterId = r.nextInt(32);
-    int sequenceId = 0;
-    long time = System.currentTimeMillis();
-    double d = r.nextDouble();
-    
-    // Random time between epoch and now
-    time = (long)(epoch + d * (time - epoch));
-    
-    return (time - epoch) << 22 |
-            datacenterId << 17 | worker << 12 | sequenceId;
-  }
-  
-  @Test
-  public void testMallocSizes() {
-    
-    System.out.println("Test malloc sizes");
-    long ptr = UnsafeAccess.malloc(1);
-    
-    for (int i = 2; i <= 1000000; i++) {
-      long old = ptr;
-      ptr = UnsafeAccess.realloc(ptr, i);
-      if (ptr != old) {
-        System.out.println(i-1);
-      }
-    }
-    UnsafeAccess.free(ptr);
-  }
-  
-  
-  @Ignore
-  @Test
-  public void testMallocMemoryUsage() throws IOException {
-    
-    System.out.println("Test malloc memory usage");
-    int N = 1000000;
-    long[] arr = new long[N];
-    for (int i = 0; i < N; i++) {
-      arr[i] = UnsafeAccess.malloc(8097);
-      UnsafeAccess.setMemory(arr[i], 2000, (byte)1);
-    }
-    System.out.println("Press any button ...");
-    System.in.read();
-    
-    long sum = 0;
-    for(int i=0; i < N ; i++) {
-      sum += arr[i];
-    }
-    System.out.println(sum);
-  }
   
   @Test
   public void testLongOrdering() {
@@ -301,6 +226,7 @@ public class TestUtils {
     }
   }
   
+  @Ignore
   @Test
   public void testRandomDistinctArray() {
     long max = Long.MAX_VALUE / 2;
@@ -322,5 +248,100 @@ public class TestUtils {
         fail("Failed");
       }
     }
+  }
+  
+  @Test
+  public void testBitSetUnSetAPI() {
+    
+    // Test 64-bit set
+    long vl = 1L;
+    long ptr = UnsafeAccess.malloc(Utils.SIZEOF_LONG);
+    for (int i = 0; i <= 64; i++) {
+      UnsafeAccess.putLong(ptr, vl);
+      int pos = UnsafeAccess.firstBitSetLong(ptr);
+      assertEquals(63 - i, pos);
+      vl <<= 1;
+    }
+    
+    vl = 0xffffffffffffffffL;
+    
+    for (int i = 0; i <= 64; i++) {
+      UnsafeAccess.putLong(ptr, vl);
+      int pos = UnsafeAccess.firstBitUnSetLong(ptr);
+      if (i == 0) {
+        assertEquals(-1, pos);
+      } else {
+        assertEquals(64 - i, pos);
+      }
+      vl <<= 1;
+    }
+    
+    int vi = 1;
+    
+    for (int i = 0; i <= 32; i++) {
+      UnsafeAccess.putInt(ptr, vi);
+      int pos = UnsafeAccess.firstBitSetInt(ptr);
+      assertEquals(31 - i, pos);
+      vi <<= 1;
+    }
+    
+    vi = 0xffffffff;
+    
+    for (int i = 0; i <= 32; i++) {
+      UnsafeAccess.putInt(ptr, vi);
+      int pos = UnsafeAccess.firstBitUnSetInt(ptr);
+      if (i == 0) {
+        assertEquals(-1, pos);
+      } else {
+        assertEquals(32 - i, pos);
+      }
+      vi <<= 1;
+    }
+    
+    short vs = 1;
+    
+    for (int i = 0; i <= 16; i++) {
+      UnsafeAccess.putShort(ptr, vs);
+      int pos = UnsafeAccess.firstBitSetShort(ptr);
+      assertEquals(15 - i, pos);
+      vs <<= 1;
+    }
+    
+    vs = (short) 0xffff;
+    
+    for (int i = 0; i <= 16; i++) {
+      UnsafeAccess.putShort(ptr, vs);
+      int pos = UnsafeAccess.firstBitUnSetShort(ptr);
+      if (i == 0) {
+        assertEquals(-1, pos);
+      } else {
+        assertEquals(16 - i, pos);
+      }
+      vs <<= 1;
+    }
+    
+    byte vb = 1;
+    
+    for (int i = 0; i <= 8; i++) {
+      UnsafeAccess.putByte(ptr, vb);
+      int pos = UnsafeAccess.firstBitSetByte(ptr);
+      assertEquals(7 - i, pos);
+      vb <<= 1;
+    }
+    
+    vb = (byte) 0xff;
+    
+    for (int i = 0; i <= 8; i++) {
+      UnsafeAccess.putByte(ptr, vb);
+      int pos = UnsafeAccess.firstBitUnSetByte(ptr);
+      if (i == 0) {
+        assertEquals(-1, pos);
+      } else {
+        assertEquals(8 - i, pos);
+      }
+      vb <<= 1;
+    }
+    
+    UnsafeAccess.free(ptr);
   }
 }

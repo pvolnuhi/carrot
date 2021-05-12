@@ -183,6 +183,7 @@ public final class UnsafeAccess {
    */
   
   /**
+   * TODO: test
    * Get offset of a first bit set in a long value (8 bytes)
    * @param addr address to read value from
    * @return offset, or -1 if no bits set 
@@ -194,7 +195,7 @@ public final class UnsafeAccess {
     if (littleEndian) {
       value = Long.reverseBytes(value);
     }
-    return Long.numberOfTrailingZeros(value) +1;
+    return Long.numberOfLeadingZeros(value);
   }
   
   /**
@@ -210,7 +211,7 @@ public final class UnsafeAccess {
       value = Long.reverseBytes(value);
     }
     value = ~value;
-    return Long.numberOfTrailingZeros(value) +1;
+    return Long.numberOfLeadingZeros(value);
   }
   
   /**
@@ -225,7 +226,7 @@ public final class UnsafeAccess {
     if (littleEndian) {
       value = Integer.reverseBytes(value);
     }
-    return Integer.numberOfTrailingZeros(value) +1;
+    return Integer.numberOfLeadingZeros(value);
   }
   
   /**
@@ -241,7 +242,7 @@ public final class UnsafeAccess {
       value = Integer.reverseBytes(value);
     }
     value = ~value;
-    return Integer.numberOfTrailingZeros(value) +1;
+    return Integer.numberOfLeadingZeros(value);
   }
   
   /**
