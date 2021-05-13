@@ -4600,7 +4600,7 @@ public class ZSets {
   
   /**
    * Deletes in bulk
-   * @param ptr address of a memory 
+   * @param chunkPtr address of a memory 
    * @return number of deleted members
    */
   private static int bulkDelete(BigSortedMap map, long memory, long keyPtr, 

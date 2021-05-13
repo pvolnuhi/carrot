@@ -21,7 +21,7 @@ import org.junit.Test;
 
 public class SparseBitmapsTest {
   BigSortedMap map;
-  Key key;
+  Key key, key2;
   long buffer;
   int bufferSize = 64;
   int keySize = 8;
@@ -35,9 +35,6 @@ public class SparseBitmapsTest {
     long ptr = UnsafeAccess.malloc(keySize);
     byte[] buf = new byte[keySize];
     Random r = new Random();
-    long seed = r.nextLong();
-    r.setSeed(seed);
-    System.out.println("SEED=" + seed);
     r.nextBytes(buf);
     UnsafeAccess.copy(buf, 0, ptr, keySize);
     return new Key(ptr, keySize);
@@ -53,6 +50,10 @@ public class SparseBitmapsTest {
     map.dispose();
 
     UnsafeAccess.free(key.address);
+    if (key2 != null) {
+      UnsafeAccess.free(key2.address);
+      key2 = null;
+    }
     UnsafeAccess.free(buffer);
     UnsafeAccess.mallocStats.printStats();
     BigSortedMap.memoryStats();
@@ -98,29 +99,32 @@ public class SparseBitmapsTest {
   }
   
   private void allTests() {
-//    setUp();
-//    testSetBitGetBitLoop();
-//    tearDown();
-//    setUp();
-//    testPerformance();
-//    tearDown();
-//    setUp();
-//    testSparseLength();
-//    tearDown();
-//    setUp();
-//    testDeleteExists();
-//    tearDown();
-//    setUp();
-//    testBitCounts();
-//    tearDown();
-//    setUp();
-//    testBitcountPerformance();
-//    tearDown();    
-//    setUp();
-//    testBitPositions();
-//    tearDown();
+    setUp();
+    testSetBitGetBitLoop();
+    tearDown();
+    setUp();
+    testPerformance();
+    tearDown();
+    setUp();
+    testSparseLength();
+    tearDown();
+    setUp();
+    testDeleteExists();
+    tearDown();
+    setUp();
+    testBitCounts();
+    tearDown();
+    setUp();
+    testBitcountPerformance();
+    tearDown();    
+    setUp();
+    testBitPositions();
+    tearDown();
     setUp();
     testBitGetRange();
+    tearDown();
+    setUp();
+    testBitSetRange();
     tearDown();
   }
   
@@ -922,5 +926,187 @@ public class SparseBitmapsTest {
     assertEquals(totalCount, count);
     System.out.println("Time for " + N + " SetBit/BitCount/StrLength =" + (end - start) + "ms");
     
+  }
+  
+  @Ignore
+  @Test
+  public void testBitSetRange() {
+    
+    System.out.println("Test Bit Set Range operations");
+    long offset = 0;
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("Test seed=" + seed);
+    TreeSet<Integer> bits = new TreeSet<Integer>();
+    System.out.println("Loading first sparse ");
+    for (int i = 0; i < N/10 ; i++) {
+      offset = Math.abs(r.nextInt()/10);
+      bits.add((int)offset);
+      SparseBitmaps.SSETBIT(map, key.address, key.length, offset, 1); 
+      if ((i + 1) % 100000 == 0) {
+        System.out.println("BitSetRange " + (i + 1));
+      }
+    }
+    
+    System.out.println("Loaded key1 " + bits.size() + " bits");
+    
+    key2 = getKey();
+    System.out.println("Loading second sparse ");
+    TreeSet<Integer> bits2 = new TreeSet<Integer>();
+
+    for (int i = 0; i < N/10 ; i++) {
+      offset = Math.abs(r.nextInt()/10);
+      bits2.add((int)offset);
+      SparseBitmaps.SSETBIT(map, key2.address, key2.length, offset, 1); 
+      if ((i + 1) % 100000 == 0) {
+        System.out.println("BitSetRange2 " + (i +1));
+      }
+    }
+    System.out.println("Loaded key2 " + bits2.size() + " bits");
+
+    long strlen1 = bits.last() / Utils.BITS_PER_BYTE + 1;
+    assertEquals(strlen1, SparseBitmaps.SSTRLEN(map, key.address, key.length));
+    long strlen2 = bits2.last() / Utils.BITS_PER_BYTE + 1;
+    assertEquals(strlen2, SparseBitmaps.SSTRLEN(map, key2.address, key2.length));  
+    assertEquals(bits.size(), (int) SparseBitmaps.SBITCOUNT(map, key.address, key.length, 
+      Commons.NULL_LONG, Commons.NULL_LONG));
+    assertEquals(bits2.size(), (int) SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, 
+      Commons.NULL_LONG, Commons.NULL_LONG));
+    
+    // Test 1: small overwrites <= BYTES_PER_CHUNK
+    int bufferSize = (int) Math.max(strlen1, strlen2);
+    long buffer = UnsafeAccess.malloc(bufferSize);
+    long buffer2 = UnsafeAccess.malloc(bufferSize);
+    
+    int strlen = (int) Math.min(strlen1, strlen2);
+    // Original bit count for key2 sparse
+    long bc = SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, Commons.NULL_LONG, Commons.NULL_LONG);
+    
+    System.out.println("Running small overwrites sub-test");
+    for (int i = 0; i < 10000; i++) {
+      int len = r.nextInt(SparseBitmaps.BYTES_PER_CHUNK) + 1;
+      int off = r.nextInt((int)strlen - len);
+      long rbc1 = SparseBitmaps.SBITCOUNT(map, key.address, key.length, off, off + len - 1);
+      long rbc2 = SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, off, off + len - 1);
+      // Clear first len bytes of buffer
+      UnsafeAccess.setMemory(buffer,  len,  (byte) 0);
+      
+      int rangeSize = (int) SparseBitmaps.SGETRANGE(map, key.address, key.length, 
+        off, off + len - 1, buffer, bufferSize);  
+      long size = SparseBitmaps.SSETRANGE(map, key2.address, key2.length, off, buffer, rangeSize);
+      assertEquals(strlen2, size);
+      // Clear first len bytes of buffer
+      UnsafeAccess.setMemory(buffer2,  len,  (byte) 0);
+      SparseBitmaps.SGETRANGE(map, key.address, key.length, 
+        off, off + len - 1, buffer2, bufferSize); 
+      
+      assertTrue(Utils.compareTo(buffer, len, buffer2, len) == 0);
+      
+      long newbc = SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, Commons.NULL_LONG, Commons.NULL_LONG);
+      assertEquals(bc + rbc1 - rbc2, newbc);
+      bc = newbc;
+      if ((i + 1) % 1000 == 0) {
+        System.out.println("small "+ (i + 1));
+      }
+    }
+    // Test 2: running larger overwrites
+    // bc contains valid bit number
+    System.out.println("Running larger overwrites sub-test");
+
+    for (int i = 0; i < 10000; i++) {
+      int len = r.nextInt(SparseBitmaps.BYTES_PER_CHUNK * 100) + 1;
+      int off = r.nextInt((int)strlen - len);
+      long rbc1 = SparseBitmaps.SBITCOUNT(map, key.address, key.length, off, off + len - 1);
+      long rbc2 = SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, off, off + len - 1);
+      // Clear first len bytes of buffer
+      UnsafeAccess.setMemory(buffer,  len,  (byte) 0);     
+      int rangeSize = (int) SparseBitmaps.SGETRANGE(map, key.address, key.length, 
+        off, off + len - 1, buffer, bufferSize);  
+      long size = SparseBitmaps.SSETRANGE(map, key2.address, key2.length, off, buffer, rangeSize);
+      assertEquals(strlen2, size);
+      // Clear first len bytes of buffer
+      UnsafeAccess.setMemory(buffer2,  len,  (byte) 0);
+      SparseBitmaps.SGETRANGE(map, key.address, key.length, 
+        off, off + len - 1, buffer2, bufferSize); 
+      
+      assertTrue(Utils.compareTo(buffer, len, buffer2, len) == 0);
+      long newbc = SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, Commons.NULL_LONG, Commons.NULL_LONG);
+      assertEquals(bc + rbc1 - rbc2, newbc);
+      bc = newbc;
+      if ((i + 1) % 1000 == 0) {
+        System.out.println("large "+ (i + 1));
+      }
+    }
+    
+    // Test 3: running larger overwrites out of key2 sparse range
+    // bc contains valid bit number
+    System.out.println("Running larger overwrites out of range (but intersects) sub-test");
+        
+    for (int i = 0; i < 10000; i++) {
+      int len = r.nextInt(SparseBitmaps.BYTES_PER_CHUNK * 100) + 1;
+      int off = r.nextInt((int)strlen - len);
+      long off2 = Math.abs(r.nextLong()) % (long)(strlen2);
+      long before = SparseBitmaps.SSTRLEN(map, key2.address, key2.length);
+      long rbc1 = SparseBitmaps.SBITCOUNT(map, key.address, key.length, off, off + len - 1);
+      long rbc2 = SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, off2, off2 + len - 1);
+      // Clear first len bytes of buffer
+      UnsafeAccess.setMemory(buffer, len, (byte) 0);
+      
+      int rangeSize = (int) SparseBitmaps.SGETRANGE(map, key.address, key.length, 
+        off, off + len - 1, buffer, bufferSize);  
+      assertEquals(len, rangeSize);
+      long size = SparseBitmaps.SSETRANGE(map, key2.address, key2.length, off2, buffer, rangeSize);
+      // Clear first len bytes of buffer2
+      UnsafeAccess.setMemory(buffer2, len, (byte) 0);
+      
+      long rangeSize2 = SparseBitmaps.SGETRANGE(map, key2.address, key2.length, off2, off2 + rangeSize - 1, buffer2, bufferSize);
+      if (rangeSize2 < rangeSize) {
+        // Requested range can be smaller than original b/c of a trailing zeros
+        // Clear last rangeSize - size2 bytes in buffer2 
+        UnsafeAccess.setMemory(buffer2 + rangeSize2, rangeSize - rangeSize2, (byte) 0);
+        assertEquals(size, off2 + rangeSize2);
+      } else {
+        assertEquals(rangeSize, (int)rangeSize2);
+      }
+      // Compare two ranges read after write
+      int res = Utils.compareTo(buffer, rangeSize, buffer2, rangeSize);
+      if (res != 0) {
+        System.err.println(i);
+        System.err.println("strlen1=" + strlen1);
+        System.err.println("strlen2=" + strlen2);
+        System.err.println("    off=" + off);
+        System.err.println("   off2=" + off2);
+        System.err.println("    len=" + len);
+        System.err.println(" before=" + before);
+        System.err.println("  after=" + size);
+      }
+      assertTrue(res == 0);
+      long newbc = SparseBitmaps.SBITCOUNT(map, key2.address, key2.length, Commons.NULL_LONG, Commons.NULL_LONG);
+      if (newbc != bc + rbc1 - rbc2) {
+        System.err.println(i);
+      }
+      assertEquals(bc + rbc1 - rbc2, newbc);
+      bc = newbc;
+      strlen2 = size;
+      if ((i + 1) % 1000 == 0) {
+        System.out.println("large out "+ (i + 1));
+      }
+    } 
+    
+    UnsafeAccess.free(buffer);
+    UnsafeAccess.free(buffer2);
+    
+    SparseBitmaps.DELETE(map, key.address, key.length);
+    assertFalse(SparseBitmaps.EXISTS(map, key.address, key.length));
+    SparseBitmaps.DELETE(map, key2.address, key2.length);
+    assertFalse(SparseBitmaps.EXISTS(map, key2.address, key2.length));
+    assertEquals(0, (int) BigSortedMap.countRecords(map));
+  }
+  
+  public static void main(String[] args) {
+    SparseBitmapsTest test = new SparseBitmapsTest();
+    test.runAllNoCompression();
+    test.runAllCompressionLZ4();
   }
 }

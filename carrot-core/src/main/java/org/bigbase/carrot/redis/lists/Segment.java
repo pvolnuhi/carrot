@@ -896,7 +896,7 @@ public final class Segment {
   
   /**
    * Remove all occurrences of a given element 
-   * @param ptr element pointer
+   * @param chunkPtr element pointer
    * @param size element size
    * @return number of elements removed
    */

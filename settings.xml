@@ -68,7 +68,7 @@
                 </os>
             </activation>
             <properties>
-                <JAVA_INCLUDE>-I/Library/Java/JavaVirtualMachines/jdk1.8.0_251.jdk/Contents/Home/include</JAVA_INCLUDE>
+                <JAVA_INCLUDE>-I/Library/Java/JavaVirtualMachines/jdk1.8.0_291.jdk/Contents/Home/include</JAVA_INCLUDE>
                 <jemalloc.include>include_mac</jemalloc.include>
                 <lib.packaging>dylib</lib.packaging>
                 <lib.path.plaftorm.suffix>Mac/x86_64</lib.path.plaftorm.suffix>

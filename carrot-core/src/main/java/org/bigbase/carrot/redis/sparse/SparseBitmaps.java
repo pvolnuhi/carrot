@@ -173,6 +173,24 @@ public class SparseBitmaps {
   }
   
   /**
+   * Decompress chunk into provided buffer
+   * @param chunkAddress chunk address
+   * @param compressedSize compressed size
+   * @param buffer buffer to decompress to - buffer size is BUFFER_CAPACITY
+   * @return address of a buffer
+   */
+  static long decompress(long chunkAddress, int compressedSize, long buffer) {
+    if (!isCompressed(chunkAddress)) {
+      return chunkAddress;
+    }
+    codec.decompress(chunkAddress + HEADER_SIZE, compressedSize, 
+      buffer + HEADER_SIZE, BUFFER_CAPACITY - HEADER_SIZE);
+    UnsafeAccess.putShort(buffer, getBitCount(chunkAddress));
+    return buffer;
+  }
+  
+  
+  /**
    * Compress chunk into provided buffer
    * @param chunkAddress chunk address
    * @param bitCount bits count
@@ -555,20 +573,20 @@ public class SparseBitmaps {
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
-   * @param offset offset of the chunk
+   * @param offset offset of the chunk (in bytes)
    * @param chunkPtr chunk data address
    * @return true on success, false - otherwise
    */
   public static boolean setChunk(BigSortedMap map, long keyPtr, int keySize, long offset,
-      long chunkPtr, boolean before) {
-    int kSize = buildKey(keyPtr, keySize, offset);
+      long chunkPtr, int chunkLength) {
+    int kSize = buildKey(keyPtr, keySize, offset * Utils.BITS_PER_BYTE);
     SparseSetChunk setchunk = sparseSetchunk.get();
     setchunk.reset();
     setchunk.setKeyAddress(keyArena.get());
     setchunk.setKeySize(kSize);
     setchunk.setChunkAddress(chunkPtr);
-    setchunk.setBefore(before);
-    setchunk.setOffset((int)(offset - (offset/BYTES_PER_CHUNK) * BYTES_PER_CHUNK));
+    setchunk.setOffset(offset);
+    setchunk.setChunkLength(chunkLength);
     return map.execute(setchunk);
   }
   
@@ -984,43 +1002,55 @@ public class SparseBitmaps {
    */
   
   public static long SSETRANGE(BigSortedMap map, long keyPtr, int keySize, long offset,
-      long valuePtr, long valueSize) {
+      long valuePtr, int valueSize) {
+    
     Key kk = getKey(keyPtr, keySize);
-
     try {
       KeysLocker.writeLock(kk);
-      int zeroPrefixSize = (int)(offset - (offset / BYTES_PER_CHUNK) * 
-          BYTES_PER_CHUNK);
-      int zeroSuffixSize = (int)((BYTES_PER_CHUNK + ((offset + valueSize) / BYTES_PER_CHUNK) * 
-          BYTES_PER_CHUNK) - (offset + valueSize));
-      
-      // set first chunk
+      int prefixSize = (int) (offset - offset / BYTES_PER_CHUNK * BYTES_PER_CHUNK);
+      int suffixSize =
+          (int) ((BYTES_PER_CHUNK + ((offset + valueSize) / BYTES_PER_CHUNK) * BYTES_PER_CHUNK)
+              - (offset + valueSize));
+
+      // Process first chunk
       long ptr = buffer.get();
-      UnsafeAccess.setMemory(ptr, zeroPrefixSize, (byte)0);
-      int toCopy;
-     
-      toCopy = Math.min((int)valueSize, BYTES_PER_CHUNK - zeroPrefixSize);
-
-      UnsafeAccess.copy(valuePtr, ptr + zeroPrefixSize, toCopy);
+      // Clear beginning of a chunk
+      //FIXME: no need to clear?
+      UnsafeAccess.setMemory(ptr + HEADER_SIZE, prefixSize, (byte) 0);
+      // Copy data 
+      int toCopy = Math.min((int) valueSize, BYTES_PER_CHUNK - prefixSize);
+      UnsafeAccess.copy(valuePtr, ptr + HEADER_SIZE + prefixSize, toCopy);
       
+      long regionStartOffset = offset * Utils.BITS_PER_BYTE / BYTES_PER_CHUNK * BYTES_PER_CHUNK;
+      long regiontEndOffset =
+          (offset + valueSize) * Utils.BITS_PER_BYTE / BYTES_PER_CHUNK * BYTES_PER_CHUNK;
+
+      if (regionStartOffset == regiontEndOffset) {
+        // Inside a single chunk - clear end of a first chunk
+        //FIXME: no need to clear
+        UnsafeAccess.setMemory(ptr + HEADER_SIZE + prefixSize + valueSize, suffixSize, (byte) 0);
+      }
       // Overwrite first chunk
-      setChunk(map, keyPtr, keySize, offset * Utils.BITS_PER_BYTE, ptr, true);
-
+      setChunk(map, keyPtr, keySize, offset, ptr, toCopy);
+      // Advance by one chunk (segment)
       long off = (offset / BYTES_PER_CHUNK) * BYTES_PER_CHUNK + BYTES_PER_CHUNK;
-
-      while(off <= offset + valueSize - BYTES_PER_CHUNK) {
-        setChunk(map, keyPtr, keySize, off * Utils.BITS_PER_BYTE, valuePtr + (off - offset), true);
+      while (off <= offset + valueSize - BYTES_PER_CHUNK) {
+        // FIXME: double copy
+        UnsafeAccess.copy(valuePtr + (off - offset), ptr + HEADER_SIZE, BYTES_PER_CHUNK);
+        // Overwrites existing chunk or creates new one 
+        setChunk(map, keyPtr, keySize, off, ptr, BYTES_PER_CHUNK);
         off += BYTES_PER_CHUNK;
       }
-      // Set last chunk
-      ptr = buffer.get();
-      UnsafeAccess.setMemory(ptr + zeroSuffixSize, BYTES_PER_CHUNK - zeroSuffixSize, (byte)0);
-      UnsafeAccess.copy(valuePtr + valueSize - zeroSuffixSize, ptr, zeroSuffixSize);
-      off = ((offset + valueSize)/ BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
-      setChunk(map, keyPtr, keySize, off * Utils.BITS_PER_BYTE, ptr, false);
-      
+      if (off < offset + valueSize) {
+        // Set last chunk
+        // Clear the end
+        UnsafeAccess.setMemory(ptr + CHUNK_SIZE - suffixSize, suffixSize, (byte) 0);
+        UnsafeAccess.copy(valuePtr + valueSize - (BYTES_PER_CHUNK  - suffixSize), 
+          ptr + HEADER_SIZE, BYTES_PER_CHUNK - suffixSize);
+        off = ((offset + valueSize) / BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
+        setChunk(map, keyPtr, keySize, off, ptr, BYTES_PER_CHUNK - suffixSize);
+      }
       long strlen = SSTRLEN(map, keyPtr, keySize);
-
       return strlen;
     } finally {
       KeysLocker.writeUnlock(kk);

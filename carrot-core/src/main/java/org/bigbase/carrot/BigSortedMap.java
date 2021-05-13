@@ -601,7 +601,7 @@ public class BigSortedMap {
               b.invalidate();
             }
           } else {
-            System.err.println("PANIC! ");
+            System.err.println("PANIC! Unexpected result of a delete operation");
             Thread.dumpStack();
             System.exit(-1);
           }
