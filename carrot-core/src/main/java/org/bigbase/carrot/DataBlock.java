@@ -24,12 +24,10 @@ import org.bigbase.carrot.util.Utils;
  * We store K-V externally if sizeOf(Key) + sizeOf(value) + RECORD_TOTAL_OVERHEAD > 0.5 * MAX_BLOCK_SIZE
  * 
  * <EXPIRATION> (8 bytes time in ms: 0 - never expires) 
- * <EVICTION> (8 bytes - used by eviction algorithm : LRU, LFU etc) 
+ * <EVICTION> (8 bytes - used by eviction algorithm : LRU, LFU etc) DEPRECATED
  * <KEY> 
  * <SEQUENCEID> - 8 bytes - DEPRECATED
  * <TYPE/DATA_TYPE> - 1 byte: 
- * 7 bit  - data type (up to 128)
- * last bit - 0 - DELETE, 1 - PUT (DELETE comes first) 
  * <VALUE> 
  * For ordering we use combination of <KEY><SEQUENCEID><TYPE> (DEPRECATED) - <KEY>
  * TODO: 
@@ -50,10 +48,10 @@ public final class DataBlock  {
   public final static int KEY_SIZE_LENGTH = 2;
   public final static int VALUE_SIZE_LENGTH = 2;
   public final static int KV_SIZE_LENGTH = KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
-  //public final static int EXPIRE_SIZE_LENGTH = 8;
-  public final static int EVICTION_SIZE_LENGTH = 8;
+  public final static int EXPIRE_SIZE_LENGTH = 8;
+  //public final static int EVICTION_SIZE_LENGTH = 8;
   public final static int RECORD_PREFIX_LENGTH =
-      KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH /*+ EXPIRE_SIZE_LENGTH */+ EVICTION_SIZE_LENGTH;
+      KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH + EXPIRE_SIZE_LENGTH /*+ EVICTION_SIZE_LENGTH*/;
   public final static long NOT_FOUND = -1L;
   public final static int TYPE_SIZE = 1;
  // public final static int SEQUENCEID_SIZE = 8;
@@ -62,7 +60,7 @@ public final class DataBlock  {
   // Overhead for K-V = 13 bytes
   public final static int RECORD_TOTAL_OVERHEAD =
       RECORD_PREFIX_LENGTH + TYPE_SIZE /*+ SEQUENCEID_SIZE*/;
-  public final static byte DELETED_MASK = (byte) (1 << 7);
+  //public final static byte DELETED_MASK = (byte) (1 << 7);
   public final static double MIN_COMPACT_RATIO = 0.25d;
 
   public final static String MAX_BLOCK_SIZE_KEY = "max.block.size";
@@ -1114,7 +1112,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not update eviction, because we overwrite existing record
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1164,7 +1162,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not reset eviction field
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1512,7 +1510,7 @@ public final class DataBlock  {
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1541,7 +1539,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not update eviction, because we overwrite existing record
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1598,7 +1596,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not reset eviction field
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1636,7 +1634,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not reset eviction field
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1665,20 +1663,20 @@ public final class DataBlock  {
    * @return
    */
   public static long getRecordExpire(long recordAddress) {
-    return 0;
-    //return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH);
+    return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH);
   }
 
   private static void setRecordExpire(long recordAddress, long time) {
-    //UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH, time);
+    UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH, time);
   }
 
   private static long getRecordEviction(long recordAddress) {
-    return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH /*+ EXPIRE_SIZE_LENGTH*/);
+    return 0;
+    //return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH /*+ EXPIRE_SIZE_LENGTH*/);
   }
 
   private static void setRecordEviction(long recordAddress, long value) {
-    UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH /*+ EXPIRE_SIZE_LENGTH*/, value);
+    //UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH /*+ EXPIRE_SIZE_LENGTH*/, value);
   }
 
   /**
@@ -1842,7 +1840,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not update eviction, because we overwrite existing record
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1893,7 +1891,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not reset eviction field
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -2023,7 +2021,7 @@ public final class DataBlock  {
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -2052,7 +2050,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not update eviction, because we overwrite existing record
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -2108,7 +2106,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not reset eviction field
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -2148,7 +2146,7 @@ public final class DataBlock  {
         setRecordSeqId(addr, version);
         // Do not reset eviction field
         // setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
