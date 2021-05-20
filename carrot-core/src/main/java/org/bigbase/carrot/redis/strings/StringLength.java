@@ -15,7 +15,7 @@ import org.bigbase.carrot.util.Utils;
 public class StringLength extends Operation {
 
 
-  int strlen;
+  int strlen = 0;
   
   @Override
   public boolean execute() {
@@ -24,12 +24,13 @@ public class StringLength extends Operation {
       // Yes we return true
       return true;
     }
-    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-      // Key not found
-      return true;
-    }
+//TODO: remove this code after testing    
+//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
+//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
+//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
+//      // Key not found
+//      return true;
+//    }
     
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     this.strlen = valueSize;  

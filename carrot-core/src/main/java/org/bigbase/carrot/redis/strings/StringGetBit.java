@@ -27,28 +27,29 @@ public class StringGetBit extends Operation {
       // Yes we return true
       return true;
     }
-    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-      // Key not found
-      return true;
-    }
+ 
+// TODO - remove this code aftre testing    
+//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
+//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
+//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
+//      // Key not found
+//      return true;
+//    }
     
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
     int valueSize = DataBlock.valueLength(foundRecordAddress);
-    if (offset < 0 || offset > ((long)valueSize) * 8 - 1) {
+    if (offset < 0 || offset > ((long)valueSize) * Utils.BITS_PER_BYTE - 1) {
       return true;
     }
-
     this.bit = getbit(valuePtr, valueSize);
     return true;
   }
   
   private int getbit(long valuePtr, int valueSize) {
-    int n = (int)(this.offset >>>3);
-    int rem = (int)(offset - ((long)n) * 8);
+    int n = (int)(this.offset / Utils.BITS_PER_BYTE);
+    int rem = (int)(offset - ((long) n) * Utils.BITS_PER_BYTE);
     byte b = UnsafeAccess.toByte(valuePtr + n);
-    return b >>> (7 - rem);
+    return (b >>> (7 - rem)) & 1;
   }
 
   @Override

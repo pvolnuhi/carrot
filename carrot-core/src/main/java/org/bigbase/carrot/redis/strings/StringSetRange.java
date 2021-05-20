@@ -21,18 +21,20 @@ public class StringSetRange extends Operation {
 
   private long valuePtr;
   private int valueSize;
-  private int offset;
+  private long offset;
   private int length;
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress < 0) {
-      return false;
-    }
-    long kPtr = DataBlock.keyAddress(foundRecordAddress);
-    int kSize = DataBlock.keyLength(foundRecordAddress);
-    // compare keys
-    boolean keyExists = Utils.compareTo(keyAddress, keySize, kPtr, kSize) ==0;
+    boolean keyExists = foundRecordAddress > 0;
+//TODO remove after testing
+//    if (foundRecordAddress < 0) {
+//      return false;
+//    }
+//    long kPtr = DataBlock.keyAddress(foundRecordAddress);
+//    int kSize = DataBlock.keyLength(foundRecordAddress);
+//    // compare keys
+//    boolean keyExists = Utils.compareTo(keyAddress, keySize, kPtr, kSize) ==0;
     long newPtr = 0;
     boolean reuseValue = false;
     if (keyExists) {
@@ -45,15 +47,16 @@ public class StringSetRange extends Operation {
         this.updatesCount = 0;
         return true;
       } else {
-        this.length = offset + valueSize;
+        this.length = (int) (offset + valueSize);
         // Allocate new value
-        newPtr = UnsafeAccess.reallocZeroed(vPtr, vSize, this.length);
+        newPtr = UnsafeAccess.mallocZeroed(this.length);
+        UnsafeAccess.copy(vPtr, newPtr, vSize);
         UnsafeAccess.copy(valuePtr, newPtr + offset, valueSize);
         reuseValue = true;
       }
     } else {
       // key does not exists;
-      this.length = offset + valueSize;
+      this.length = (int)(offset + valueSize);
       // Allocate new value
       newPtr = UnsafeAccess.mallocZeroed(this.length);
       UnsafeAccess.copy(valuePtr, newPtr + offset, valueSize);
@@ -80,7 +83,7 @@ public class StringSetRange extends Operation {
     this.valueSize = size;
   }
   
-  public void setOffset(int offset) {
+  public void setOffset(long offset) {
     this.offset = offset;
   }
   

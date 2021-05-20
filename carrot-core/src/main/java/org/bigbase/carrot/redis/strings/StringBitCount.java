@@ -35,6 +35,7 @@ public class StringBitCount extends Operation {
     }
     long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
     int foundKeySize = DataBlock.keyLength(foundRecordAddress);
+    //FIXME: do we need this code?
     if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
       // Key not found
       return true;
@@ -44,22 +45,36 @@ public class StringBitCount extends Operation {
     int valueSize =DataBlock.valueLength(foundRecordAddress);
     
     if (startEndSet) {
+      if (start == Commons.NULL_LONG) {
+        start = 0;
+      }
       // sanity checks
       if (start < 0) {
         start = valueSize + start;
       }
-      if (end == Commons.NULL_LONG) {
-        end = valueSize -1;
+      // still < 0?
+      if (start < 0) {
+        start = 0;
+      } else if (start >= valueSize) {
+        return true;
       }
+      
+      if (end == Commons.NULL_LONG) {
+        end = valueSize - 1;
+      }
+      
       if (end < 0) {
         end = valueSize + end;
       }
-      if (start < 0 || start > valueSize -1) {
+      // still < 0?
+      if (end < 0) {
         return true;
       }
-      if (end < 0 || end > valueSize -1) {
-        return true;
+      
+      if (end >= valueSize) {
+        end = valueSize -1 ;
       }
+      
       if (start > end) {
         // 0
         return true;
@@ -68,7 +83,7 @@ public class StringBitCount extends Operation {
       start = 0;
       end = valueSize -1;
     }
-    this.count = Utils.bitcount(valuePtr + start, (int)(end -start + 1));
+    this.count = Utils.bitcount(valuePtr + start, (int)(end - start + 1));
     return true;
   }
   

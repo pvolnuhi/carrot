@@ -61,35 +61,52 @@ public class StringBitPos extends Operation {
       // Yes we return true
       return true;
     }
-    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-      // Key not found
-      return true;
-    }
+//TODO: remove after testing    
+//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
+//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
+//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
+//      // Key not found
+//      return true;
+//    }
    
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
-    int valueSize =DataBlock.valueLength(foundRecordAddress);
+    int valueSize = DataBlock.valueLength(foundRecordAddress);
+    
+    if (start == Commons.NULL_LONG) {
+      start = 0;
+    }
+    if (end == Commons.NULL_LONG) {
+      end = valueSize -1;
+    }
     
     if (startEndSet) {
+ 
       // sanity checks
       if (start < 0) {
         start = valueSize + start;
       }
-      
-      if (end == Commons.NULL_LONG) {
-        end = valueSize -1;
+
+      //TODO: is it correct?
+      if (start < 0) {
+        start = 0;
       }
       
       if (end < 0) {
         end = valueSize + end;
       }
-      if (start < 0 || start > valueSize -1) {
+      
+      if (end < 0) {
         return true;
       }
-      if (end < 0 || end > valueSize -1) {
+      
+      if (start > valueSize - 1) {
         return true;
       }
+      
+      if (end > valueSize - 1) {
+        end = valueSize - 1;
+      }
+      
       if (start > end) {
         // 0
         return true;
@@ -98,10 +115,10 @@ public class StringBitPos extends Operation {
       start = 0;
       end = valueSize -1;
     }
-    this.position = bit == 1? Utils.bitposSet(valuePtr + start, (int)(end -start) +1): 
+    this.position = bit == 1? Utils.bitposSet(valuePtr + start, (int)(end - start) + 1): 
       Utils.bitposUnset(valuePtr + start, (int)(end - start) +1);
     if (this.position == -1 && bit == 0 && !startEndSet) {
-      this.position = valueSize * Utils.SIZEOF_BYTE;
+      this.position = valueSize * Utils.BITS_PER_BYTE;
     }
     return true;
   }
@@ -128,7 +145,9 @@ public class StringBitPos extends Operation {
   public void setStartEnd (long start, long end) {
     this.start = start;
     this.end = end;
-    this.startEndSet = true;
+    if (start != Commons.NULL_LONG || end != Commons.NULL_LONG) {
+      this.startEndSet = true;
+    }
   }
   
   public long getPosition() {

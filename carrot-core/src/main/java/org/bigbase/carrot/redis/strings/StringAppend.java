@@ -53,7 +53,8 @@ public class StringAppend extends Operation {
   };
   
   public StringAppend() {
-    setFloorKey(true);
+    // WTF is it for?
+    //setFloorKey(true);
   }
   
   @Override
@@ -61,7 +62,7 @@ public class StringAppend extends Operation {
     super.reset();
     appendValuePtr = 0;
     appendValueSize = 0;
-    sizeAfterAppend=0;
+    sizeAfterAppend = 0;
   }
   /**
    * Sets append value address and size
@@ -98,15 +99,8 @@ public class StringAppend extends Operation {
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress <=0) {
-      return false;
-    }
-    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    
-    boolean keyExists = Utils.compareTo(keyAddress, keySize, foundKeyPtr, foundKeySize) == 0;
     int vsize = appendValueSize;
-    if (keyExists) {
+    if (foundRecordAddress > 0) {
       vsize = DataBlock.valueLength(foundRecordAddress);
       checkBuffer(vsize + appendValueSize);
       long ptr = DataBlock.valueAddress(foundRecordAddress);
@@ -124,7 +118,7 @@ public class StringAppend extends Operation {
       keys[0] = keyAddress; // original key
       keySizes[0] = keySize;
       values[0] = appendValuePtr;
-      valueSizes[0] = vsize;
+      valueSizes[0] = appendValueSize;
     }
     this.sizeAfterAppend = vsize;
     // Set update count to 1

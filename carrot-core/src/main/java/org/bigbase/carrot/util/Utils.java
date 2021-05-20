@@ -1393,6 +1393,18 @@ public class Utils {
     return true; 
   }
   
+  /**
+   * Fills memory area with random data
+   * @param ptr pointer 
+   * @param size size of a memory area
+   */
+  public static void fillRandom(long ptr, int size) {
+    byte[] arr = new byte[size];
+    Random r = new Random();
+    r.nextBytes(arr);
+    UnsafeAccess.copy(arr, size, ptr, size);
+  }
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;

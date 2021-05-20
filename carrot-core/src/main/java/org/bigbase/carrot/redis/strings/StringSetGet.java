@@ -3,7 +3,7 @@ package org.bigbase.carrot.redis.strings;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.redis.MutationOptions;
-import org.bigbase.carrot.util.Utils;
+import org.bigbase.carrot.util.UnsafeAccess;
 
 /**
  * String SET operation.
@@ -13,18 +13,16 @@ import org.bigbase.carrot.util.Utils;
  * @author Vladimir Rodionov
  *
  */
-public class StringSet extends Operation {
+public class StringSetGet extends Operation {
 
 
   private long valuePtr;
   private int valueSize;
   private boolean keepTTL = false;
   private MutationOptions opts;
-  
-  public StringSet() {
-    //TODO remove after testing
-    //setFloorKey(true);
-  }
+  private long bufferPtr = 0;
+  private int bufferSize = 0;
+  private int oldValueSize = -1;
   
   @Override
   public boolean execute() {
@@ -33,8 +31,15 @@ public class StringSet extends Operation {
         !keyExists && opts == MutationOptions.XX) {
       return false;
     }
-    if (keyExists && keepTTL) {
-      this.expire = DataBlock.getRecordExpire(foundRecordAddress);
+    if (keyExists) {
+      this.oldValueSize = DataBlock.valueLength(foundRecordAddress);
+      if (keepTTL) {
+        this.expire = DataBlock.getRecordExpire(foundRecordAddress);
+      }
+    }
+    if (keyExists && this.oldValueSize < this.bufferSize) {
+      long vPtr = DataBlock.valueAddress(foundRecordAddress);
+      UnsafeAccess.copy(vPtr, this.bufferPtr, this.oldValueSize);
     }
     // now update
     this.updatesCount = 1;
@@ -45,6 +50,24 @@ public class StringSet extends Operation {
     return true;
   }
   
+  
+  /**
+   * Set buffer address for return value
+   * @param bufPtr buffer address
+   * @param bufSize buffer size
+   */
+  public void setBuffer(long bufPtr, int bufSize) {
+    this.bufferPtr = bufPtr;
+    this.bufferSize = bufSize;
+  }
+  
+  /**
+   * Returns old value size
+   * @return
+   */
+  public int getOldValueSize() {
+    return oldValueSize;
+  }
   /**
    * Set keep TimeToLive
    * @param b value
@@ -78,5 +101,8 @@ public class StringSet extends Operation {
     this.valueSize = 0;
     this.keepTTL = false;
     this.opts = null;
+    this.bufferPtr = 0;
+    this.bufferSize = 0;
+    this.oldValueSize = -1;
   }
 }

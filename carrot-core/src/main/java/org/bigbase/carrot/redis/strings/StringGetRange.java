@@ -2,6 +2,7 @@ package org.bigbase.carrot.redis.strings;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -18,9 +19,9 @@ import org.bigbase.carrot.util.Utils;
  */
 public class StringGetRange extends Operation {
 
-  int from;
-  int to;
-  int rangeSize = -1;
+  long from;
+  long to;
+  long rangeSize = -1;
   long bufferPtr;
   int bufferSize;
   
@@ -31,17 +32,25 @@ public class StringGetRange extends Operation {
       // Yes we return true
       return false;
     }
-    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-      // Key not found
-      return false;
-    }
+//TODO: remove this code after testing    
+//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
+//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
+//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
+//      // Key not found
+//      return false;
+//    }
    
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
-    int valueSize =DataBlock.valueLength(foundRecordAddress);
+    int valueSize = DataBlock.valueLength(foundRecordAddress);
+    this.rangeSize = 0; 
     
-  
+    if (from == Commons.NULL_LONG) {
+      from = 0;
+    }
+    
+    if (to == Commons.NULL_LONG) {
+      to = valueSize - 1;
+    }
     // sanity checks
     if (from < 0) {
       from = valueSize + from;
@@ -52,28 +61,24 @@ public class StringGetRange extends Operation {
     if (from < 0){
       from = 0;
     }
-    if (from > valueSize -1) {
-      from = valueSize -1;
-    }
-    
-    if (to < 0) {
-      to = 0;
-    }
-    
-    if (to > valueSize -1) {
-      to = valueSize -1;
-    }
-    if (from > to) {
-      // 0
-      rangeSize = 0;
+    if (from > valueSize - 1) {
+      // out of range
       return false;
     }
-    
-    this.rangeSize = to - from +1;
+    if (to < 0) {
+      return false;
+    }
+    if (to > valueSize - 1) {
+      to = valueSize - 1;
+    }
+    if (from > to) {
+      return false;
+    }
+    this.rangeSize = to - from + 1;
     if (this.rangeSize > this.bufferSize) {
       return false;
     }
-    UnsafeAccess.copy(valuePtr, bufferPtr, this.rangeSize);
+    UnsafeAccess.copy(valuePtr + from, bufferPtr, this.rangeSize);
     return true;
   }
   
@@ -82,7 +87,7 @@ public class StringGetRange extends Operation {
     super.reset();
     this.from = 0;
     this.to = 0;
-    this.rangeSize = 0;
+    this.rangeSize = -1;
     this.bufferPtr = 0;
     this.bufferSize = 0;
   }
@@ -92,7 +97,7 @@ public class StringGetRange extends Operation {
    * @param from from offset inclusive
    * @param to offset inclusive
    */
-  public void setFromTo (int from, int to) {
+  public void setFromTo (long from, long to) {
     this.from = from;
     this.to = to;
   }
@@ -110,7 +115,7 @@ public class StringGetRange extends Operation {
    * @return length
    */
   public int getRangeLength() {
-    return (int)rangeSize;
+    return (int) rangeSize;
   }
 
 }

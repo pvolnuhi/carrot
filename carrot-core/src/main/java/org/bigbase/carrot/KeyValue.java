@@ -48,7 +48,7 @@ public class KeyValue implements Comparable<KeyValue>{
 
   @Override
   public int hashCode() {
-    return Utils.murmurHash(keyPtr, keySize, 0);
+    return Math.abs(Utils.murmurHash(keyPtr, keySize, 0));
   }
   
   public void free() {

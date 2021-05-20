@@ -6,6 +6,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
+import org.bigbase.carrot.util.Utils;
 
 /**
  * THis helper class performs safe group Key/KeyValue locking/unlocking
@@ -99,7 +100,7 @@ public class KeysLocker {
    * @param key
    */
   public static void writeUnlock(KeyValue key) {
-    int hash = key.hashCode();
+    int hash = key.hashCode(); 
     int index = hash % locks.length;
     locks[index].writeLock().unlock();
   }

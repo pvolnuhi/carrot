@@ -1093,7 +1093,7 @@ public final class DataBlock  {
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
@@ -1666,7 +1666,12 @@ public final class DataBlock  {
     return UnsafeAccess.toLong(recordAddress + KV_SIZE_LENGTH);
   }
 
-  private static void setRecordExpire(long recordAddress, long time) {
+  /**
+   * Sets record expiration time
+   * @param recordAddress address of a K-V record
+   * @param time new expiration time
+   */
+  public static void setRecordExpire(long recordAddress, long time) {
     UnsafeAccess.putLong(recordAddress + KV_SIZE_LENGTH, time);
   }
 
@@ -1821,7 +1826,7 @@ public final class DataBlock  {
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         setRecordEviction(addr, 0L);
-        if (expire > 0) {
+        if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
