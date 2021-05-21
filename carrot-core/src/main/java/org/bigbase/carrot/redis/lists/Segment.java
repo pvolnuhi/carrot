@@ -425,7 +425,7 @@ public final class Segment {
   }
   /**
    * Get element by index (0- based)
-   * @param index index of element
+   * @param index index of an element
    * @param buffer buffer for the result
    * @param bufferSize buffer size
    * @return size of the element, or -1

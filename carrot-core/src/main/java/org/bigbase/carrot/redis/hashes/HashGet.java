@@ -17,12 +17,14 @@ public class HashGet extends Operation{
   
   public HashGet() {
     setFloorKey(true);
+    setReadOnly(true);
   }
 
   @Override
   public void reset() {
     super.reset();
     setFloorKey(true);
+    setReadOnly(true);
     bufferPtr = 0;
     bufferSize=0;
     foundValueSize = -1;

@@ -25,6 +25,10 @@ public class StringGetRange extends Operation {
   long bufferPtr;
   int bufferSize;
   
+  public StringGetRange() {
+    setReadOnly(true);
+  }
+  
   @Override
   public boolean execute() {
     this.updatesCount = 0;
@@ -32,13 +36,6 @@ public class StringGetRange extends Operation {
       // Yes we return true
       return false;
     }
-//TODO: remove this code after testing    
-//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-//      // Key not found
-//      return false;
-//    }
    
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
     int valueSize = DataBlock.valueLength(foundRecordAddress);
@@ -90,6 +87,7 @@ public class StringGetRange extends Operation {
     this.rangeSize = -1;
     this.bufferPtr = 0;
     this.bufferSize = 0;
+    setReadOnly(true);
   }
   
   /**

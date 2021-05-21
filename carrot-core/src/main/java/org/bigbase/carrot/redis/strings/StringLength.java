@@ -17,6 +17,10 @@ public class StringLength extends Operation {
 
   int strlen = 0;
   
+  public StringLength() {
+    setReadOnly(true);
+  }
+  
   @Override
   public boolean execute() {
     this.updatesCount = 0;
@@ -24,13 +28,6 @@ public class StringLength extends Operation {
       // Yes we return true
       return true;
     }
-//TODO: remove this code after testing    
-//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-//      // Key not found
-//      return true;
-//    }
     
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     this.strlen = valueSize;  
@@ -42,6 +39,7 @@ public class StringLength extends Operation {
   public void reset() {
     super.reset();
     this.strlen = 0;
+    setReadOnly(true);
   }
   
   /**

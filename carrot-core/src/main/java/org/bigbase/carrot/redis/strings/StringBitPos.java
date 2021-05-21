@@ -54,6 +54,10 @@ public class StringBitPos extends Operation {
   boolean startEndSet = false;
   int bit;
   
+  public StringBitPos() {
+    setReadOnly(true);
+  }
+  
   @Override
   public boolean execute() {
     this.updatesCount = 0;
@@ -61,13 +65,6 @@ public class StringBitPos extends Operation {
       // Yes we return true
       return true;
     }
-//TODO: remove after testing    
-//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-//      // Key not found
-//      return true;
-//    }
    
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
     int valueSize = DataBlock.valueLength(foundRecordAddress);
@@ -131,6 +128,7 @@ public class StringBitPos extends Operation {
     this.position = -1;
     this.startEndSet = false;
     this.bit = 0;
+    setReadOnly(true);
   }
   
   /**

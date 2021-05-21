@@ -13,15 +13,14 @@ import org.bigbase.carrot.util.Utils;
  */
 public class StringGetExpire extends Operation {
 
+  public StringGetExpire() {
+    setReadOnly(true);
+  }
   
   @Override
   public boolean execute() {
 
     if (foundRecordAddress > 0) {
-      long kPtr = DataBlock.keyAddress(foundRecordAddress);
-      int kSize = DataBlock.keyLength(foundRecordAddress);
-      int result = Utils.compareTo(kPtr, kSize, keyAddress, keySize);
-      
       this.expire = DataBlock.getRecordExpire(foundRecordAddress);
     } else {
       // Does not exist
@@ -34,5 +33,6 @@ public class StringGetExpire extends Operation {
   @Override
   public void reset() {
     super.reset();
+    setReadOnly(true);
   }
 }

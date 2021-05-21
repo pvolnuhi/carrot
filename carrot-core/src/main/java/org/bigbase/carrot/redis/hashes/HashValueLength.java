@@ -1,9 +1,7 @@
 package org.bigbase.carrot.redis.hashes;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
 import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
-import static org.bigbase.carrot.redis.Commons.keySize;
 import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
 
 import org.bigbase.carrot.DataBlock;
@@ -16,6 +14,7 @@ public class HashValueLength extends Operation{
   
   public HashValueLength() {
     setFloorKey(true);
+    setReadOnly(true);
   }
 
   @Override
@@ -23,6 +22,7 @@ public class HashValueLength extends Operation{
     super.reset();
     setFloorKey(true);
     foundValueSize = -1;
+    setReadOnly(true);
   }
     
   public int getFoundValueSize() {

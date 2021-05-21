@@ -528,6 +528,8 @@ public class BigSortedMap {
     kvBlock.putForSearch(op.getKeyAddress(), op.getKeySize(), version);
     IndexBlock b = null;
     boolean lowerKey = false;
+    boolean readOnly = op.isReadOnly();
+    
     while (true) {
       try {
         b = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
@@ -537,8 +539,11 @@ public class BigSortedMap {
         }
         boolean firstBlock = b.isFirstIndexBlock();
 
-        //lock(b); // to prevent locking from another thread
-        b.writeLock(); // execute can be both read and write but we do not know in advance
+        if (readOnly) {
+          b.readLock();
+        } else {
+          b.writeLock();
+        }
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
           IndexBlock bbb = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
@@ -610,7 +615,11 @@ public class BigSortedMap {
             return true;
           } else {
             // Currently we support only single DELETE or 1/2 PUTs
-            throw new RuntimeException("Unexpected number of updates with DELETE operation: " + updatesCount);
+            //throw new RuntimeException("Unexpected number of updates with DELETE operation: " + updatesCount);
+            // TODO: logging error
+            System.err.println("Unexpected number of updates with DELETE");
+            Thread.dumpStack();
+            return true;
           }
           
         } else { // PUT
@@ -690,8 +699,13 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          if (readOnly) {
+            b.readUnlock();
+          } else {
+            b.writeUnlock();
+          }
+        }
       }
     }
   }

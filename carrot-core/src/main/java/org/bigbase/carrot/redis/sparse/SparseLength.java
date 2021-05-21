@@ -18,6 +18,7 @@ public class SparseLength extends Operation {
   
   public SparseLength() {
     setFloorKey(true);
+    setReadOnly(true);
   }
   
   @Override
@@ -55,6 +56,7 @@ public class SparseLength extends Operation {
     super.reset();
     this.strlen = 0;
     setFloorKey(true);
+    setReadOnly(true);
   }
   
   /**

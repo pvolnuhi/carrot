@@ -20,18 +20,18 @@ import org.bigbase.carrot.util.Utils;
 public class SetExists extends Operation{
   // TODO: use own keyArena
 
-    
   public SetExists() {
     setFloorKey(true);
+    setReadOnly(true);
   }
   
   @Override
   public void reset() {
     super.reset();
     setFloorKey(true);
+    setReadOnly(true);
   }
     
-  
   @Override
   public boolean execute() {
     if (foundRecordAddress <=0) {

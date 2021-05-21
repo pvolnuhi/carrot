@@ -21,7 +21,7 @@ public class ListsTest {
   long n = 100000;
   
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   
   private Key getKey() {

@@ -20,6 +20,10 @@ public class StringGetBit extends Operation {
   long offset;
   int bit;
   
+  public StringGetBit() {
+    setReadOnly(true);
+  }
+  
   @Override
   public boolean execute() {
     this.updatesCount = 0;
@@ -27,15 +31,7 @@ public class StringGetBit extends Operation {
       // Yes we return true
       return true;
     }
- 
-// TODO - remove this code aftre testing    
-//    long foundKeyPtr = DataBlock.keyAddress(foundRecordAddress);
-//    int foundKeySize = DataBlock.keyLength(foundRecordAddress);
-//    if (Utils.compareTo(foundKeyPtr, foundKeySize, keyAddress, keySize) != 0) {
-//      // Key not found
-//      return true;
-//    }
-    
+     
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
     int valueSize = DataBlock.valueLength(foundRecordAddress);
     if (offset < 0 || offset > ((long)valueSize) * Utils.BITS_PER_BYTE - 1) {
@@ -57,6 +53,7 @@ public class StringGetBit extends Operation {
     super.reset();
     this.bit = 0;
     this.offset = 0;
+    setReadOnly(true);
   }
   
   /**

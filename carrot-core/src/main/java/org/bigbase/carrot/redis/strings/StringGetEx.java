@@ -30,7 +30,7 @@ public class StringGetEx extends Operation {
       }
       long vPtr = DataBlock.valueAddress(foundRecordAddress);
       UnsafeAccess.copy(vPtr, bufferPtr, vLength);
-      // Update expire filed
+      // Update expire field
       DataBlock.setRecordExpire(foundRecordAddress, this.expire);
     } else {
       // Does not exist

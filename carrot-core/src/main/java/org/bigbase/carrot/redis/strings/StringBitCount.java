@@ -26,6 +26,10 @@ public class StringBitCount extends Operation {
   long count;
   boolean startEndSet = false;
   
+  public StringBitCount() {
+    setReadOnly(true);
+  }
+  
   @Override
   public boolean execute() {
     this.updatesCount = 0;
@@ -96,6 +100,7 @@ public class StringBitCount extends Operation {
     this.end = 0;
     this.count = 0;
     this.startEndSet = false;
+    setReadOnly(true);
   }
   
   

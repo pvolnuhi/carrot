@@ -70,41 +70,102 @@ public abstract class Operation {
    */
   protected int updatesCount; // 1 or 2
   
-  protected boolean floorKey = false; // if true, look for largest key which less or equals
+  /*
+   * If true, look for largest key which less or equals
+   */
+  protected boolean floorKey = false; 
   
+  /*
+   * Read - only operation
+   */
+  protected boolean readOnly = false;
+  
+  /*
+   * Constructor
+   */
   public Operation() {
   }
   
+  /**
+   * Sets expire time
+   * @param expire expire time
+   */
   public final void setExpire(long expire) {
     this.expire = expire;
   }
   
+  /**
+   * Gets expire time
+   * @return expire time
+   */
   public final long getExpire() {
     return expire;
   }
   
+  /**
+   * Sets key address to look for
+   * @param address key address
+   */
   public final void setKeyAddress(long address) {
     this.keyAddress = address;
   }
   
+  /**
+   * Gets key address
+   * @return key address
+   */
   public final long getKeyAddress() {
     return keyAddress;
   }
   
+  /**
+   * Sets key size
+   * @param size key size
+   */
   public final void setKeySize (int size) {
     this.keySize = size;
   }
   
+  /**
+   * Gets key size
+   * @return key size
+   */
   public final int getKeySize() {
     return keySize;
   }
   
+  /**
+   * Sets version (not used anymore)
+   * @param version version
+   * @deprecated
+   */
   public final void setVersion(long version) {
     this.version = version;
   }
   
+  /**
+   * Get the vesrion
+   * @return version (deprectaed)
+   * @deprecated
+   */
   public final long getVersion() {
     return version;
+  }
+ 
+  /**
+   * This operation is read-only
+   * @param b
+   */
+  public final void setReadOnly(boolean b) {
+    this.readOnly = b;
+  }
+ 
+  /**
+   * Is operation read-only
+   * @return read only
+   */
+  public boolean isReadOnly() {
+    return this.readOnly;
   }
   
   public void reset() {
@@ -125,12 +186,21 @@ public abstract class Operation {
     this.floorKey = false;
     this.reuseValues[0] = false;
     this.reuseValues[1] = false;
+    this.readOnly = false;
   }
   
+  /**
+   * Sets floor key (look for greatest key which are less or equals to)
+   * @param b
+   */
   public final void setFloorKey(boolean b) {
     this.floorKey = b;
   }
   
+  /**
+   * Is floor key
+   * @return true/false
+   */
   public final boolean isFloorKey() {
     return floorKey;
   }

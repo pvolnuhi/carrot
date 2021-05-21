@@ -10,6 +10,9 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Lists: collections of string elements sorted according to the order of insertion. 
  * They are basically linked lists.
@@ -18,7 +21,9 @@ import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
  */
 public class Lists {
   
-  
+  public static enum Side {
+    LEFT, RIGHT;
+  }
 
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
@@ -60,6 +65,13 @@ public class Lists {
     protected Segment initialValue() {
       return new Segment();
     } 
+  };
+  
+  private static ThreadLocal<ListsLindex> listsLindex = new ThreadLocal<ListsLindex>() {
+    @Override
+    protected ListsLindex initialValue() {
+      return new ListsLindex();
+    }
   };
   
   static long allocMemory(long size) {
@@ -138,6 +150,7 @@ public class Lists {
   }
   
   /**
+   * TODO: verify thread-safe (looks OK)
    * Deletes and frees memory resources
    * @param map sorted map storage
    * @param keyPtr list key pointer
@@ -167,6 +180,111 @@ public class Lists {
       KeysLocker.writeUnlock(key);
     }
   }
+  
+  /**
+   * LMOVE source destination LEFT|RIGHT LEFT|RIGHT
+   *
+   * Available since 6.2.0.
+   * Time complexity: O(1)
+   * Atomically returns and removes the first/last element (head/tail depending on the where
+   * from argument) of the list stored at source, and pushes the element at the first/last element 
+   * (head/tail depending on the whereto argument) of the list stored at destination.
+   * For example: consider source holding the list a,b,c, and destination holding the list x,y,z. 
+   * Executing LMOVE source destination RIGHT LEFT results in source holding a,b and destination 
+   * holding c,x,y,z.
+   * If source does not exist, the value nil is returned and no operation is performed. If source and 
+   * destination are the same, the operation is equivalent to removing the first/last element from 
+   * the list and pushing it as first/last element of the list, so it can be considered as a list 
+   * rotation command (or a no-op if wherefrom is the same as whereto).
+   * This command comes in place of the now deprecated RPOPLPUSH. Doing LMOVE RIGHT LEFT is equivalent.
+   * 
+   * Return value
+   * Bulk string reply: the element being popped and pushed.
+   * 
+   *   
+   * @param map sorted map storage
+   * @param srcKeyPtr source list key address
+   * @param srcKeySize source list key size
+   * @param dstKeyPtr dst key list address
+   * @param dstKeySize dst key list size
+   * @param src source side (LEFT|RIGHT)
+   * @param dst dst side (LEFT|RIGHT)
+   * @param buffer buffer for return value
+   * @param bufferSize buffer size
+   * @return size of a value being moved or -1 
+   */
+    
+   public static long LMOVE (BigSortedMap map, long srcKeyPtr, int srcKeySize, 
+       long dstKeyPtr, int dstKeySize, Side src, Side dst, long buffer, int bufferSize) {
+     
+     //TODO we produce temporary garbage in this method
+     // Looks thread-safe
+     Key srcKey = new Key(srcKeyPtr, srcKeySize);
+     Key dstKey = new Key(srcKeyPtr, srcKeySize);
+     List<Key> keyList = Arrays.asList(srcKey, dstKey);
+     long size = 0;
+     try {
+       KeysLocker.writeLockAllKeys(keyList);
+       if(src == Side.LEFT) {
+         size = LPOP(map, srcKeyPtr, srcKeySize, buffer, bufferSize);
+       } else {
+         size = RPOP(map, srcKeyPtr, srcKeySize, buffer, bufferSize);
+       }
+       if (size == -1) {
+         return -1; // Empty or src does  not exists
+       }
+       if (size > bufferSize) {
+         return size; // repeat call with a large buffer
+       }
+       // now we have element in a buffer of size = 'size'
+       if (dst == Side.LEFT) {
+         LPUSH(map, dstKeyPtr, dstKeySize, new long[] {buffer}, new int[] {(int)size});
+       } else {
+         RPUSH(map, dstKeyPtr, dstKeySize, new long[] {buffer}, new int[] {(int)size});
+       }
+     } finally {
+       KeysLocker.writeUnlockAllKeys(keyList);
+     }
+     return size;
+   }
+   
+   
+  /**
+   * BLMOVE source destination LEFT|RIGHT LEFT|RIGHT timeout
+   *
+   * Available since 6.2.0.
+   * Time complexity: O(1)
+   * BLMOVE is the blocking variant of LMOVE. When source contains elements, this command behaves exactly 
+   * like LMOVE. When used inside a MULTI/EXEC block, this command behaves exactly like LMOVE. When source 
+   * is empty, Redis will block the connection until another client pushes to it or until timeout is reached. 
+   * A timeout of zero can be used to block indefinitely.
+   * This command comes in place of the now deprecated BRPOPLPUSH. Doing BLMOVE RIGHT LEFT is equivalent.
+   * See LMOVE for more information.
+   * 
+   * Return value
+   * Bulk string reply: the element being popped from source and pushed to destination. If timeout is reached,
+   *  a Null reply is returned.
+   * Pattern: Reliable queue
+   * Please see the pattern description in the LMOVE documentation.
+   * Pattern: Circular list
+   * Please see the pattern description in the LMOVE documentation.
+   * @param map sorted map storage
+   * @param srcKeyPtr source list key address
+   * @param srcKeySize source list key size
+   * @param dstKeyPtr dst key list address
+   * @param dstKeySize dst key list size
+   * @param src source side (LEFT|RIGHT)
+   * @param dst dst side (LEFT|RIGHT)
+   * @param timeout time to wait (sec? ms?)
+   * @param buffer buffer for return value
+   * @param bufferSize buffer size
+   * @return size of a value being moved or -1 
+   */
+    
+   public static long BLMOVE (BigSortedMap map, long srcKeyPtr, int srcKeySize, 
+       long dstKeyPtr, int dstKeySize, Side src, Side dst, long timeout, long buffer, int bufferSize) {
+     return LMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, src, dst, buffer, bufferSize);
+   }
   /**
    * Available since 2.0.0.
    * Time complexity: O(1)
@@ -266,11 +384,28 @@ public class Lists {
    * @param keySizes array o key sizes
    * @param buffer buffer for the response
    * @param bufferSize buffer size
-   * @return response size (0 - nil)
+   * @return total response size (index of a key (4 bytes) + value) (-1 - nil)
+   * 
+   * Buffer format:
+   * 
+   * Key index = 4 bytes
+   * Value
    */
   public static long BLPOP(BigSortedMap map, long[] keyPtrs, int[] keySizes, long buffer, int bufferSize)
   {
-    return 0;
+    // Looks thread-safe
+    int size; 
+    for (int i = 0; i < keyPtrs.length; i++) {
+      size = (int) LPOP(map, keyPtrs[i], keySizes[i], buffer + Utils.SIZEOF_INT, bufferSize - Utils.SIZEOF_INT);
+      if (size + Utils.SIZEOF_INT > bufferSize) {
+        return size + Utils.SIZEOF_INT;
+      } else if (size > 0) {
+        // Set index
+        UnsafeAccess.putInt(buffer,  i);
+        return size + Utils.SIZEOF_INT;
+      }
+    }
+    return -1;// all empty or non-existent
   }
   
   /**
@@ -296,12 +431,29 @@ public class Lists {
    * @param keySizes array o key sizes
    * @param buffer buffer for the response
    * @param bufferSize buffer size
-   * @return response size (0 - nil)
+   * @return total response size (index of a key (4 bytes) + value) (-1 - nil)
+   * 
+   * Buffer format:
+   * 
+   * Key index = 4 bytes
+   * Value
    */
   
   public static long BRPOP(BigSortedMap map, long[] keyPtrs, int[] keySizes, long buffer, int bufferSize)
   {
-    return 0;
+    // Looks thread - safe
+    int size; 
+    for (int i = 0; i < keyPtrs.length; i++) {
+      size = (int) RPOP(map, keyPtrs[i], keySizes[i], buffer + Utils.SIZEOF_INT, bufferSize - Utils.SIZEOF_INT);
+      if (size + Utils.SIZEOF_INT > bufferSize) {
+        return size + Utils.SIZEOF_INT;
+      } else if (size > 0) {
+        // Set index
+        UnsafeAccess.putInt(buffer,  i);
+        return size + Utils.SIZEOF_INT;
+      }
+    }
+    return -1;// all empty or non-existent
   }
   
   /**
@@ -331,12 +483,12 @@ public class Lists {
    * @param timeout timeout
    * @param buffer buffer for response
    * @param bufferSize buffer size
-   * @return size of element or 0 (NULL)
+   * @return size of element or -1 (NULL)
    */
-  public static long BRPOPLPUSH(BigSortedMap map, long strKeyPtr, int srcKeySize, long dstKeyPtr, 
+  public static long BRPOPLPUSH(BigSortedMap map, long srcKeyPtr, int srcKeySize, long dstKeyPtr, 
       int dstKeySize, long timeout, long buffer, int bufferSize)
   {
-    return 0;
+    return BLMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, Side.LEFT, Side.RIGHT, timeout, buffer, bufferSize);
   }
   
   /**
@@ -405,12 +557,12 @@ public class Lists {
    * @param dstKeyPtr destination key pointer
    * @param dstKeySize destination key size
    * @param timeout timeout
-   * @return size of element or 0 (NULL)
+   * @return size of element or -1 (NULL)
    */
-  public static long RPOPLPUSH(BigSortedMap map, long strKeyPtr, int srcKeySize, long dstKeyPtr, 
+  public static long RPOPLPUSH(BigSortedMap map, long srcKeyPtr, int srcKeySize, long dstKeyPtr, 
       int dstKeySize, long timeout, long buffer, int bufferSize)
   {
-    return 0;
+    return LMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, Side.LEFT, Side.RIGHT,  buffer, bufferSize);
   }
   
   /**
@@ -427,8 +579,9 @@ public class Lists {
    * @param index index
    * @param buffer buffer for the response
    * @param bufferSize buffer size
-   * @return size of an element, if greater then bufferSize - repeat the call
+   * @return size of an element, if greater then bufferSize - repeat the call, -1 - NULL
    */
+  
   public static long LINDEX(BigSortedMap map, long keyPtr, int keySize, long index, 
       long buffer, int bufferSize) {
     
@@ -436,37 +589,21 @@ public class Lists {
     try {
       KeysLocker.readLock(key);
       int kSize = buildKey(keyPtr, keySize);
-      long kPtr = keyArena.get();
-      long valueBuf = valueArena.get();
-      int valueBufSize = valueArenaSize.get();
-      long size = map.get(kPtr, kSize, valueBuf, valueBufSize, 0);
-      if (size < 0) return -1; // Key does not exist
-      // Address of a first segment after total number of elements in this list (INT value)
-      long ptr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
-      if (ptr <=0) {
-        return -1;
-      }
-      int listSize = UnsafeAccess.toInt(valueBuf);
-      if (index < 0) {
-        index += listSize;
-        if (index < 0) return -1; 
-      }
-      if (index >= listSize) {
-        return -1;
-      }
-      Segment s = segment.get();
-      s.setDataPointer(ptr);
-      int off = findSegmentForIndex(s, index);
-      if (off < 0) {
-        return -1; // Index is too big
-      }
-      return s.get(off, buffer, bufferSize);
+      long kPtr = keyArena.get(); 
+      ListsLindex lindex  =  listsLindex.get();
+      lindex.reset();
+      lindex.setKeyAddress(kPtr);
+      lindex.setKeySize(kSize);
+      lindex.setBuffer(buffer, bufferSize);
+      lindex.setIndex(index);
+      map.execute(lindex);
+      return lindex.getLength();
     } finally {
       KeysLocker.readUnlock(key);
     }
   }
   
-  private static int findSegmentForIndex(Segment s, long index) {
+  public static int findSegmentForIndex(Segment s, long index) {
     long count = 0;
     long prev = 0;
     do {
@@ -506,6 +643,11 @@ public class Lists {
   public static long LINSERT(BigSortedMap map, long keyPtr, int keySize, boolean after, 
       long pivotPtr, int pivotSize, long elemPtr, int elemSize )
   {
+    // THREAD-SAFE and atomic if use only Lists API (FIXME)
+    // By bypassing Lists API we can access this key in parallel
+    // using generic BSM API
+    //We perform GET/PUT on a same key 
+    
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
@@ -514,10 +656,12 @@ public class Lists {
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
       long size = map.get(kPtr, kSize, valueBuf, valueBufSize, 0);
-      if (size < 0) return -1; // Key does not exist
+      if (size < 0) {
+        return -1; // Key does not exist
+      }
       // Address of a first segment after total number of elements in this list (INT value)
       long ptr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
-      if (ptr <=0) {
+      if (ptr <= 0) {
         return -1;
       }
       Segment s = segment.get();
@@ -547,13 +691,16 @@ public class Lists {
           return n + 1;
         }
       } while (s.next(s) != null);
+      
       return -1;
+      
     } finally {
       KeysLocker.writeUnlock(key);
     }  
   }
   
   /**
+   * THREAD-SAFE
    * Returns the length of the list stored at key. If key does not exist, it is interpreted as 
    * an empty list and 0 is returned. An error is returned when the value stored at key is not a list.
    
@@ -571,7 +718,9 @@ public class Lists {
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
       long size = map.get(kPtr, kSize, valueBuf, valueBufSize, 0);
-      if (size < 0) return 0; // Key does not exist
+      if (size < 0) {
+        return 0; // Key does not exist
+      }
       // We keep length of the list in a first 4 bytes of a Value
       // Value: SIZE FIRST-SEGMENT-ADDRESS LAST-SEGMENT-ADDRESS (20 bytes total)
       return UnsafeAccess.toInt(valueBuf);
@@ -599,6 +748,7 @@ public class Lists {
    */
   public static long LPOP(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize)
   {
+    // THREAD-SAFE and atomic only in Lists API (FIXME in a future)
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
@@ -607,7 +757,9 @@ public class Lists {
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
       long size = map.get(kPtr, kSize, valueBuf, valueBufSize, 0);
-      if (size < 0) return -1; // Key does not exist
+      if (size < 0) {
+        return -1; // Key does not exist
+      }
       // First segment pointer
       long ptr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
       if (ptr == 0) {
@@ -1208,7 +1360,7 @@ public class Lists {
    * @param keySize list key size
    * @param buffer buffer for the response
    * @param bufferSize buffer size
-   * @return serialized size of the response
+   * @return serialized size of the response or -1 (nil)
    */
   public static long RPOP(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) {
     Key key = getKey(keyPtr, keySize);
