@@ -2,28 +2,38 @@ package org.bigbase.carrot.ops;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 
 /**
  * This example of specific Update - atomic counter 
  * @author Vladimir Rodionov
  *
  */
-public class Increment extends Operation {
+public class IncrementDouble extends Operation {
   
-  long value;
+  double value;
   
-  public void setIncrement(long v) {
+  public IncrementDouble() {
+    setReadOnlyOrUpdateInPlace(true);
+  }
+  
+  public void setIncrement(double v) {
     this.value = v;
   }
   
-  public long getIncrement() {
-    return value;
+  public double getIncrement() {
+    return this.value;
+  }
+  
+  public double getValue() {
+    return this.value;
   }
   
   @Override
   public void reset() {
     super.reset();
     value = 0;
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   @Override
@@ -32,12 +42,14 @@ public class Increment extends Operation {
       return false;
     }
     int vSize = DataBlock.valueLength(foundRecordAddress);
-    if (vSize != 8 /*long size*/) {
+    if (vSize != Utils.SIZEOF_DOUBLE /*long size*/) {
       return false;
     }
     long ptr = DataBlock.valueAddress(foundRecordAddress);
     long v = UnsafeAccess.toLong(ptr);
-    UnsafeAccess.putLong(ptr, v + value);
+    double dv = Double.longBitsToDouble(v);
+    value += dv;
+    UnsafeAccess.putLong(ptr, Double.doubleToLongBits(value));
     // set updateCounts to 0 - we update in place
     this.updatesCount = 0;
     return true;

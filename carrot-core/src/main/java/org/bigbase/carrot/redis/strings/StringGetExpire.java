@@ -14,7 +14,7 @@ import org.bigbase.carrot.util.Utils;
 public class StringGetExpire extends Operation {
 
   public StringGetExpire() {
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   @Override
@@ -33,6 +33,6 @@ public class StringGetExpire extends Operation {
   @Override
   public void reset() {
     super.reset();
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
 }

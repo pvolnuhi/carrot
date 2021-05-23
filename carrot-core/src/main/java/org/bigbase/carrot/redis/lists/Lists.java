@@ -157,6 +157,7 @@ public class Lists {
    * @param keySize list key size
    */
   public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+    //TODO: implement as Operation
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
@@ -646,7 +647,8 @@ public class Lists {
     // THREAD-SAFE and atomic if use only Lists API (FIXME)
     // By bypassing Lists API we can access this key in parallel
     // using generic BSM API
-    //We perform GET/PUT on a same key 
+    // We perform GET/PUT on a same key 
+    // TODO: implement as the Operation (better performance)
     
     Key key = getKey(keyPtr, keySize);
     try {
@@ -749,6 +751,7 @@ public class Lists {
   public static long LPOP(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize)
   {
     // THREAD-SAFE and atomic only in Lists API (FIXME in a future)
+    // TODO: implement as the Operation
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
@@ -784,8 +787,12 @@ public class Lists {
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, nextSegmentPtr);
       }
       // Should we delete list if it is empty now?
-      // Update list element number and first segment
-      map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + Utils.SIZEOF_LONG, 0);
+      if (numElements == 0) {
+        DELETE(map, keyPtr, keySize);
+      } else {
+        // Update list element number and first segment
+        map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + Utils.SIZEOF_LONG, 0);
+      }
       return elSize;
     } finally {
       KeysLocker.writeUnlock(key);
@@ -874,7 +881,7 @@ public class Lists {
    */
   public static int LPOS(BigSortedMap map, long keyPtr, int keySize, long elemPtr, 
       int elemSize, int rank, int numMatches, int maxlen, long buffer, int bufferSize) {
-    
+    //TODO
     return 0;
   }
   
@@ -928,23 +935,19 @@ public class Lists {
       }
       boolean singleSegment = s.getNextAddress() == 0;
       // Add to the first segment
-      for(int i=0; i< elemPtrs.length; i++) {
+      for(int i = 0; i < elemPtrs.length; i++) {
         long ptr = s.prepend(elemPtrs[i], elemSizes[i]);
         // Update first segment address
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, ptr);
       }
       // Last segment address can change only if there were only one segment
       int numberToPush = elemPtrs.length;
-      if (!exists) {
+      if (!exists || singleSegment) {
         s = s.last(s);
         long lastSegmentPtr = s.getDataPtr();
         // Update last segment pointer
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, lastSegmentPtr);
-      } else if (singleSegment) {
-        // Update last segment pointer
-        s = s.last(s);
-        UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, s.getDataPtr());
-      }
+      } 
       // Update length of the list
       int n = exists? UnsafeAccess.toInt(valueBuf): 0;
       n += numberToPush;
@@ -1002,7 +1005,7 @@ public class Lists {
       }
       boolean singleSegment = s.getNextAddress() == 0;
       // Add to the first segment
-      for(int i=0; i< elemPtrs.length; i++) {
+      for(int i=0; i < elemPtrs.length; i++) {
         long ptr = s.prepend(elemPtrs[i], elemSizes[i]);
         // Update first segment address
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, ptr);
@@ -1035,7 +1038,7 @@ public class Lists {
       return null;
     } else {
       long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
-      if (dataPtr ==0) return null;
+      if (dataPtr == 0) return null;
       s.setDataPointer(dataPtr);
     }
     return s;

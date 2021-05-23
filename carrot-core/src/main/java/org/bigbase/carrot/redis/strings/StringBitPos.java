@@ -55,7 +55,7 @@ public class StringBitPos extends Operation {
   int bit;
   
   public StringBitPos() {
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   @Override
@@ -128,7 +128,7 @@ public class StringBitPos extends Operation {
     this.position = -1;
     this.startEndSet = false;
     this.bit = 0;
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   /**

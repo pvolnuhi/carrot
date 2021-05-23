@@ -9,7 +9,7 @@ import java.util.Random;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.ops.Append;
-import org.bigbase.carrot.ops.Increment;
+import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.junit.Test;
 
@@ -50,7 +50,7 @@ public class OperationsTest {
     try {
       System.out.println("Increment test");
       load();
-      Increment incr = new Increment();
+      IncrementLong incr = new IncrementLong();
       long ptr = UnsafeAccess.malloc(16);
       int keySize;
       long totalIncrement = 2000000;

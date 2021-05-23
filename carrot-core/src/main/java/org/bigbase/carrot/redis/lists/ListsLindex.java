@@ -42,7 +42,7 @@ public class ListsLindex extends Operation {
   private long index = -1;
   
   public ListsLindex() {
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   @Override
@@ -112,6 +112,6 @@ public class ListsLindex extends Operation {
     this.bufferSize = 0;
     this.index = -1;
     this.length = -1;
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
 }

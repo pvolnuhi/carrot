@@ -26,7 +26,7 @@ public class StringGetRange extends Operation {
   int bufferSize;
   
   public StringGetRange() {
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   @Override
@@ -87,7 +87,7 @@ public class StringGetRange extends Operation {
     this.rangeSize = -1;
     this.bufferPtr = 0;
     this.bufferSize = 0;
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   /**

@@ -14,7 +14,7 @@ public class HashValueLength extends Operation{
   
   public HashValueLength() {
     setFloorKey(true);
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
 
   @Override
@@ -22,7 +22,7 @@ public class HashValueLength extends Operation{
     super.reset();
     setFloorKey(true);
     foundValueSize = -1;
-    setReadOnly(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
     
   public int getFoundValueSize() {

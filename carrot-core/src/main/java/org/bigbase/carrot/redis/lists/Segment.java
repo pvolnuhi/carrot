@@ -490,8 +490,8 @@ public final class Segment {
     int toMove = extAlloc? Utils.SIZEOF_INT + Utils.SIZEOF_LONG + Utils.sizeUVInt(0) :
       elemSize + eSizeSize;
 
-    int requiredSize = extAlloc? dataSize + SEGMENT_OVERHEAD + Utils.SIZEOF_INT +
-        Utils.SIZEOF_LONG + Utils.sizeUVInt(0): dataSize + SEGMENT_OVERHEAD + elemSize + eSizeSize;
+    int requiredSize = dataSize + SEGMENT_OVERHEAD + toMove;//extAlloc? dataSize + SEGMENT_OVERHEAD + Utils.SIZEOF_INT +
+        //Utils.SIZEOF_LONG + Utils.sizeUVInt(0): dataSize + SEGMENT_OVERHEAD + elemSize + eSizeSize;
     if (requiredSize <= segmentSize || expand(requiredSize)) {      
       dataSize = getDataSize();
       segmentSize = getSize();
@@ -500,6 +500,7 @@ public final class Segment {
       if (extAlloc) {
         long ptr = UnsafeAccess.allocAndCopy(elemPtr, elemSize);
    
+        // Memory housekeeping call
         Lists.allocMemory(elemSize);
         
         int zeroSize = Utils.sizeUVInt(0);
@@ -635,15 +636,15 @@ public final class Segment {
   }
   /**
    * Insert element before or after a given element
-   * @param elemPtr given element pointer
-   * @param elemSize given element size
+   * @param pivotPtr given element pointer
+   * @param pivotSize given element size
    * @param ptr element pointer
    * @param size element size
    * @param after true, then insert after
    * @return this segment adat pointer after the operation
    */
-  public long insert(long elemPtr, int elemSize, long ptr, int size, boolean after) {
-    long addr = search(elemPtr, elemSize, after);
+  public long insert(long pivotPtr, int pivotSize, long ptr, int size, boolean after) {
+    long addr = search(pivotPtr, pivotSize, after);
     if (addr < 0) return addr; // not found
     return insert((int)(addr - this.dataPtr), ptr, size);
   }

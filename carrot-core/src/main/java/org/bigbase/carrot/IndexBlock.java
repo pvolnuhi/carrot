@@ -2845,7 +2845,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		return numDataBlocks;
 	}
 
-	public long getSeqNumberSplitOrMerge() {
+	public int getSeqNumberSplitOrMerge() {
 		return seqNumberSplitOrMerge;
 	}
 

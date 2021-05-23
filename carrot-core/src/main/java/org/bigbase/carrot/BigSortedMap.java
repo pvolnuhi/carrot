@@ -3,13 +3,19 @@ package org.bigbase.carrot;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
+import org.bigbase.carrot.ops.IncrementDouble;
+import org.bigbase.carrot.ops.IncrementFloat;
+import org.bigbase.carrot.ops.IncrementInt;
+import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -92,6 +98,15 @@ public class BigSortedMap {
   static AtomicLong sequenceID = new AtomicLong(0);
 
   //private ReentrantLock[] locks = new ReentrantLock[11113];
+  /*
+   * Read-Write Lock TODO: StampedLock (Java 8)
+   */
+  static ReentrantReadWriteLock[] locks = new ReentrantReadWriteLock[11113];
+  static {
+    for (int i = 0; i < locks.length; i++) {
+      locks[i] = new ReentrantReadWriteLock();
+    }
+  }
   private long maxMemory; 
   /*
    * Keeps ordered list of active snapshots (future Tx)
@@ -393,6 +408,48 @@ public class BigSortedMap {
     }
   }
   
+  /**
+   * Locking support. We have 2 - level locking: Level 1: BSM locks on index block to get correct
+   * index block for read / write operations Level 2: Index block internal locking to prevent
+   * concurrent access disaster
+   * @param b index block
+   */
+  public void readLock(IndexBlock b) {
+    int index = (b.hashCode() % locks.length);
+    ReentrantReadWriteLock lock = locks[index];
+    lock.readLock().lock();
+  }
+
+  /**
+   * Read unlock
+   */
+  public void readUnlock(IndexBlock b) {
+
+    int index = (b.hashCode() % locks.length);
+    ReentrantReadWriteLock lock = locks[index];
+    lock.readLock().unlock();
+  }
+
+  /**
+   * Write lock
+   * @throws RetryOperationException
+   * @throws InterruptedException
+   */
+  public void writeLock(IndexBlock b) {
+    int index = (b.hashCode() % locks.length);
+    ReentrantReadWriteLock lock = locks[index];
+    lock.writeLock().lock();
+  }
+
+  /**
+   * Write unlock
+   */
+  public void writeUnlock(IndexBlock b) {
+    int index = (b.hashCode() % locks.length);
+    ReentrantReadWriteLock lock = locks[index];
+    lock.writeLock().unlock();
+  }
+  
   private final IndexBlock getThreadLocalBlock () {
     IndexBlock kvBlock = keyBlock.get();
     if (kvBlock == null) {
@@ -461,20 +518,25 @@ public class BigSortedMap {
 
     while (true) {
       IndexBlock b = null;
+      int seqNumber;
       try {
         b = map.floorKey(kvBlock);
-        // TODO: we do a lot of locking
-        //lock(b); // to prevent locking from another thread
-        
-        b.writeLock();
-        
+        // TODO: we do a lot of locking        
+        writeLock(b);
+        seqNumber = b.getSeqNumberSplitOrMerge();
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
           if (b != bbb) {
             continue;
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (sn != seqNumber) {
+              seqNumber = sn;
+              continue;
+            }
           }
-        }
+        } 
         boolean result =
             b.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
         if (!result && getTotalAllocatedMemory() < maxMemory) {
@@ -494,11 +556,11 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
-
   }
   
   /**
@@ -518,9 +580,11 @@ public class BigSortedMap {
   
   /**
    * Execute generic read - modify - write operation in a single update
+   * If Update is in place or no updates - set Operation.setReadOnlyOrUpdateInPlace
    * @param op - update operation
    * @return true if operation succeeds, false otherwise
    */
+  @SuppressWarnings("deprecation")
   public boolean execute(Operation op) {
     long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
@@ -528,8 +592,8 @@ public class BigSortedMap {
     kvBlock.putForSearch(op.getKeyAddress(), op.getKeySize(), version);
     IndexBlock b = null;
     boolean lowerKey = false;
-    boolean readOnly = op.isReadOnly();
-    
+    boolean readOnly = op.isReadOnlyOrUpdateInPlace();
+    int seqNumber;
     while (true) {
       try {
         b = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
@@ -540,15 +604,25 @@ public class BigSortedMap {
         boolean firstBlock = b.isFirstIndexBlock();
 
         if (readOnly) {
-          b.readLock();
+          readLock(b);
         } else {
-          b.writeLock();
+          writeLock(b);
         }
+        if (!b.isValid()) {
+          continue;
+        }
+        seqNumber = b.getSeqNumberSplitOrMerge();
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
           IndexBlock bbb = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
           if (b != bbb) {
             continue;
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (sn != seqNumber) {
+              seqNumber = sn;
+              continue;
+            }
           }
         } 
         
@@ -701,9 +775,9 @@ public class BigSortedMap {
       } finally {
         if (b != null) {
           if (readOnly) {
-            b.readUnlock();
+            readUnlock(b);
           } else {
-            b.writeUnlock();
+            writeUnlock(b);
           }
         }
       }
@@ -742,16 +816,23 @@ public class BigSortedMap {
 
     while (true) {
       IndexBlock b = null;
+      int seqNumber ;
       try {
         b = map.floorKey(kvBlock);
         // TODO: we do a lot of locking
-        //lock(b); // to prevent locking from another thread
-        b.writeLock();
+        writeLock(b);
+        seqNumber = b.getSeqNumberSplitOrMerge();
         // TODO: optimize - last time split? what is the safest threshold? 100ms
         if(b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
           if (b != bbb) {
             continue;
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (sn != seqNumber) {
+              seqNumber = sn;
+              continue;
+            }
           }
         }
         boolean result =
@@ -771,8 +852,9 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
   }
@@ -794,16 +876,29 @@ public class BigSortedMap {
     kvBlock.putForSearch(key, keyOffset, keyLength, version);
     while (true) {
       IndexBlock b = null;
+      int seqNumber ;
       try {
         b = map.floorKey(kvBlock);
-        //lock(b); // to prevent
-        b.writeLock();
+        // Top level lock
+        writeLock(b);
+        // Check if block is still valid
+        if (!b.isValid()) {
+          continue;
+        }
+        seqNumber = b.getSeqNumberSplitOrMerge();
         if (b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
           if (b != bbb) {
             continue;
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (seqNumber != sn) {
+              seqNumber = sn;
+              continue;
+            }
           }
         }
+        // Now we get the correct index block - perform the operation
         OpResult result = b.delete(key, keyOffset, keyLength, version);
         if (result == OpResult.OK) {
           if (b.isEmpty() && !b.isFirstIndexBlock()) {
@@ -822,8 +917,9 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
   }
@@ -843,6 +939,7 @@ public class BigSortedMap {
     IndexBlock b = null, prev = null;
     boolean firstBlock = true;
     IndexBlock toDelete = null;
+    int seqNumber;
     while (true) {
       try {
         long loopStartTime = System.currentTimeMillis();
@@ -850,8 +947,27 @@ public class BigSortedMap {
         if (b == null) {
           break;
         }
-        //lock(b);
-        b.writeLock();
+        writeLock(b);
+        if(!b.isValid()) {
+          continue;
+        }
+        
+        seqNumber = b.getSeqNumberSplitOrMerge();
+ 
+        if (b.hasRecentUnsafeModification(loopStartTime)) {
+          //TODO: what happens after index block split?
+          IndexBlock bbb = firstBlock? map.floorKey(kvBlock): map.higherKey(prev);
+          if (b != bbb) {
+            continue;
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (sn != seqNumber) {
+              seqNumber = sn;
+              continue;
+            }
+          }
+        }
+        
         if (b.isEmpty()) {
           // toDelete
           if (toDelete != null) {
@@ -863,14 +979,7 @@ public class BigSortedMap {
             toDelete = b;
           }
           break;
-        }
-        if (b.hasRecentUnsafeModification(loopStartTime)) {
-          //TODO: what happens after index block split?
-          IndexBlock bbb = firstBlock? map.floorKey(kvBlock): map.higherKey(prev);
-          if (b != bbb) {
-            continue;
-          }
-        }
+        }       
         prev = b;        
         long del = b.deleteRange(startKeyPtr, startKeyLength, endKeyPtr, endKeyLength, version);
         if (del == 0 && !firstBlock) {
@@ -894,9 +1003,8 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
         if (b != null) {
-          b.writeUnlock();
+          writeUnlock(b);
         }
       }
     }
@@ -920,16 +1028,27 @@ public class BigSortedMap {
     kvBlock.putForSearch(keyPtr, keyLength, version);
     while (true) {
       IndexBlock b = null;
+      int seqNumber;
       try {
         b = map.floorKey(kvBlock);
-        //lock(b); // to prevent
-        b.writeLock();
+        writeLock(b);
+        if (!b.isValid()) {
+          continue;
+        }
+        seqNumber = b.getSeqNumberSplitOrMerge();
         if (b.hasRecentUnsafeModification()) {
           IndexBlock bbb = map.floorKey(kvBlock);
           if (b != bbb) {
             continue;
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (seqNumber != sn) {
+              seqNumber = sn;
+              continue;
+            }
           }
         }
+        // Now we get the correct index block - perform the operation
         OpResult result = b.delete(keyPtr, keyLength, version);
         if (result == OpResult.OK) {
           if (b.isEmpty()) {
@@ -948,8 +1067,9 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
   }
@@ -983,13 +1103,11 @@ public class BigSortedMap {
           IndexBlock bb = null;
           while (true) {
             b = map.floorKey(kvBlock);
-            //lock(b);
-            b.readLock();
+            readLock(b);
             locked = true;
             bb = map.floorKey(kvBlock);
             if (bb != b) {
-              //unlock(b);
-              b.readUnlock();
+              readUnlock(b);
               locked = false;
               continue;
             } else {
@@ -998,15 +1116,12 @@ public class BigSortedMap {
           }
           result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
         }
-        // TODO
-        // check length
         return result;
       } catch (RetryOperationException e) {
         continue;
       } finally {
         if (locked && b != null) {
-          //unlock(b);
-          b.readUnlock();
+          readUnlock(b);
         }
       }
     }
@@ -1038,13 +1153,11 @@ public class BigSortedMap {
           IndexBlock bb = null;
           while (true) {
             b = map.floorKey(kvBlock);
-            //lock(b);
-            b.readLock();
+            readLock(b);
             locked = true;
             bb = map.floorKey(kvBlock);
             if (bb != b) {
-              //unlock(b);
-              b.readUnlock();
+              readUnlock(b);
               locked = false;
               continue;
             } else {
@@ -1053,15 +1166,12 @@ public class BigSortedMap {
           }
           result =  b.get(keyPtr, keyLength, valueBuf, valueBufLength, version);
         }
-        // TODO
-        // check length
         return result;
       } catch (RetryOperationException e) {
         continue;
       } finally {
         if (locked && b != null) {
-          //unlock(b);
-          b.readUnlock();
+          readUnlock(b);
         }
       }
     }
@@ -1091,13 +1201,11 @@ public class BigSortedMap {
           IndexBlock bb = null;
           while (true) {
             b = map.floorKey(kvBlock);
-            //lock(b);
-            b.readLock();
+            readLock(b);
             locked = true;
             bb = map.floorKey(kvBlock);
             if (bb != b) {
-              //unlock(b);
-              b.readUnlock();
+              readUnlock(b);
               locked = false;
               continue;
             } else {
@@ -1111,8 +1219,7 @@ public class BigSortedMap {
         continue;
       } finally {
         if (locked && b != null) {
-          //unlock(b);
-          b.readUnlock();
+          readUnlock(b);
         }
       }
     }
@@ -1130,19 +1237,23 @@ public class BigSortedMap {
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(keyPtr, keyLength, version);
     IndexBlock b = null;
+    int seqNumber;
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        //lock(b);
-        b.writeLock();
+        writeLock(b);
+        seqNumber = b.getSeqNumberSplitOrMerge();
         if (b.hasRecentUnsafeModification()) {
-          // check one more time with lock
-          // - we caught split in flight
-          IndexBlock bb = null;
-          bb = map.floorKey(kvBlock);
-          if (bb != b) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
             continue;
-          } 
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (seqNumber != sn) {
+              seqNumber = sn;
+              continue;
+            }
+          }
         }
         
         long valueBuf = incrBuffer.get();
@@ -1160,17 +1271,174 @@ public class BigSortedMap {
         }
         long value = UnsafeAccess.toLong(valueBuf);
         UnsafeAccess.putLong(valueBuf, value + incr);
-        put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_LONG, 0);
+        if (!b.put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_LONG, 0, -1)) {
+          put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_LONG, 0);
+        }
         return value + incr;
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
   }
   
+  
+  private static ThreadLocal<Key> key = new ThreadLocal<Key>() {
+    @Override
+    protected Key initialValue() {
+      return new Key(0,0);
+    }
+  };
+  
+  private static Key getKey(long ptr, int size) {
+    Key k = key.get();
+    k.address = ptr;
+    k.length = size;
+    return k;
+  }
+  
+  private static ThreadLocal<IncrementLong> incrLong = new ThreadLocal<IncrementLong>() {
+
+    @Override
+    protected IncrementLong initialValue() {
+      return new IncrementLong();
+    }
+  };
+  
+  /**
+   * Optimized for speed and multi-threading
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param incr increment value
+   * @return value after increment
+   */
+  public long incrementLongOp(long keyPtr, int keyLength, long incr) {
+    Key k = getKey(keyPtr, keyLength);
+    
+    KeysLocker.writeLock(k);
+    try {
+      IncrementLong op = incrLong.get();
+      op.reset();
+      op.setKeyAddress(keyPtr);
+      op.setKeySize(keyLength);
+      op.setIncrement(incr);
+      boolean result = execute(op);
+      if (result) {
+        return op.getValue();
+      }
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+    // Key does not exists yet, so call safe version
+    return incrementLong(keyPtr, keyLength, 0, incr);
+  }
+  
+  private static ThreadLocal<IncrementInt> incrInt = new ThreadLocal<IncrementInt>() {
+    @Override
+    protected IncrementInt initialValue() {
+      return new IncrementInt();
+    }
+  };
+  /**
+   * Optimized for speed and multi-threading
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param incr increment value
+   * @return value after increment
+   */
+  public int incrementIntOp(long keyPtr, int keyLength, int incr) {
+    
+    Key k = getKey(keyPtr, keyLength);
+    KeysLocker.writeLock(k);
+    try {
+      IncrementInt op = incrInt.get();
+      op.reset();
+      op.setKeyAddress(keyPtr);
+      op.setKeySize(keyLength);
+      op.setIncrement(incr);
+      boolean result = execute(op);
+      if (result) {
+        return op.getValue();
+      }
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+    // Key does not exists yet, so call safe version
+    return incrementInt(keyPtr, keyLength, 0, incr);
+  }
+  
+  
+  private static ThreadLocal<IncrementDouble> incrDouble = new ThreadLocal<IncrementDouble>() {
+    @Override
+    protected IncrementDouble initialValue() {
+      return new IncrementDouble();
+    }
+  };
+  /**
+   * Optimized for speed and multi-threading
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param incr increment value
+   * @return value after increment
+   */
+  public double incrementDoubleOp(long keyPtr, int keyLength, double incr) {
+    
+    Key k = getKey(keyPtr, keyLength);
+    KeysLocker.writeLock(k);
+    
+    try {
+      IncrementDouble op = incrDouble.get();
+      op.reset();
+      op.setKeyAddress(keyPtr);
+      op.setKeySize(keyLength);
+      op.setIncrement(incr);
+      boolean result = execute(op);
+      if (result) {
+        return op.getValue();
+      }
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+    // Key does not exists yet, so call safe version
+    return incrementDouble(keyPtr, keyLength, 0, incr);
+  }
+  
+  private static ThreadLocal<IncrementFloat> incrFloat = new ThreadLocal<IncrementFloat>() {
+    @Override
+    protected IncrementFloat initialValue() {
+      return new IncrementFloat();
+    }
+  };
+  /**
+   * Optimized for speed and multi-threading
+   * @param keyPtr key address
+   * @param keyLength key length
+   * @param incr increment value
+   * @return value after increment
+   */
+  public float incrementFloatOp(long keyPtr, int keyLength, float incr) {
+    
+    Key k = getKey(keyPtr, keyLength);
+    KeysLocker.writeLock(k);
+    try {
+      IncrementFloat op = incrFloat.get();
+      op.reset();
+      op.setKeyAddress(keyPtr);
+      op.setKeySize(keyLength);
+      op.setIncrement(incr);
+      boolean result = execute(op);
+      if (result) {
+        return op.getValue();
+      }
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+    // Key does not exists yet, so call safe version
+    return incrementFloat(keyPtr, keyLength, 0, incr);
+  }
   /**
    * TODO: test
    * TODO: update in place for compressed data
@@ -1183,19 +1451,23 @@ public class BigSortedMap {
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(keyPtr, keyLength, version);
     IndexBlock b = null;
+    int seqNumber;
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        //lock(b);
-        b.writeLock();
+        writeLock(b);
+        seqNumber = b.getSeqNumberSplitOrMerge();
         if (b.hasRecentUnsafeModification()) {
-          // check one more time with lock
-          // - we caught split in flight
-          IndexBlock bb = null;
-          bb = map.floorKey(kvBlock);
-          if (bb != b) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
             continue;
-          } 
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (seqNumber != sn) {
+              seqNumber = sn;
+              continue;
+            }
+          }
         }
         long valueBuf = incrBuffer.get();
         int valueSize = Utils.SIZEOF_INT;
@@ -1216,8 +1488,9 @@ public class BigSortedMap {
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
   }
@@ -1233,19 +1506,23 @@ public class BigSortedMap {
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(keyPtr, keyLength, version);
     IndexBlock b = null;
+    int seqNumber;
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        //lock(b);
-        b.writeLock();
+        writeLock(b);
+        seqNumber = b.getSeqNumberSplitOrMerge();
         if (b.hasRecentUnsafeModification()) {
-          // check one more time with lock
-          // - we caught split in flight
-          IndexBlock bb = null;
-          bb = map.floorKey(kvBlock);
-          if (bb != b) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
             continue;
-          } 
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (seqNumber != sn) {
+              seqNumber = sn;
+              continue;
+            }
+          }
         }
         long valueBuf = incrBuffer.get();
         int valueSize = Utils.SIZEOF_FLOAT;
@@ -1262,13 +1539,16 @@ public class BigSortedMap {
         int value = UnsafeAccess.toInt(valueBuf);
         float val = Float.intBitsToFloat(value);
         UnsafeAccess.putInt(valueBuf, Float.floatToIntBits(val + incr));
-        put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_FLOAT, 0);
+        if (!b.put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_FLOAT, 0, -1)){
+          put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_FLOAT, 0);
+        }
         return val + incr;
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
   }
@@ -1284,19 +1564,23 @@ public class BigSortedMap {
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(keyPtr, keyLength, version);
     IndexBlock b = null;
+    int seqNumber;
     while (true) {
       try {
         b = map.floorKey(kvBlock);
-        //lock(b);
-        b.writeLock();
+        writeLock(b);
+        seqNumber = b.getSeqNumberSplitOrMerge();
         if (b.hasRecentUnsafeModification()) {
-          // check one more time with lock
-          // - we caught split in flight
-          IndexBlock bb = null;
-          bb = map.floorKey(kvBlock);
-          if (bb != b) {
+          IndexBlock bbb = map.floorKey(kvBlock);
+          if (b != bbb) {
             continue;
-          } 
+          } else {
+            int sn = b.getSeqNumberSplitOrMerge();
+            if (seqNumber != sn) {
+              seqNumber = sn;
+              continue;
+            }
+          }
         }
         long valueBuf = incrBuffer.get();
         int valueSize = Utils.SIZEOF_LONG;
@@ -1314,14 +1598,17 @@ public class BigSortedMap {
         long value = UnsafeAccess.toLong(valueBuf);
         double val = Double.longBitsToDouble(value);
         UnsafeAccess.putLong(valueBuf, Double.doubleToLongBits(val + incr));
-        put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_DOUBLE, 0);
-
+        // negative expire is ignored
+        if (! b.put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_DOUBLE, 0, -1)) {
+          put(keyPtr, keyLength, valueBuf, Utils.SIZEOF_DOUBLE, 0);
+        }
         return val + incr;
       } catch (RetryOperationException e) {
         continue;
       } finally {
-        //unlock(b);
-        if (b != null) b.writeUnlock();
+        if (b != null) {
+          writeUnlock(b);
+        }
       }
     }
   }

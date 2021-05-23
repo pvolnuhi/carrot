@@ -76,9 +76,9 @@ public abstract class Operation {
   protected boolean floorKey = false; 
   
   /*
-   * Read - only operation
+   * Read - only or update in place operation
    */
-  protected boolean readOnly = false;
+  protected boolean readOnlyOrUpdateInPlace = false;
   
   /*
    * Constructor
@@ -156,16 +156,16 @@ public abstract class Operation {
    * This operation is read-only
    * @param b
    */
-  public final void setReadOnly(boolean b) {
-    this.readOnly = b;
+  public final void setReadOnlyOrUpdateInPlace(boolean b) {
+    this.readOnlyOrUpdateInPlace = b;
   }
  
   /**
    * Is operation read-only
    * @return read only
    */
-  public boolean isReadOnly() {
-    return this.readOnly;
+  public boolean isReadOnlyOrUpdateInPlace() {
+    return this.readOnlyOrUpdateInPlace;
   }
   
   public void reset() {
@@ -186,7 +186,7 @@ public abstract class Operation {
     this.floorKey = false;
     this.reuseValues[0] = false;
     this.reuseValues[1] = false;
-    this.readOnly = false;
+    this.readOnlyOrUpdateInPlace = false;
   }
   
   /**
