@@ -4,14 +4,21 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.Key;
 import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
+import org.junit.After;
 import org.junit.Test;
 
 /**
@@ -25,7 +32,8 @@ public class AtomicIncrementTestMT {
   static AtomicLong totalLoaded = new AtomicLong();
   static AtomicLong totalIncrements = new AtomicLong();
   static int totalThreads = 16;
-  
+  static List<Key> keys = Collections.synchronizedList(new ArrayList<Key>());
+
   static class IncrementRunner extends Thread {
     
     
@@ -35,46 +43,56 @@ public class AtomicIncrementTestMT {
 
     public void run() {
       
-      long ptr = UnsafeAccess.malloc(16);
       int keySize = 16;
       byte[] key = new byte[keySize];      
-      byte[] LONG_ZERO = new byte[] {0,0,0,0,0,0,0,0};
+      long LONG_ZERO = UnsafeAccess.mallocZeroed(Utils.SIZEOF_LONG);
+      Random r = new Random();
+
       while (true) {        
-        Random r = new Random();
+ 
         double d = r.nextDouble();
         if (d < 0.5 && totalLoaded.get() > 1000) {
           // Run increment
-          int n = r.nextInt((int) totalLoaded.get());
-          r.setSeed(n);
-          r.nextBytes(key);
-          UnsafeAccess.copy(key, 0, ptr, keySize);
-          if(!map.exists(ptr, keySize)) {
-            continue;
+          int n = r.nextInt((int) keys.size());
+          Key k = keys.get(n);
+          try {
+            map.incrementLongOp(k.address, k.length, 1);
+          } catch(OperationFailedException e) {
+            System.err.println("Increment failed.");
+            break;
           }
-          map.incrementLong(ptr, keySize, 0, 1);
           totalIncrements.incrementAndGet();
 
         } else {
           // Run put
-          int n = (int) totalLoaded.incrementAndGet();
-          r.setSeed(n);
-          r.nextBytes(key);
-          byte[] value = LONG_ZERO;
-          boolean result = map.put(key, 0, key.length, value, 0, value.length, 0);
+          totalLoaded.incrementAndGet();
+          Key k = nextKey(r, key);
+          boolean result = map.put(k.address, k.length, LONG_ZERO, Utils.SIZEOF_LONG, 0);
           if (result == false) {
             totalLoaded.decrementAndGet();
             break;
+          } else {
+            keys.add(k);
           }
           if (totalLoaded.get() % 1000000 == 0) {
-            System.out.println(getName() + " loaded = " + totalLoaded+" increments="+ totalIncrements);
+            System.out.println(getName() + " loaded = " + totalLoaded+" increments="+ totalIncrements + " mem="+
+          BigSortedMap.getTotalAllocatedMemory() + " max="+ map.getMaxMemory());
           }
         }
       }// end while
-      UnsafeAccess.free(ptr);
     }// end run()
+    
+    private Key nextKey(Random r, byte[] buf) {
+      r.nextBytes(buf);
+      long ptr = UnsafeAccess.allocAndCopy(buf, 0, buf.length);
+      Key k = new Key(ptr, buf.length);
+      return k;
+    }
+    
   }// end IncrementRunner
  
-    
+
+  
   @Test
   public void testIncrement() throws IOException {
     for (int k = 1; k <= 1; k++) {
@@ -110,11 +128,11 @@ public class AtomicIncrementTestMT {
           total += UnsafeAccess.toLong(addr);
           scanner.next();
         }
+        System.out.println("totalLoaded=" + totalLoaded + " actual="+ count);
+
         assertEquals(totalIncrements.get(), total);
         // CHECK THIS 
-        //assertEquals(totalLoaded.get(), count);
-        System.out.println("totalLoaded=" + totalLoaded + " actual="+ count);
-        //map.dumpStats();
+        assertEquals(keys.size(), (int) count);
         System.out.println("Time to load= "+ totalLoaded+" and to increment =" 
             + totalIncrements+"="+(end -start)+"ms");
         System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
@@ -128,4 +146,5 @@ public class AtomicIncrementTestMT {
       }
     }
   }
+  
 }

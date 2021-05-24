@@ -9,11 +9,11 @@ import java.util.List;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
+import org.bigbase.carrot.ops.OperationFailedException;
 import org.bigbase.carrot.redis.BitOp;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
-import org.bigbase.carrot.redis.OperationFailedException;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.bigbase.carrot.examples.util.Address;
-import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.ops.OperationFailedException;
 
 import redis.clients.jedis.Jedis;
 

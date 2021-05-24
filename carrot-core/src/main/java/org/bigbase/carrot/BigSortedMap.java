@@ -15,6 +15,7 @@ import org.bigbase.carrot.ops.IncrementFloat;
 import org.bigbase.carrot.ops.IncrementInt;
 import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.ops.Operation;
+import org.bigbase.carrot.ops.OperationFailedException;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -1315,7 +1316,9 @@ public class BigSortedMap {
    * @param incr increment value
    * @return value after increment
    */
-  public long incrementLongOp(long keyPtr, int keyLength, long incr) {
+  public long incrementLongOp(long keyPtr, int keyLength, long incr) 
+    throws OperationFailedException
+  {
     Key k = getKey(keyPtr, keyLength);
     
     KeysLocker.writeLock(k);
@@ -1328,12 +1331,12 @@ public class BigSortedMap {
       boolean result = execute(op);
       if (result) {
         return op.getValue();
+      } else {
+        throw new OperationFailedException();
       }
     } finally {
       KeysLocker.writeUnlock(k);
     }
-    // Key does not exists yet, so call safe version
-    return incrementLong(keyPtr, keyLength, 0, incr);
   }
   
   private static ThreadLocal<IncrementInt> incrInt = new ThreadLocal<IncrementInt>() {
@@ -1349,7 +1352,9 @@ public class BigSortedMap {
    * @param incr increment value
    * @return value after increment
    */
-  public int incrementIntOp(long keyPtr, int keyLength, int incr) {
+  public int incrementIntOp(long keyPtr, int keyLength, int incr) 
+      throws OperationFailedException
+  {
     
     Key k = getKey(keyPtr, keyLength);
     KeysLocker.writeLock(k);
@@ -1362,12 +1367,12 @@ public class BigSortedMap {
       boolean result = execute(op);
       if (result) {
         return op.getValue();
+      } else {
+        throw new OperationFailedException();
       }
     } finally {
       KeysLocker.writeUnlock(k);
     }
-    // Key does not exists yet, so call safe version
-    return incrementInt(keyPtr, keyLength, 0, incr);
   }
   
   
@@ -1384,7 +1389,9 @@ public class BigSortedMap {
    * @param incr increment value
    * @return value after increment
    */
-  public double incrementDoubleOp(long keyPtr, int keyLength, double incr) {
+  public double incrementDoubleOp(long keyPtr, int keyLength, double incr)
+      throws OperationFailedException
+  {
     
     Key k = getKey(keyPtr, keyLength);
     KeysLocker.writeLock(k);
@@ -1398,12 +1405,12 @@ public class BigSortedMap {
       boolean result = execute(op);
       if (result) {
         return op.getValue();
+      } else {
+        throw new OperationFailedException();
       }
     } finally {
       KeysLocker.writeUnlock(k);
     }
-    // Key does not exists yet, so call safe version
-    return incrementDouble(keyPtr, keyLength, 0, incr);
   }
   
   private static ThreadLocal<IncrementFloat> incrFloat = new ThreadLocal<IncrementFloat>() {
@@ -1419,7 +1426,9 @@ public class BigSortedMap {
    * @param incr increment value
    * @return value after increment
    */
-  public float incrementFloatOp(long keyPtr, int keyLength, float incr) {
+  public float incrementFloatOp(long keyPtr, int keyLength, float incr) 
+    throws OperationFailedException
+  {
     
     Key k = getKey(keyPtr, keyLength);
     KeysLocker.writeLock(k);
@@ -1432,12 +1441,12 @@ public class BigSortedMap {
       boolean result = execute(op);
       if (result) {
         return op.getValue();
+      } else {
+        throw new OperationFailedException();
       }
     } finally {
       KeysLocker.writeUnlock(k);
     }
-    // Key does not exists yet, so call safe version
-    return incrementFloat(keyPtr, keyLength, 0, incr);
   }
   /**
    * TODO: test

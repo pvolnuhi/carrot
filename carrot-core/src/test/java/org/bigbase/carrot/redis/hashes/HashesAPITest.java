@@ -13,7 +13,7 @@ import java.util.Random;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
-import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.ops.OperationFailedException;
 import org.bigbase.carrot.util.Pair;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;

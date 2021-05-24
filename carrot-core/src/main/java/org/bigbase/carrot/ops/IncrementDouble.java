@@ -11,6 +11,13 @@ import org.bigbase.carrot.util.Utils;
  */
 public class IncrementDouble extends Operation {
   
+  static ThreadLocal<Long> buffer = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
+    }
+  };
+  
   double value;
   
   public IncrementDouble() {
@@ -38,20 +45,27 @@ public class IncrementDouble extends Operation {
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress <= 0) {
-      return false;
+    double dv = 0;
+    if (foundRecordAddress > 0) {
+      int vSize = DataBlock.valueLength(foundRecordAddress);
+      if (vSize != Utils.SIZEOF_DOUBLE /*long size*/) {
+        return false;
+      }
+      long ptr = DataBlock.valueAddress(foundRecordAddress);
+      long v = UnsafeAccess.toLong(ptr);
+      dv = Double.longBitsToDouble(v);
+      value += dv;
+      UnsafeAccess.putLong(ptr, Double.doubleToLongBits(value));
+      this.updatesCount = 0;
+      return true;
     }
-    int vSize = DataBlock.valueLength(foundRecordAddress);
-    if (vSize != Utils.SIZEOF_DOUBLE /*long size*/) {
-      return false;
-    }
-    long ptr = DataBlock.valueAddress(foundRecordAddress);
-    long v = UnsafeAccess.toLong(ptr);
-    double dv = Double.longBitsToDouble(v);
     value += dv;
-    UnsafeAccess.putLong(ptr, Double.doubleToLongBits(value));
-    // set updateCounts to 0 - we update in place
-    this.updatesCount = 0;
+    UnsafeAccess.putLong(buffer.get(), Double.doubleToLongBits(value));
+    this.updatesCount = 1;
+    this.keys[0] = keyAddress;
+    this.keySizes[0] = keySize;
+    this.values[0] = buffer.get();
+    this.valueSizes[0] = Utils.SIZEOF_DOUBLE;
     return true;
   }
 

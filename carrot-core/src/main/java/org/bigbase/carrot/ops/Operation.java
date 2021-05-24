@@ -71,12 +71,14 @@ public abstract class Operation {
   protected int updatesCount; // 1 or 2
   
   /*
-   * If true, look for largest key which less or equals
+   * If true, look for the largest key which LESS or equals to 
+   * this operation key.
    */
   protected boolean floorKey = false; 
   
   /*
    * Read - only or update in place operation
+   * WARNING: updates in place with compression enabled do not work yet
    */
   protected boolean readOnlyOrUpdateInPlace = false;
   

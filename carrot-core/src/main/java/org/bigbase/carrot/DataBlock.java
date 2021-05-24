@@ -1,5 +1,6 @@
 package org.bigbase.carrot;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
@@ -306,6 +307,7 @@ public final class DataBlock  {
     LOG.info("Data size      =" + getDataInBlockSize());
     LOG.info("Number k/v's   =" + getNumberOfRecords());
   }
+  
   /**
    * Create new block with a given size (memory allocation)
    * @param size of a block
@@ -984,7 +986,7 @@ public final class DataBlock  {
   private boolean isForbiddenKey (long key, int len) {
     return len == 1 && UnsafeAccess.toByte(key) == 0;
   }
-  
+    
   /**
    * Put operation
    * @param key
@@ -998,7 +1000,7 @@ public final class DataBlock  {
    */
   final boolean put(byte[] key, int keyOffset, int keyLength, byte[] value, int valueOffset,
       int valueLength, long version, long expire) throws RetryOperationException {
-
+    
     // Now this is a mutation
     setMutationOp(true);
     

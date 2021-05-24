@@ -11,10 +11,17 @@ import org.bigbase.carrot.util.Utils;
  */
 public class IncrementLong extends Operation {
   
+  static ThreadLocal<Long> buffer = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(Utils.SIZEOF_LONG);
+    }
+  };
+  
   long value;
   
   public IncrementLong() {
-    //setReadOnlyOrUpdateInPlace(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   /**
@@ -44,25 +51,32 @@ public class IncrementLong extends Operation {
   public void reset() {
     super.reset();
     value = 0;
-    //setReadOnlyOrUpdateInPlace(true);
+    setReadOnlyOrUpdateInPlace(true);
   }
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress <= 0) {
-      return false;
+    long v = 0;
+    if (foundRecordAddress > 0) {
+      int vSize = DataBlock.valueLength(foundRecordAddress);
+      if (vSize != Utils.SIZEOF_LONG /*long size*/) {
+        return false;
+      }
+      long ptr = DataBlock.valueAddress(foundRecordAddress);
+      v = UnsafeAccess.toLong(ptr);
+      this.value += v;
+      UnsafeAccess.putLong(ptr, value);
+      this.updatesCount = 0;
+      return true;
     }
-    int vSize = DataBlock.valueLength(foundRecordAddress);
-    if (vSize != Utils.SIZEOF_LONG /*long size*/) {
-      return false;
-    }
-    long ptr = DataBlock.valueAddress(foundRecordAddress);
-    long v = UnsafeAccess.toLong(ptr);
     this.value += v;
-    UnsafeAccess.putLong(ptr, v + value);
+    UnsafeAccess.putLong(buffer.get(), value);
     // set updateCounts to 0 - we update in place
-    this.updatesCount = 0;
+    this.updatesCount = 1;
+    this.keys[0] = keyAddress;
+    this.keySizes[0] = keySize;
+    this.values[0] = buffer.get();
+    this.valueSizes[0] = Utils.SIZEOF_LONG;
     return true;
   }
-
 }

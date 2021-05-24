@@ -6,7 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.bigbase.carrot.examples.util.UserSession;
-import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.ops.OperationFailedException;
 
 import redis.clients.jedis.Jedis;
 

@@ -11,6 +11,12 @@ import org.bigbase.carrot.util.Utils;
  */
 public class IncrementInt extends Operation {
   
+  static ThreadLocal<Long> buffer = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(Utils.SIZEOF_INT);
+    }
+  };
   int value;
   
   public IncrementInt() {
@@ -50,19 +56,28 @@ public class IncrementInt extends Operation {
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress <= 0) {
-      return false;
+    int v = 0;
+    if (foundRecordAddress > 0) {
+      int vSize = DataBlock.valueLength(foundRecordAddress);
+      if (vSize != Utils.SIZEOF_INT /*long size*/) {
+        return false;
+      }
+      long ptr = DataBlock.valueAddress(foundRecordAddress);
+      v = UnsafeAccess.toInt(ptr);
+      value += v;
+      UnsafeAccess.putInt(ptr, value);
+      this.updatesCount = 0;
+      return true;
     }
-    int vSize = DataBlock.valueLength(foundRecordAddress);
-    if (vSize != Utils.SIZEOF_INT /*long size*/) {
-      return false;
-    }
-    long ptr = DataBlock.valueAddress(foundRecordAddress);
-    int v = UnsafeAccess.toInt(ptr);
     value += v;
-    UnsafeAccess.putInt(ptr, value);
-    // set updateCounts to 0 - we update in place
-    this.updatesCount = 0;
+    UnsafeAccess.putInt(buffer.get(), value);
+    
+    this.updatesCount = 1;
+    this.keys[0] = keyAddress;
+    this.keySizes[0] = keySize;
+    this.values[0] = buffer.get();
+    this.valueSizes[0] = Utils.SIZEOF_INT;
+    
     return true;
   }
 

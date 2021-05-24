@@ -3,7 +3,7 @@ package org.bigbase.carrot.examples.basic;
 import java.io.IOException;
 import java.util.Random;
 
-import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.ops.OperationFailedException;
 
 import redis.clients.jedis.Jedis;
 

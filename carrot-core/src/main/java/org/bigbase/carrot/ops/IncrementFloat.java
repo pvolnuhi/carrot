@@ -6,13 +6,22 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * This example of specific Update - atomic counter 
+ * Implementation is not safe for regular scanners
+ * 
+ * Should introduce scanner with write locks?
  * @author Vladimir Rodionov
  *
  */
 public class IncrementFloat extends Operation {
   
-  float value;
+  static ThreadLocal<Long> buffer = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(Utils.SIZEOF_FLOAT);
+    }
+  };
   
+  float value;
   public IncrementFloat() {
     setReadOnlyOrUpdateInPlace(true);
   }
@@ -49,20 +58,27 @@ public class IncrementFloat extends Operation {
   
   @Override
   public boolean execute() {
-    if (foundRecordAddress <= 0) {
-      return false;
+    float fv = 0f;
+    if (foundRecordAddress > 0) {
+      int vSize = DataBlock.valueLength(foundRecordAddress);
+      if (vSize != Utils.SIZEOF_FLOAT /*long size*/) {
+        return false;
+      }
+      long ptr = DataBlock.valueAddress(foundRecordAddress);
+      int v = UnsafeAccess.toInt(ptr);
+      fv = Float.intBitsToFloat(v);
+      this.value += fv;
+      UnsafeAccess.putInt(ptr, Float.floatToIntBits(value));
+      this.updatesCount = 0;
+      return true;
     }
-    int vSize = DataBlock.valueLength(foundRecordAddress);
-    if (vSize != Utils.SIZEOF_FLOAT /*long size*/) {
-      return false;
-    }
-    long ptr = DataBlock.valueAddress(foundRecordAddress);
-    int v = UnsafeAccess.toInt(ptr);
-    float fv = Float.intBitsToFloat(v);
     this.value += fv;
-    UnsafeAccess.putInt(ptr, Float.floatToIntBits(value));
-    // set updateCounts to 0 - we update in place
-    this.updatesCount = 0;
+    UnsafeAccess.putInt(buffer.get(), Float.floatToIntBits(value));
+    this.updatesCount = 1;
+    this.keys[0] = keyAddress;
+    this.keySizes[0] = keySize;
+    this.values[0] = buffer.get();
+    this.valueSizes[0] = Utils.SIZEOF_FLOAT;
     return true;
   }
 

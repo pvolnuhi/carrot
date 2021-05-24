@@ -8,7 +8,7 @@ import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.examples.util.Address;
-import org.bigbase.carrot.redis.OperationFailedException;
+import org.bigbase.carrot.ops.OperationFailedException;
 import org.bigbase.carrot.redis.hashes.Hashes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
