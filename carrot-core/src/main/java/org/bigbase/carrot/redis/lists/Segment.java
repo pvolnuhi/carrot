@@ -90,6 +90,7 @@ public final class Segment {
   private Segment(long ptr, int size) {
     this.dataPtr = ptr;
     setSize (size);
+    Lists.allocMemory(size);
   }
   
   public static Segment allocateNew() {
@@ -129,8 +130,9 @@ public final class Segment {
    * Sets data pointer
    * @param ptr
    */
-  public void setDataPointer(long ptr) {
+  public Segment setDataPointer(long ptr) {
     this.dataPtr = ptr;
+    return this;
   }
   
   /**
@@ -471,7 +473,7 @@ public final class Segment {
       if (Utils.compareTo(ePtr, eSize, elemPtr, elemSize) == 0) {
         return after? ptr + eBlockSize + Utils.sizeUVInt(eSize): ptr;
       }
-      ptr += eBlockSize + Utils.sizeUVInt(eSize);
+      ptr += eBlockSize + Utils.sizeUVInt(eBlockSize);
     }
     return -1;
   }
@@ -584,7 +586,12 @@ public final class Segment {
       return size;
     }
     long addr = elementAddress(this.dataPtr + SEGMENT_OVERHEAD);
-    UnsafeAccess.copy( addr, buffer, size);
+    
+    UnsafeAccess.copy(addr, buffer, size);
+    if (isExternalAllocation(this.dataPtr + SEGMENT_OVERHEAD)) {
+      UnsafeAccess.free(addr);
+      Lists.freeMemory(size);
+    }
     int bSize = elementBlockFullSize(this.dataPtr + SEGMENT_OVERHEAD);
     int dataSize = getDataSize();
     UnsafeAccess.copy(this.dataPtr + + SEGMENT_OVERHEAD + bSize, 
@@ -628,7 +635,11 @@ public final class Segment {
       return size;
     }
     long addr = elementAddress(ptr);
-    UnsafeAccess.copy( addr, buffer, size);
+    UnsafeAccess.copy(addr, buffer, size);
+    if (isExternalAllocation(ptr)) {
+      UnsafeAccess.free(addr);
+      Lists.freeMemory(size);
+    }
     int bSize = elementBlockFullSize(ptr);
     incrementDataSize(-bSize);
     incrementNumberOfElements(-1);
@@ -703,7 +714,7 @@ public final class Segment {
     int newElementNumber = count;
     int rightDataSize = dataSize - off;
     int rightElementNumber = elementNumber - count;
-    int newSize = getMinSizeGreaterOrEqualsThan(rightDataSize);
+    int newSize = getMinSizeGreaterOrEqualsThan(rightDataSize + SEGMENT_OVERHEAD);
     
     long ptr = UnsafeAccess.mallocZeroed(newSize);
     Lists.allocMemory(newSize);
@@ -838,7 +849,7 @@ public final class Segment {
    */
   public Segment next(Segment s) {
     long ptr = getNextAddress();
-    if (ptr <=0) return null;
+    if (ptr <= 0) return null;
     s.setDataPointer(ptr);
     return s;
   }
@@ -850,7 +861,7 @@ public final class Segment {
    */
   public Segment previous(Segment s) {
     long ptr = getPreviousAddress();
-    if (ptr <=0) return null;
+    if (ptr <= 0) return null;
     s.setDataPointer(ptr);
     return s;
   }
@@ -884,6 +895,7 @@ public final class Segment {
       if (eSize == elSize && Utils.compareTo(elPtr, elSize, ePtr, eSize) == 0) {
         if (isExternalAllocation(ptr)) {
           UnsafeAccess.free(ePtr);
+          Lists.freeMemory(eSize);
         }
         UnsafeAccess.copy(ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
         incrementDataSize(-bSize - bSizeSize);
@@ -896,12 +908,13 @@ public final class Segment {
   }
   
   /**
-   * Remove all occurrences of a given element 
+   * Remove up to max occurrences of a given element 
    * @param chunkPtr element pointer
    * @param size element size
+   * @param m maximum occurrences to remove
    * @return number of elements removed
    */
-  public int removeAll(long elPtr, int elSize) {
+  public int removeAll(long elPtr, int elSize, int m) {
     long ptr = this.dataPtr + SEGMENT_OVERHEAD;
     int dataSize = getDataSize();
     long max = ptr + dataSize;
@@ -915,14 +928,19 @@ public final class Segment {
       if (eSize == elSize && Utils.compareTo(elPtr, elSize, ePtr, eSize) == 0) {
         if (isExternalAllocation(ptr)) {
           UnsafeAccess.free(ePtr);
+          Lists.freeMemory(eSize);
         }
         UnsafeAccess.copy(ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
         incrementDataSize(-bSize - bSizeSize);
         incrementNumberOfElements(-1);
         max -= bSize + bSizeSize;
         count++;
+        if (count == m) {
+          break;
+        }
+      } else {
+        ptr += bSize + bSizeSize;
       }
-      ptr += bSize + bSizeSize;
     }
     return count;
   }
@@ -950,12 +968,14 @@ public final class Segment {
       }
       ptr += bSize + bSizeSize;
     }
-    if (lastPtr != 0) {
+    if (lastPtr > 0) {
       long ePtr = elementAddress(lastPtr);
       int bSize = elementBlockSize(lastPtr);
       int bSizeSize = Utils.sizeUVInt(bSize);  
       if (isExternalAllocation(lastPtr)) {
         UnsafeAccess.free(ePtr);
+        int eSize = elementSize(lastPtr);
+        Lists.freeMemory(eSize);
       }
       UnsafeAccess.copy(lastPtr + bSize + bSizeSize, lastPtr, max - lastPtr - bSize - bSizeSize);
       incrementDataSize(-bSize - bSizeSize);
@@ -968,12 +988,12 @@ public final class Segment {
   /**
    * Removes element by index
    * @param index index to remove
-   * @return number of removed (0 or 1)
+   * @return offset in bytes of an element being removed or -1
    */
   public int removeByIndex(int index) {
     int num = getNumberOfElements();
     if (index < 0 || index >= num) {
-      return 0;
+      return -1;
     }
     int count = 0;
     long ptr = this.dataPtr + SEGMENT_OVERHEAD;
@@ -985,12 +1005,17 @@ public final class Segment {
       ptr += bSize + bSizeSize;
     }
     
+    if (isExternalAllocation(ptr)) {
+      UnsafeAccess.free(elementAddress(ptr));
+      Lists.freeMemory(elementSize(ptr));
+    }
+    
     int bSize = elementBlockSize(ptr);
     int bSizeSize = Utils.sizeUVInt(bSize);
-    UnsafeAccess.copy( ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
+    UnsafeAccess.copy(ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
     incrementDataSize(-bSize - bSizeSize);
     incrementNumberOfElements(-1);
-    return 1;
+    return (int)(ptr - this.dataPtr);
   }
   
   /**
@@ -1011,13 +1036,77 @@ public final class Segment {
       ptr += bSize + bSizeSize;
     }
     
-    int bSize = elementBlockSize(ptr);
-    int bSizeSize = Utils.sizeUVInt(bSize);
-    if (bSize + bSizeSize > bufferSize) {
-      return bSize + bSizeSize;
+    int eSize = elementSize(ptr);
+    long address = elementAddress(ptr);
+    int eSizeSize = Utils.sizeUVInt(eSize);
+    if (eSize + eSizeSize > bufferSize) {
+      return eSize + eSizeSize;
     }
-    UnsafeAccess.copy( ptr, buffer, bSize + bSizeSize);
-    return bSize + bSizeSize;
+    Utils.writeUVInt(buffer, eSize);
+    UnsafeAccess.copy(address, buffer + eSizeSize, eSize);
+    return eSize + eSizeSize;
   }
   
+  /**
+   * TODO: fix it, the method MUST return overall size of a data
+   * Get range of elements into a buffer
+   * @param from from index
+   * @param max maximum number of elements to get
+   * @param buffer buffer address
+   * @param bufferSize buffer size
+   * @return number of elements
+   */
+  
+  public int getRange(int from, int max, long buffer, int bufferSize) {
+    int num = getNumberOfElements();
+    if (from < 0 || from >= num) {
+      return 0;
+    }
+    int count = 0;
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    while (count < from) {
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+      ptr += bSize + bSizeSize;
+      count++;
+    }
+    
+    int to = Math.min(num, from + max) - 1;
+    int totalSize = 0;
+    count = 0;
+    while(count <= to - from) {
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+      long address = elementAddress(ptr);
+      int eSize = elementSize(ptr);
+      int eSizeSize = Utils.sizeUVInt(eSize);
+      if (totalSize + eSize + eSizeSize > bufferSize) {
+        break;
+      }
+      Utils.writeUVInt(buffer + totalSize, eSize);
+      UnsafeAccess.copy(address, buffer + totalSize + eSizeSize, eSize);
+      totalSize += eSize + eSizeSize;
+      ptr += bSize + bSizeSize;
+      count++;
+    }
+    return totalSize;
+  }
+  
+  /**
+   * Calculates number of elements in a given buffer
+   * @param buffer buffer start address
+   * @param bufferSize buffer size
+   * @return number of elements
+   */
+  static int numElementsInBuffer(long buffer, int bufferSize) {
+    int total = 0;
+    long ptr = buffer;
+    while (ptr < buffer + bufferSize) {
+      int size = Utils.readUVInt(ptr);
+      int sizeSize = Utils.sizeUVInt(size);
+      ptr += size + sizeSize;
+      total++;
+    }
+    return total;
+  }
 }

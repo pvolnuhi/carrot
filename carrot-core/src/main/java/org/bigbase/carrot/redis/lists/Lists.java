@@ -4,6 +4,7 @@ package org.bigbase.carrot.redis.lists;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.Key;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -157,7 +158,7 @@ public class Lists {
    * @param keySize list key size
    */
   public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
-    //TODO: implement as Operation
+    //TODO: implement as the Operation (speed optimization and atomicity)
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
@@ -166,7 +167,7 @@ public class Lists {
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
       Segment s = firstSegment(map, kPtr, kSize, valueBuf, valueBufSize);
-      if (s!= null) {
+      if (s != null) {
         long nextPtr = 0;
         do {
           nextPtr = s.getNextAddress();
@@ -215,17 +216,23 @@ public class Lists {
    * @return size of a value being moved or -1 
    */
     
-   public static long LMOVE (BigSortedMap map, long srcKeyPtr, int srcKeySize, 
+   public static int LMOVE (BigSortedMap map, long srcKeyPtr, int srcKeySize, 
        long dstKeyPtr, int dstKeySize, Side src, Side dst, long buffer, int bufferSize) {
      
      //TODO we produce temporary garbage in this method
      // Looks thread-safe
+     // Atomicity only if we use Lists API!
+     boolean sameKey = srcKeyPtr == dstKeyPtr;
      Key srcKey = new Key(srcKeyPtr, srcKeySize);
-     Key dstKey = new Key(srcKeyPtr, srcKeySize);
+     Key dstKey = new Key(dstKeyPtr, dstKeySize);
      List<Key> keyList = Arrays.asList(srcKey, dstKey);
-     long size = 0;
+     int size = 0;
      try {
-       KeysLocker.writeLockAllKeys(keyList);
+       if (!sameKey) {
+         KeysLocker.writeLockAllKeys(keyList);
+       } else {
+         KeysLocker.writeLock(srcKey);
+       }
        if(src == Side.LEFT) {
          size = LPOP(map, srcKeyPtr, srcKeySize, buffer, bufferSize);
        } else {
@@ -244,7 +251,11 @@ public class Lists {
          RPUSH(map, dstKeyPtr, dstKeySize, new long[] {buffer}, new int[] {(int)size});
        }
      } finally {
-       KeysLocker.writeUnlockAllKeys(keyList);
+       if (!sameKey) {
+         KeysLocker.writeUnlockAllKeys(keyList);
+       } else {
+         KeysLocker.writeUnlock(srcKey);
+       }
      }
      return size;
    }
@@ -489,7 +500,7 @@ public class Lists {
   public static long BRPOPLPUSH(BigSortedMap map, long srcKeyPtr, int srcKeySize, long dstKeyPtr, 
       int dstKeySize, long timeout, long buffer, int bufferSize)
   {
-    return BLMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, Side.LEFT, Side.RIGHT, timeout, buffer, bufferSize);
+    return BLMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, Side.RIGHT, Side.LEFT, timeout, buffer, bufferSize);
   }
   
   /**
@@ -557,13 +568,12 @@ public class Lists {
    * @param srcKeySize source key size
    * @param dstKeyPtr destination key pointer
    * @param dstKeySize destination key size
-   * @param timeout timeout
    * @return size of element or -1 (NULL)
    */
-  public static long RPOPLPUSH(BigSortedMap map, long srcKeyPtr, int srcKeySize, long dstKeyPtr, 
-      int dstKeySize, long timeout, long buffer, int bufferSize)
+  public static int RPOPLPUSH(BigSortedMap map, long srcKeyPtr, int srcKeySize, long dstKeyPtr, 
+      int dstKeySize, long buffer, int bufferSize)
   {
-    return LMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, Side.LEFT, Side.RIGHT,  buffer, bufferSize);
+    return LMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, Side.RIGHT, Side.LEFT,  buffer, bufferSize);
   }
   
   /**
@@ -583,7 +593,7 @@ public class Lists {
    * @return size of an element, if greater then bufferSize - repeat the call, -1 - NULL
    */
   
-  public static long LINDEX(BigSortedMap map, long keyPtr, int keySize, long index, 
+  public static int LINDEX(BigSortedMap map, long keyPtr, int keySize, long index, 
       long buffer, int bufferSize) {
     
     Key key = getKey(keyPtr, keySize);
@@ -604,6 +614,12 @@ public class Lists {
     }
   }
   
+  /**
+   * Finds segment which contains element by index
+   * @param s segment to start with
+   * @param index index of an element being searched
+   * @return offset (in elements) in a segment of a given element
+   */
   public static int findSegmentForIndex(Segment s, long index) {
     long count = 0;
     long prev = 0;
@@ -693,9 +709,7 @@ public class Lists {
           return n + 1;
         }
       } while (s.next(s) != null);
-      
       return -1;
-      
     } finally {
       KeysLocker.writeUnlock(key);
     }  
@@ -748,7 +762,7 @@ public class Lists {
    * @return serialized size of an element or -1
    * 
    */
-  public static long LPOP(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize)
+  public static int LPOP(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize)
   {
     // THREAD-SAFE and atomic only in Lists API (FIXME in a future)
     // TODO: implement as the Operation
@@ -784,14 +798,14 @@ public class Lists {
           Segment.setPreviousSegmentAddress(nextSegmentPtr, 0);
         }
         s.free();
+        // Update fisrt segment address
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, nextSegmentPtr);
       }
+      // Update list element number and first-last segments
+      map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + 2 * Utils.SIZEOF_LONG, 0);
       // Should we delete list if it is empty now?
       if (numElements == 0) {
         DELETE(map, keyPtr, keySize);
-      } else {
-        // Update list element number and first segment
-        map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + Utils.SIZEOF_LONG, 0);
       }
       return elSize;
     } finally {
@@ -916,9 +930,11 @@ public class Lists {
    */
   public static long LPUSH(BigSortedMap map, long keyPtr, int keySize, long[] elemPtrs, int[] elemSizes)
   {
+    //TODO: implement as an Operation
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
+      
       int kSize = buildKey(keyPtr, keySize);
       long kPtr = keyArena.get();
       long valueBuf = valueArena.get();
@@ -930,6 +946,7 @@ public class Lists {
         exists = false;
         s = Segment.allocateNew(s, 0);
       } else {
+        // Get first segment
         long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
         s.setDataPointer(dataPtr);
       }
@@ -992,20 +1009,27 @@ public class Lists {
   
   public static long LPUSHX(BigSortedMap map, long keyPtr, int keySize, long[] elemPtrs, int[] elemSizes)
   {
+    //TODO: implement as an Operation
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
+      
       int kSize = buildKey(keyPtr, keySize);
       long kPtr = keyArena.get();
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
-      Segment s = firstSegment(map, kPtr, kSize, valueBuf, valueBufSize);
-      if (s == null) {
+      Segment s = segment.get();
+      long size = map.get(kPtr, kSize, valueBuf, valueBufSize, 0);
+      if (size < 0) {
         return -1;
+      } else {
+        // Get first segment
+        long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
+        s.setDataPointer(dataPtr);
       }
       boolean singleSegment = s.getNextAddress() == 0;
       // Add to the first segment
-      for(int i=0; i < elemPtrs.length; i++) {
+      for(int i = 0; i < elemPtrs.length; i++) {
         long ptr = s.prepend(elemPtrs[i], elemSizes[i]);
         // Update first segment address
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, ptr);
@@ -1013,12 +1037,13 @@ public class Lists {
       // Last segment address can change only if there were only one segment
       int numberToPush = elemPtrs.length;
       if (singleSegment) {
-        // Update last segment pointer
         s = s.last(s);
-        UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, s.getDataPtr());
-      }
+        long lastSegmentPtr = s.getDataPtr();
+        // Update last segment pointer
+        UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, lastSegmentPtr);
+      } 
       // Update length of the list
-      int n =  UnsafeAccess.toInt(valueBuf);
+      int n = UnsafeAccess.toInt(valueBuf);
       n += numberToPush;
       UnsafeAccess.putInt(valueBuf, n);
       // Update list 
@@ -1027,7 +1052,7 @@ public class Lists {
       return n;
     } finally {
       KeysLocker.writeUnlock(key);
-    } 
+    }
   }
   
   private static Segment firstSegment(BigSortedMap map, long kPtr, int kSize, 
@@ -1038,7 +1063,9 @@ public class Lists {
       return null;
     } else {
       long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
-      if (dataPtr == 0) return null;
+      if (dataPtr == 0) {
+        return null;
+      }
       s.setDataPointer(dataPtr);
     }
     return s;
@@ -1052,6 +1079,9 @@ public class Lists {
       return null;
     } else {
       long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG);
+      if (dataPtr == 0) {
+        return null;
+      }
       s.setDataPointer(dataPtr);
     }
     return s;
@@ -1081,6 +1111,9 @@ public class Lists {
    * an empty list is returned. If stop is larger than the actual end of the list, Redis will treat 
    * it like the last element of the list.
    * 
+   * -inf - no limit for start
+   * +inf - no limit for end
+   * 
    * Return value
    * Array reply: list of elements in the specified range.
    * 
@@ -1091,7 +1124,7 @@ public class Lists {
    * @param end range end
    * @param buffer buffer for response
    * @param bufferSize buffer size
-   * @return serialized size of the response
+   * @return serialized size of the response, -1 if not exists, 0 if range is incorrect
    */
   public static long LRANGE (BigSortedMap map, long keyPtr, int keySize, long start, long end, 
       long buffer, int bufferSize) {
@@ -1102,45 +1135,63 @@ public class Lists {
       long kPtr = keyArena.get();
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
+      int size = (int) map.get(kPtr, kSize, valueBuf,valueBufSize, 0);
+      if (size < 0) {
+        return -1;// Does not exists
+      }
+      // List size - first 4 bytes of the value
       int num = UnsafeAccess.toInt(valueBuf);
       if (start < 0) {
         start += num;
         if (start < 0) {
+          // Including Commons.NULL_LONG
           start = 0;
         }
       }
+      if (end == Commons.NULL_LONG) {
+        end = num - 1;
+      }
       if (end < 0) {
         end += num;
-        if (end < 0) return 0;
+        if (end < 0) {
+          return 0;
+        }
       }
       if (end >= num) {
-        end = num -1;
+        end = num - 1;
       }
-      if (start > end) return 0;
-      // TODO optimize
-      Segment s = firstSegment(map, kPtr, kSize, valueBuf, valueBufSize);
-      if (s == null) {
+      if (start > end || start >= num) {
         return 0;
       }
+      // TODO optimize (what for?)
+      Segment s = firstSegment(map, kPtr, kSize, valueBuf, valueBufSize);
+      if (s == null) {
+        // Empty list?
+        return -1;
+      }
       int off = findSegmentForIndex(s, start);
-      if (off < 0) return -1;
+      if (off < 0) {
+        return -1;
+      }
       long ptr = buffer + Utils.SIZEOF_INT;
-      long limit = buffer + bufferSize;
       long counter = 0;
       long totalSize = Utils.SIZEOF_INT;
+      int max = (int)(end - start + 1);
+      bufferSize -= Utils.SIZEOF_INT;
       do {
-        int n = s.getNumberOfElements();
-        for (int k = off; k < n; k++) {
-          int sz = s.getByIndex(k, ptr, (int)(limit - ptr));
-          totalSize += sz;
-          ptr += sz;
-          counter++;
-          if (counter > (end - start)) {
-            break;
-          }
+        int sz = s.getRange(off, max, ptr, bufferSize);
+        if (sz == 0) {
+          break;
         }
+        totalSize += sz;
+        int nn = Segment.numElementsInBuffer(ptr, sz);
+        counter += nn;
+        max -= nn;
+        ptr += sz;
+        bufferSize -= sz;
         off = 0;
-      } while( counter <= (end - start) && s.next(s) != null);
+      } while(counter <= (end - start) && s.next(s) != null);
+      UnsafeAccess.putInt(buffer, (int) counter);
       return totalSize;
     } finally {
       KeysLocker.readUnlock(key);
@@ -1171,18 +1222,21 @@ public class Lists {
    * @param count count (see above)
    * @param elemPtr element pointer
    * @param elemSize element size
-   * @return number of elements removed
+   * @return number of elements removed or 0 if does not exists
    */
   
   public static long LREM(BigSortedMap map, long keyPtr, int keySize, int count, long elemPtr, int elemSize) {
+    //TODO: Operation
     Key key = getKey(keyPtr, keySize);
     boolean reverse = false;
     if (count < 0) {
       reverse = true;
       count = -count;
     } else if (count == 0) {
+      // FIXME: fix this hack
       count = Integer.MAX_VALUE;
     }
+    int deleted = 0;
     try {
       KeysLocker.writeLock(key);
       int kSize = buildKey(keyPtr, keySize);
@@ -1191,24 +1245,40 @@ public class Lists {
       int valueBufSize = valueArenaSize.get();
       Segment s = reverse? lastSegment(map, kPtr, kSize, valueBuf, valueBufSize):
         firstSegment(map, kPtr, kSize, valueBuf, valueBufSize);
+      // Now valueBuf contains list's Value= NUMBER ELEMENTS, FIRST SEGMENT ADDRESS, LAST SEGMENT ADDRESS
       if (s == null) {
         return 0;
       }
-      int deleted = 0;
-      do {
+      
+      while(s != null) {
+        // Check if we reached maximum limit
         if (deleted == count) {
           break;
         }
-        while((reverse? s.removeReverse(elemPtr, elemSize): 
-          s.remove(elemPtr, elemSize)) > 0) {
-          deleted ++;
-          if (deleted == count) {
-            break;
+        // Process one segment
+        if (!reverse) {
+          deleted += s.removeAll(elemPtr, elemSize, (count - deleted));
+        } else {
+          // For reverse scan we go one-by-one
+          while(s.removeReverse(elemPtr, elemSize) == 1) {
+            deleted++;
+            if (deleted == count) {
+              break;
+            }
           }
         }
-        updateSegmentInChain(s, valueBuf);
-      } while( (reverse? s.previous(s): s.next(s)) != null);
-      incrementNumberOfElements(valueBuf, -deleted);
+        // Update segment and get next (or previous)
+        s = reverse? updateSegmentInChainReverse(s, valueBuf): updateSegmentInChain(s, valueBuf);
+      }
+      
+      long total = incrementNumberOfElements(valueBuf, -deleted);
+      if (deleted > 0) {
+        // Update list number of elements, first and last segment
+        map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + 2 * Utils.SIZEOF_LONG, -1);
+      }
+      if (total == 0) {
+        DELETE(map, keyPtr, keySize);
+      }
       return deleted;
     } finally {
       KeysLocker.writeUnlock(key);
@@ -1218,24 +1288,80 @@ public class Lists {
   private static long incrementNumberOfElements(long valueBuf, int incr) {
     if (incr == 0) return UnsafeAccess.toInt(valueBuf);
     int v = UnsafeAccess.toInt(valueBuf);
-    UnsafeAccess.putLong(valueBuf, v + incr);
+    UnsafeAccess.putInt(valueBuf, v + incr);
     return v + incr;
   }
 
   /**
-   * Update segments first and last
+   * Update segments first and last - direct scan
    * @param s segment
    * @param buffer buffer
    */
-  private static void updateSegmentInChain(Segment s, long buffer) {
-    if (s.isFirst()) {
-      UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, s.getDataPtr());
+  private static Segment updateSegmentInChain(Segment s, long buffer) {
+    if (s.isFirst() && s.isEmpty()) {
+        long nextPtr = s.getNextAddress();
+        s.free();
+        if (nextPtr > 0) {
+          // Update first segment
+          UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, nextPtr);
+          s =  s.setDataPointer(nextPtr);
+        } else {
+          // Empty list
+          s = null;
+        }
+    } else if (s.isLast() && s.isEmpty()) {
+      long prevPtr = s.getPreviousAddress();
+      // prevPtr can not be null - otherwise s is a first segment
+      UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, prevPtr);
+      s.free();
+      return null; // we finished
+    } else if (s.isEmpty()) {
+      // Empty segment, not first, not last
+      // Both are not nulls
+      long prev = s.getPreviousAddress();
+      long next = s.getNextAddress();  
+      Segment.setNextSegmentAddress(prev, next);
+      Segment.setPreviousSegmentAddress(next, prev);
+      s.free();
+      s = s.setDataPointer(next);
     }
-    if (s.isLast()) {
-      UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, s.getDataPtr());
-    } 
+    return s.next(s);
+    
   }
 
+  /**
+   * Update segments first and last - reverse scan
+   * @param s segment
+   * @param buffer buffer
+   */
+  private static Segment updateSegmentInChainReverse(Segment s, long buffer) {
+    if (s.isFirst() && s.isEmpty()) {
+        long nextPtr = s.getNextAddress();
+        if (nextPtr > 0) {
+          // Update first segment
+          UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, nextPtr);
+        }
+        s.free();
+        s = null;
+    } else if (s.isLast() && s.isEmpty()) {
+      long prevPtr = s.getPreviousAddress();
+      // prevPtr can not be null - otherwise s is a first segment
+      UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, prevPtr);
+      s.free();
+      s = s.setDataPointer(prevPtr);
+    } else if (s.isEmpty()) {
+      // Empty segment, not first, not last
+      // Both are not nulls
+      long prev = s.getPreviousAddress();
+      long next = s.getNextAddress();  
+      Segment.setNextSegmentAddress(prev, next);
+      Segment.setPreviousSegmentAddress(next, prev);
+      s.free();
+      s = s.setDataPointer(prev);
+    }
+    return s.previous(s);
+  }
+  
   /**
    * LSET key index element
    * Available since 1.0.0.
@@ -1255,6 +1381,7 @@ public class Lists {
    * @return number of elements after the operation or -1;
    */
   public static long LSET (BigSortedMap map, long keyPtr, int keySize, long index, long elemPtr, int elemSize) {
+    //TODO: make it Operation
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
@@ -1263,6 +1390,7 @@ public class Lists {
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
       Segment s = firstSegment(map, kPtr, kSize, valueBuf, valueBufSize);
+      // valueBuf contains list's header now
       if (s == null) {
         return -1;
       }
@@ -1279,13 +1407,18 @@ public class Lists {
         return -1; // Index is too big
       }
       long oldAddr = s.getDataPtr();
+      
+      //TODO: optimize by combining remove/insert
+      // into update
       // remove old one
-      int n = s.removeByIndex(off);
-      if (n == 0) {
+      int elOff = s.removeByIndex(off);
+      if (elOff < 0) {
+        // What does it mean?
         return -1;
       }
+      // s may be empty now!
       // Insert new one
-      long newAddr = s.insert(off, elemPtr, elemSize);
+      long newAddr = s.insert(elOff, elemPtr, elemSize);
       boolean needUpdate = false;
       // Update firstLast
       if (s.isFirst() && oldAddr != newAddr) {
@@ -1295,13 +1428,16 @@ public class Lists {
         needUpdate = true;
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, newAddr); 
       } else {
+        // TODO: Optimize, check if old last segment address != new last segment address 
         s = s.next(s);
         if (s != null && s.isLast()) {
           needUpdate = true;
           UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, s.getDataPtr()); 
         }
       }
+      
       if (needUpdate) {
+        //UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, s.next(s).getDataPtr());
         map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + Utils.SIZEOF_LONG + Utils.SIZEOF_LONG, 0);
       }
       // Number of elements in this list
@@ -1365,7 +1501,7 @@ public class Lists {
    * @param bufferSize buffer size
    * @return serialized size of the response or -1 (nil)
    */
-  public static long RPOP(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) {
+  public static int RPOP(BigSortedMap map, long keyPtr, int keySize, long buffer, int bufferSize) {
     Key key = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(key);
@@ -1392,19 +1528,21 @@ public class Lists {
       UnsafeAccess.putInt(valueBuf, numElements);
       if (s.isEmpty()) {
         if (s.isFirst()) {
-          UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, 0);
-          UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT , 0);
+          //UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, 0);
+          //UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT , 0);
+          DELETE(map, keyPtr, keySize);
+          return elSize;
         } else {
           long prevSegmentPtr = s.getPreviousAddress();
           UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, prevSegmentPtr);
           // last segment does not have the next segment address
           Segment.setNextSegmentAddress(prevSegmentPtr, 0);
+          s.free();
         }
-        s.free();
       }
-      // Should we delete list if it is empty now?
-      // Update list element number and first segment
-      map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + Utils.SIZEOF_LONG + Utils.SIZEOF_LONG, 0);
+      
+      // Update list element number and first-last segment
+      map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + 2 *Utils.SIZEOF_LONG, 0);
       return elSize;
     } finally {
       KeysLocker.writeUnlock(key);
@@ -1453,7 +1591,7 @@ public class Lists {
       if (size < 0) {
         exists = false;
         s = Segment.allocateNew(s, 0);
-        // Set first segment now
+        // Set first segment now - its a last as well
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, s.getDataPtr());
       } else {
         long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG);
@@ -1461,8 +1599,9 @@ public class Lists {
         s.setDataPointer(dataPtr);
       }
       // Add to the last segment
-      for(int i=0; i< elemPtrs.length; i++) {
+      for(int i = 0; i < elemPtrs.length; i++) {
         long ptr = s.append(elemPtrs[i], elemSizes[i]);
+        // TODO: append w/o splits
         if (s.isFirst()) {
           UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, ptr);
         }
@@ -1510,7 +1649,7 @@ public class Lists {
    * @param keySize list key size
    * @param elemPtrs array of element pointers
    * @param elemSizes array of element sizes
-   * @return the length of the list after the push operation
+   * @return the length of the list after the push operation or -1 if key does not exists
    */
   public static long RPUSHX(BigSortedMap map, long keyPtr, int keySize, long[] elemPtrs, int[] elemSizes) {
     Key key = getKey(keyPtr, keySize);
@@ -1523,7 +1662,6 @@ public class Lists {
       Segment s = segment.get();
       long size = map.get(kPtr, kSize, valueBuf, valueBufSize, 0);
       if (size < 0) {
-        // Key does not exists
         return -1;
       } else {
         long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG);
@@ -1531,17 +1669,19 @@ public class Lists {
         s.setDataPointer(dataPtr);
       }
       // Add to the last segment
-      for(int i=0; i< elemPtrs.length; i++) {
+      for(int i = 0; i < elemPtrs.length; i++) {
         long ptr = s.append(elemPtrs[i], elemSizes[i]);
+        // TODO: append w/o splits
+        if (s.isFirst()) {
+          UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, ptr);
+        }
         if (!s.isLast()) {
-          if (s.isFirst()) {
-            UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, ptr);
-          }
           s = s.next(s);
         }
       }
       // Last segment address can change only if there were only one segment
       int numberToPush = elemPtrs.length;
+      
       s = s.last(s);
       // Update last segment pointer
       UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, s.getDataPtr());
@@ -1551,9 +1691,10 @@ public class Lists {
       UnsafeAccess.putInt(valueBuf, n);
       // Update list 
       map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + 2 * Utils.SIZEOF_LONG, 0);
+      // Now we have first segment
       return n;
     } finally {
       KeysLocker.writeUnlock(key);
-    }  
+    }
   }
 }

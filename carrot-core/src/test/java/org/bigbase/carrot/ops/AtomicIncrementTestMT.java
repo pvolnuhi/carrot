@@ -99,7 +99,7 @@ public class AtomicIncrementTestMT {
       System.out.println("Increment test run #" + k);
 
       BigSortedMap.setMaxBlockSize(4096);
-      map = new BigSortedMap(1000000000L);
+      map = new BigSortedMap(10000000000L);
       totalLoaded.set(0);
       totalIncrements.set(0);
       try {
