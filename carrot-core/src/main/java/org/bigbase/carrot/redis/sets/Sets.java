@@ -439,10 +439,6 @@ public class Sets {
         total += numElementsInValue(valuePtr);
         scanner.next();
       }
-      if (total > 0 && total < 10000) {
-        System.err.println("total=" + total+ " start=" + Bytes.toHex(startKeyPtr, kSize)+" end="+ Bytes.toHex(endKeyPtr, kSize -1)
-        +" time=" + System.nanoTime());
-      }
       scanner.close();
     } catch (IOException e) {
       // should never be thrown
