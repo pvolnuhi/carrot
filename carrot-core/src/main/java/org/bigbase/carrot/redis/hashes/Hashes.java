@@ -20,6 +20,7 @@ import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.ops.OperationFailedException;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.redis.MutationOptions;
@@ -535,12 +536,13 @@ public class Hashes {
   public static long HLEN(BigSortedMap map, long keyPtr, int keySize) {
     
     Key k = getKey(keyPtr, keySize);
-
+    long endKeyPtr = 0;
     try {
       readLock(k);
-      int kSize = buildKey(keyPtr, keySize, 0, 0);
+      int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
       long ptr = keyArena.get();
-      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
+      BigSortedMapDirectMemoryScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -557,6 +559,9 @@ public class Hashes {
       }
       return total;
     } finally {
+      if (endKeyPtr > 0) {
+        UnsafeAccess.free(endKeyPtr);
+      }
       readUnlock(k);
     }
   }
@@ -620,12 +625,13 @@ public class Hashes {
    */
   public static long getHashSizeInBytes(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
-
+    long endKeyPtr = 0;
     try {
       readLock(k);      
-      int kSize = buildKey(keyPtr, keySize, 0, 0);
+      int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
       long ptr = keyArena.get();
-      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
+      BigSortedMapDirectMemoryScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize -1);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -641,6 +647,9 @@ public class Hashes {
       }
       return total;
     } finally {
+      if (endKeyPtr > 0) {
+        UnsafeAccess.free(endKeyPtr);
+      }
       readUnlock(k);
     }
   }
@@ -677,7 +686,6 @@ public class Hashes {
       for (int i = 0; i < fieldPtrs.length; i++) {
         long fieldPtr = fieldPtrs[i];
         int fieldSize = fieldSizes[i];
-
         int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
         HashDelete update = hashDelete.get();
         update.reset();
@@ -1871,6 +1879,11 @@ public class Hashes {
    */
   public static HashScanner getScanner(BigSortedMap map, long lastSeenKeyPtr, 
       int lastSeenKeySize, long lastFieldSeenPtr, int lastFieldSeenSize) {
+    
+    
+    //TODO: this code is not OK
+    
+    
     int startKeySize = keySizeWithPrefix(lastSeenKeyPtr);
     long stopKeyPtr = Utils.prefixKeyEnd(lastSeenKeyPtr, startKeySize);
     if (stopKeyPtr == -1) {
@@ -1942,6 +1955,8 @@ public class Hashes {
       hs.setDisposeKeysOnClose(true);
     } catch (IOException e) {
       try {
+        UnsafeAccess.free(endPtr);
+        UnsafeAccess.free(kPtr);
         scanner.close();
       } catch (IOException e1) {
       }
@@ -1991,12 +2006,15 @@ public class Hashes {
     }
     // Special handling when fieldStartPtr == 0 (from beginning)
     long startPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + 
-      (fieldStartSize == 0? 1: fieldStartSize));
+      (fieldStartSize == 0? Utils.SIZEOF_BYTE: fieldStartSize));
+    fieldStartPtr = fieldStartPtr == 0? ZERO: fieldStartPtr;
+    fieldStartSize = fieldStartSize == 0? 1: fieldStartSize;
+    
     int startPtrSize = buildKey(keyPtr, keySize, fieldStartPtr, fieldStartSize, startPtr);
-    if (fieldStartSize == 0) {
-      startPtrSize += 1;
-      UnsafeAccess.putByte(startPtr + startPtrSize - 1, (byte) 0);
-    }
+//    if (fieldStartSize == 0) {
+//      startPtrSize += 1;
+//      UnsafeAccess.putByte(startPtr + startPtrSize - 1, (byte) 0);
+//    }
     
     long stopPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldStopSize);
     int stopPtrSize = buildKey(keyPtr, keySize, fieldStopPtr, fieldStopSize, stopPtr);
@@ -2033,13 +2051,14 @@ public class Hashes {
       return null;
     }
     
-    
     HashScanner hs = null;
     try {
       hs = new HashScanner(scanner, fieldStartPtr, fieldStartSize, fieldStopPtr, fieldStopSize, reverse);
       hs.setDisposeKeysOnClose(true);
     } catch (IOException e) {
       try {
+        UnsafeAccess.free(startPtr);
+        UnsafeAccess.free(stopPtr);
         scanner.close();
       } catch (IOException e1) {
       }
@@ -2192,7 +2211,7 @@ public class Hashes {
     long off = NUM_ELEM_SIZE;
     long prevOff = NUM_ELEM_SIZE;
     int n = 0;
-    while(off < valueSize/2) {
+    while(off < valueSize / 2) {
       n++;
       int fSize = Utils.readUVInt(valuePtr + off);
       int fSizeSize = Utils.sizeUVInt(fSize);
@@ -2202,7 +2221,7 @@ public class Hashes {
       off+= fSizeSize + fSize + vSize + vSizeSize;
     }
     if (prevOff - NUM_ELEM_SIZE > valueSize - off) {
-      return n-1;
+      return n - 1;
     } else {
       return n;
     }

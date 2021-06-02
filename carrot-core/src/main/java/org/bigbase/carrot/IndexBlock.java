@@ -70,9 +70,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * to a particular CPU cores - this value can be very low. The lower value is the better
 	 * performance is for put/delete operations.
 	 */
-	private static long SAFE_UNSAFE_THRESHOLD = 50;// in ms
+	private static long SAFE_UNSAFE_THRESHOLD = 500;// in ms
 
-	 private static long SAFE_UNSAFE_THRESHOLD_A = 10;// in ms
+	 private static long SAFE_UNSAFE_THRESHOLD_A = 500;// in ms
 
 	// bytes
 
