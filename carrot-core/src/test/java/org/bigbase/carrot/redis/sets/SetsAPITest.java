@@ -27,7 +27,7 @@ public class SetsAPITest {
     List<String> list = new ArrayList<String>();
     Random r = new Random();
     for (int i=0; i < n; i++) {
-      String m = Utils.getRandomStr(r, 10);
+      String m = Utils.getRandomStr(r, 16);
       list.add(m);
       int res = Sets.SADD(map, key, m);
       if (res == 0) {
@@ -635,22 +635,22 @@ public class SetsAPITest {
     
     Collections.sort(list);
     
-    List<String> result = Sets.SRANDMEMBER(map, key, 100, 1105);// Required size is 1104 for 100 elements
+    List<String> result = Sets.SRANDMEMBER(map, key, 100, 1705);// Required size is 1704 for 100 elements
     assertEquals(100, result.size());
     
-    result = Sets.SRANDMEMBER(map, key, 100, 1104);// Required size is 1104 for 100 elements
+    result = Sets.SRANDMEMBER(map, key, 100, 1704);// Required size is 1104 for 100 elements
     assertEquals(100, result.size());
     
-    result = Sets.SRANDMEMBER(map, key, 100, 1103);// Required size is 1093 for 99 elements
+    result = Sets.SRANDMEMBER(map, key, 100, 1703);// Required size is 1093 for 99 elements
     assertEquals(99, result.size());
     
-    result = Sets.SRANDMEMBER(map, key, 100, 1092);// Required size is 1082 for 98 elements
+    result = Sets.SRANDMEMBER(map, key, 100, 1686);// Required size is 1082 for 98 elements
     assertEquals(98, result.size());
     
-    result = Sets.SRANDMEMBER(map, key, 100, 100);// Required size is 92 for 8 elements
-    assertEquals(8, result.size());
+    result = Sets.SRANDMEMBER(map, key, 100, 100);// Required size is 89 for 5 elements
+    assertEquals(5, result.size());
     
-    result = Sets.SRANDMEMBER(map, key, 100, 15);// Required size is 15 for 1 element
+    result = Sets.SRANDMEMBER(map, key, 100, 21);// Required size is 21 for 1 element
     assertEquals(1, result.size());
     
     result = Sets.SRANDMEMBER(map, key, 100, 10);// Required size is 15 for 1 element
@@ -707,25 +707,25 @@ public class SetsAPITest {
     
     Collections.sort(list);
     
-    List<String> result = Sets.SPOP(map, key, 100, 1105);// Required size is 1104 for 100 elements
+    List<String> result = Sets.SPOP(map, key, 100, 1705);// Required size is 1704 for 100 elements
     assertEquals(100, result.size());
     
-    result = Sets.SPOP(map, key, 100, 1104);// Required size is 1104 for 100 elements
+    result = Sets.SPOP(map, key, 100, 1704);// Required size is 1704 for 100 elements
     assertEquals(100, result.size());
     
-    result = Sets.SPOP(map, key, 100, 1103);// Required size is 1093 for 99 elements
+    result = Sets.SPOP(map, key, 100, 1687);// Required size is 1687 for 99 elements
     assertEquals(99, result.size());
     
-    result = Sets.SPOP(map, key, 100, 1092);// Required size is 1082 for 98 elements
+    result = Sets.SPOP(map, key, 100, 1670);// Required size is 1670 for 98 elements
     assertEquals(98, result.size());
     
-    result = Sets.SPOP(map, key, 100, 100);// Required size is 92 for 8 elements
-    assertEquals(8, result.size());
+    result = Sets.SPOP(map, key, 100, 100);// Required size is 89 for 5 elements
+    assertEquals(5, result.size());
     
-    result = Sets.SPOP(map, key, 100, 15);// Required size is 15 for 1 element
+    result = Sets.SPOP(map, key, 100, 21);// Required size is 21 for 1 element
     assertEquals(1, result.size());
     
-    result = Sets.SPOP(map, key, 100, 10);// Required size is 15 for 1 element
+    result = Sets.SPOP(map, key, 100, 10);// Required size is 21 for 1 element
     assertEquals(0, result.size());
   }
   

@@ -130,21 +130,21 @@ public class SetsTest {
   }
   
   private void allTests() throws IOException {
-//    long start = System.currentTimeMillis();
-//    setUp();
-//    testSADDSISMEMBER();
-//    tearDown();
-//    setUp();
-//    testAddRemove();
-//    tearDown();
-//    setUp();
-//    testAddMultiDelete();
-//    tearDown();
-//    long end = System.currentTimeMillis();    
-//    System.out.println("\nRUN in " + (end -start) + "ms");
+    long start = System.currentTimeMillis();
+    setUp();
+    testSADDSISMEMBER();
+    tearDown();
+    setUp();
+    testAddRemove();
+    tearDown();
+    setUp();
+    testAddMultiDelete();
+    tearDown();
+    long end = System.currentTimeMillis();    
+    System.out.println("\nRUN in " + (end -start) + "ms");
 //   testMemoryUsageForInts();
 //   testCompressionSortedIntSet();
-    testPerformance();
+//    testPerformance();
   }
   
   @Ignore

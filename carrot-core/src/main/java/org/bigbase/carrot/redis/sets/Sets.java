@@ -16,8 +16,10 @@ import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
+import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
 import org.bigbase.carrot.redis.KeysLocker;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -422,11 +424,13 @@ public class Sets {
 
     Key k = getKey(keyPtr, keySize);
     long total = 0;
+    long startKeyPtr = 0, endKeyPtr = 0;
     try {
       KeysLocker.readLock(k);
-      int kSize = buildKey(keyPtr, keySize, 0, 0);
-      long ptr = keyArena.get();
-      BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
+      startKeyPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE) ;
+      int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1, startKeyPtr);
+      endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, kSize - 1);      
+      BigSortedMapDirectMemoryScanner scanner = map.getScanner(startKeyPtr, kSize, endKeyPtr, kSize - 1);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -435,10 +439,20 @@ public class Sets {
         total += numElementsInValue(valuePtr);
         scanner.next();
       }
+      if (total > 0 && total < 10000) {
+        System.err.println("total=" + total+ " start=" + Bytes.toHex(startKeyPtr, kSize)+" end="+ Bytes.toHex(endKeyPtr, kSize -1)
+        +" time=" + System.nanoTime());
+      }
       scanner.close();
     } catch (IOException e) {
       // should never be thrown
     } finally {
+      if (startKeyPtr > 0) {
+        UnsafeAccess.free(startKeyPtr);
+      }
+      if (endKeyPtr > 0) {
+        UnsafeAccess.free(endKeyPtr);
+      }
       KeysLocker.readUnlock(k);
     }
     return total;
@@ -459,10 +473,7 @@ public class Sets {
       readLock(k);
       int newKeySize = keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
       kPtr = UnsafeAccess.malloc(newKeySize);
-      UnsafeAccess.putByte(kPtr, (byte) DataType.SET.ordinal());
-      UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
-      UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-      UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE, (byte)0);
+      buildKey(keyPtr, keySize, Commons.ZERO, 1, kPtr);
       
       endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
       
@@ -497,6 +508,7 @@ public class Sets {
   
   
   /**
+   * TODO: Remove if not used
    * Returns total size (in bytes) of elements in this set, defined by key
    * This method is good for reading all set elements 
    * @param map ordered map
@@ -506,14 +518,17 @@ public class Sets {
    * @throws IOException 
    */
   public static long getSetSizeInBytes(BigSortedMap map, long keyPtr, int keySize){
-    int kSize = buildKey(keyPtr, keySize, 0, 0);
-    long ptr = keyArena.get();
-    BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, kSize);
-    if (scanner == null) {
-      return 0; // empty or does not exists
-    }
+    
+    long ptr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
+    int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1, ptr);
+    long endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
+
     long total = 0;
     try {
+      if (scanner == null) {
+        return 0; // empty or does not exists
+      }
       while (scanner.hasNext()) {
         long valueSize = scanner.valueSize();
         total += valueSize - NUM_ELEM_SIZE;
@@ -521,6 +536,13 @@ public class Sets {
       scanner.close();
     } catch (IOException e) {
       // should never be thrown
+    } finally {
+      if (endKeyPtr > 0) {
+        UnsafeAccess.free(endKeyPtr);
+      }
+      if (ptr > 0) {
+        UnsafeAccess.free(ptr);
+      }
     }
     return total;
   }
@@ -962,22 +984,23 @@ public class Sets {
    * @param keySize key size
    * @return number of deleted K-Vs
    */
-  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+  public static long DELETE(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
+    long startKeyPtr = 0, endKeyPtr = 0;
     try {
       KeysLocker.writeLock(k);
-      int newKeySize = keySize + KEY_SIZE + Utils.SIZEOF_BYTE;
-      long kPtr = UnsafeAccess.malloc(newKeySize);
-      UnsafeAccess.putByte(kPtr, (byte)DataType.SET.ordinal());
-      UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
-      UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
-      
-      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
-      
-      UnsafeAccess.free(kPtr);
-      UnsafeAccess.free(endKeyPtr);
+      startKeyPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
+      int newKeySize = buildKey(keyPtr, keySize, Commons.ZERO, 1, startKeyPtr);
+      endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, newKeySize - 1);      
+      long deleted = map.deleteRange(startKeyPtr, newKeySize, endKeyPtr, newKeySize - 1);      
+      return deleted;
     } finally {
+      if (startKeyPtr > 0) {
+        UnsafeAccess.free(startKeyPtr);
+      }
+      if (endKeyPtr > 0) {
+        UnsafeAccess.free(endKeyPtr);
+      }
       KeysLocker.writeUnlock(k);
     }
 

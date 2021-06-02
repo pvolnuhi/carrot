@@ -1,6 +1,8 @@
 package org.bigbase.carrot;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -586,6 +588,206 @@ public class BigSortedMap {
    * @return true if operation succeeds, false otherwise
    */
   @SuppressWarnings("deprecation")
+//  public boolean execute(Operation op) {
+//    long version = getSequenceId();
+//    IndexBlock kvBlock = getThreadLocalBlock();
+//    op.setVersion(version);
+//    kvBlock.putForSearch(op.getKeyAddress(), op.getKeySize(), version);
+//    IndexBlock b = null;
+//    boolean lowerKey = false;
+//    boolean readOnly = op.isReadOnlyOrUpdateInPlace();
+//    int seqNumber;
+//    while (true) {
+//      try {
+//        b = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
+//        if (b == null) {
+//          // TODO
+//          return false;
+//        }
+//        boolean firstBlock = b.isFirstIndexBlock();
+//
+//        if (readOnly) {
+//          readLock(b);
+//        } else {
+//          writeLock(b);
+//        }
+//        if (!b.isValid()) {
+//          continue;
+//        }
+//        seqNumber = b.getSeqNumberSplitOrMerge();
+//        // TODO: optimize - last time split? what is the safest threshold? 100ms
+//        if(b.hasRecentUnsafeModification()) {
+//          IndexBlock bbb = lowerKey == false? map.floorKey(kvBlock): map.lowerKey(b);
+//          if (b != bbb) {
+//            continue;
+//          } else {
+//            int sn = b.getSeqNumberSplitOrMerge();
+//            if (sn != seqNumber) {
+//              seqNumber = sn;
+//              continue;
+//            }
+//          }
+//        } 
+//        
+//        // When map is empty, recordAddress is always 0
+//        // This call ONLY decompresses data
+//        long recordAddress = lowerKey == false? 
+//            b.get(op.getKeyAddress(), op.getKeySize(), version, op.isFloorKey()):
+//              b.lastRecordAddress();
+//        if (recordAddress < 0 && op.isFloorKey() && lowerKey == false && !firstBlock) {
+//          lowerKey = true;
+//          b.compressLastUsedDataBlock();
+//          continue;
+//        }
+//        op.setFoundRecordAddress(recordAddress);
+//        // Execute operation
+//        boolean result = op.execute();
+//        int updatesCount = op.getUpdatesCount();
+//
+//        if (result == false || updatesCount == 0) {
+//          b.compressLastUsedDataBlock();
+//          return result;
+//        }         
+//        // updates count > 0
+//        // execute first update (update to existing key)
+//        long keyPtr = op.keys()[0];
+//        int keyLength     = op.keySizes()[0];
+//        long valuePtr = op.values()[0];
+//        int valueLength = op.valueSizes()[0];
+//        boolean updateType = op.updateTypes()[0];
+//        boolean reuseValue = op.reuseValues()[0];
+//        
+//        checkKeyBuffer(keyBuffer1, keyBufferSize1, keyLength);
+//        UnsafeAccess.copy(keyPtr, keyBuffer1.get(), keyLength);
+//        keyPtr = keyBuffer1.get();
+//        
+//        if (updatesCount > 1) {
+//          checkKeyBuffer(keyBuffer2, keyBufferSize2, op.keySizes()[1]);
+//          UnsafeAccess.copy(op.keys()[1], keyBuffer2.get(), op.keySizes()[1]);
+//        }
+//        // Compress again to preserve compressed data ptr
+//        b.compressLastUsedDataBlock();
+//
+//        IndexBlock bb = null;
+//        boolean isBB = false;
+//
+//        if (updateType == true) { // DELETE
+//          // Single update can be delete - NOW WE DO NOT INSERT DELETE MARKERS
+//          // So DELETE will always succeed (true or false)
+//          // This call compress data block in b
+//          OpResult res = b.delete(keyPtr, keyLength, version);
+//          if (res == OpResult.OK) {
+//            if (b.isEmpty() && !firstBlock) {
+//              map.remove(b);
+//              b.free();
+//              b.invalidate();
+//            }
+//          } else {
+//            //TODO: remove this
+//            System.err.println("PANIC! Unexpected result of a delete operation");
+//            Thread.dumpStack();
+//            System.exit(-1);
+//          }
+//          // We do not check result? Should always be OK?
+//          if (updatesCount < 2) {
+//            return true;
+//          } else {
+//            // Currently we support only single DELETE or 1/2 PUTs
+//            //throw new RuntimeException("Unexpected number of updates with DELETE operation: " + updatesCount);
+//            // TODO: logging error
+//            System.err.println("Unexpected number of updates with DELETE");
+//            Thread.dumpStack();
+//            return true;
+//          }
+//          
+//        } else { // PUT
+//          // This call compress data block in b
+//          result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
+//          if (!result && getTotalAllocatedMemory() < maxMemory) {
+//            /*DEBUG*/ System.err.println("IB split time="+ System.nanoTime());
+//            bb = b.split();
+//            if (!bb.isLessThanMin(keyPtr, keyLength, version)) {
+//              // Insert into new block
+//              result = bb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
+//              // This should succeed?
+//              if (!result) {
+//                // TODO: We failed to insert into non-full index block
+//                return false;
+//              }
+//              isBB = true;
+//            } else {
+//              // try again into b
+//              result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
+//              if (!result) {
+//                // TODO: We failed to insert into non-full index block
+//                return false;
+//              }
+//            }
+//          } else if (!result) {
+//            // MAP is FULL
+//            return false;
+//          }
+//          // block into
+//          if (updatesCount < 2) {
+//            if (bb != null) {
+//              putBlock(bb);
+//            }
+//            return true;
+//          }
+//        }
+//        // updateCounts == 2 - second is insert new K-V
+//        // second key is larger than first one and if first was inserted into new split block
+//        // so the second one goes into it as well.
+//        IndexBlock block = isBB? bb: b;
+//        keyPtr = keyBuffer2.get();
+//        keyLength     = op.keySizes()[1];
+//        valuePtr = op.values()[1];
+//        valueLength = op.valueSizes()[1];
+//        updateType = op.updateTypes()[1];
+//        reuseValue = op.reuseValues()[1];
+//        result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
+//        if (!result) {
+//          // We do not check allocated memory limit b/c it can break
+//          // the transaction
+//          IndexBlock ibb = block.split();          
+//          if (!ibb.isLessThanMin(keyPtr, keyLength, version)) {
+//            // Insert into new block
+//            result = ibb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
+//            // This should succeed?
+//            if (!result) {
+//              // TODO: We failed to insert into non-full index block
+//              return false;
+//            }
+//          } else {
+//            // try again into block
+//            result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
+//            if (!result) {
+//              // TODO: We failed to insert into non-full index block
+//              return false;
+//            }
+//          }
+//          putBlock(ibb);
+//        }
+//        // we put either ibb or bb - not both of them - mens
+//        // we do not do two index block splits in a single update operation
+//        if (block == bb) {
+//          putBlock(bb);
+//        }
+//        return true;
+//      } catch (RetryOperationException e) {
+//        continue;
+//      } finally {
+//        if (b != null) {
+//          if (readOnly) {
+//            readUnlock(b);
+//          } else {
+//            writeUnlock(b);
+//          }
+//        }
+//      }
+//    }
+//  }
+  
   public boolean execute(Operation op) {
     long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
@@ -666,9 +868,6 @@ public class BigSortedMap {
         // Compress again to preserve compressed data ptr
         b.compressLastUsedDataBlock();
 
-        IndexBlock bb = null;
-        boolean isBB = false;
-
         if (updateType == true) { // DELETE
           // Single update can be delete - NOW WE DO NOT INSERT DELETE MARKERS
           // So DELETE will always succeed (true or false)
@@ -686,92 +885,32 @@ public class BigSortedMap {
             Thread.dumpStack();
             System.exit(-1);
           }
-          // We do not check result? Should always be OK?
-          if (updatesCount < 2) {
-            return true;
-          } else {
-            // Currently we support only single DELETE or 1/2 PUTs
-            //throw new RuntimeException("Unexpected number of updates with DELETE operation: " + updatesCount);
-            // TODO: logging error
-            System.err.println("Unexpected number of updates with DELETE");
-            Thread.dumpStack();
-            return true;
-          }
+          return true;
           
         } else { // PUT
           // This call compress data block in b
           result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
           if (!result && getTotalAllocatedMemory() < maxMemory) {
-            bb = b.split();
-            if (!bb.isLessThanMin(keyPtr, keyLength, version)) {
-              // Insert into new block
-              result = bb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
-              // This should succeed?
-              if (!result) {
-                // TODO: We failed to insert into non-full index block
-                return false;
-              }
-              isBB = true;
-            } else {
-              // try again into b
-              result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
-              if (!result) {
-                // TODO: We failed to insert into non-full index block
-                return false;
-              }
-            }
+            result = put(keyPtr, keyLength, valuePtr, valueLength,  op.getExpire(), reuseValue);
           } else if (!result) {
             // MAP is FULL
             return false;
           }
           // block into
           if (updatesCount < 2) {
-            if (bb != null) {
-              putBlock(bb);
-            }
-            return true;
+            return result;
           }
         }
         // updateCounts == 2 - second is insert new K-V
         // second key is larger than first one and if first was inserted into new split block
         // so the second one goes into it as well.
-        IndexBlock block = isBB? bb: b;
-        
         keyPtr = keyBuffer2.get();
         keyLength     = op.keySizes()[1];
         valuePtr = op.values()[1];
         valueLength = op.valueSizes()[1];
         updateType = op.updateTypes()[1];
         reuseValue = op.reuseValues()[1];
-        result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
-        if (!result) {
-          // We do not check allocated memory limit b/c it can break
-          // the transaction
-          IndexBlock ibb = block.split();          
-          if (!ibb.isLessThanMin(keyPtr, keyLength, version)) {
-            // Insert into new block
-            result = ibb.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
-            // This should succeed?
-            if (!result) {
-              // TODO: We failed to insert into non-full index block
-              return false;
-            }
-          } else {
-            // try again into block
-            result = block.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
-            if (!result) {
-              // TODO: We failed to insert into non-full index block
-              return false;
-            }
-          }
-          putBlock(ibb);
-        }
-        // we put either ibb or bb - not both of them - mens
-        // we do not do two index block splits in a single update operation
-        if (block == bb) {
-          putBlock(bb);
-        }
-        return true;
+        return put(keyPtr, keyLength, valuePtr, valueLength, op.getExpire(), reuseValue);
       } catch (RetryOperationException e) {
         continue;
       } finally {
@@ -925,7 +1064,21 @@ public class BigSortedMap {
       }
     }
   }
+  
   /**
+   * To keep list of empty blocks
+   */
+  static ThreadLocal<List<IndexBlock>> emptyBlocks = new ThreadLocal<List<IndexBlock>>() {
+    @Override
+    protected List<IndexBlock> initialValue() {
+      return new ArrayList<IndexBlock>();
+    }
+  };
+  
+  /**
+   * 
+   * TODO: How to safely delete empty index blocks?
+   * 
    * TODO: TEST delete empty index blocks
    * Delete key range operation
    * @param startKeyPtr key address
@@ -940,15 +1093,22 @@ public class BigSortedMap {
     kvBlock.putForSearch(startKeyPtr, startKeyLength, version);
     IndexBlock b = null, prev = null;
     boolean firstBlock = true;
-    IndexBlock toDelete = null;
+    //IndexBlock toDelete = null;
     int seqNumber;
+    
+    //List<IndexBlock> toDeleteList = emptyBlocks.get();
+    //toDeleteList.clear();
+    
     while (true) {
       try {
         long loopStartTime = System.currentTimeMillis();
-        b = firstBlock? map.floorKey(kvBlock): map.higherKey(b);
+        // We need it to avoid releasing write lock from a wrong block
+        b = null;
+        b = firstBlock? map.floorKey(kvBlock): map.higherKey(prev);
         if (b == null) {
           break;
         }
+        
         writeLock(b);
         if(!b.isValid()) {
           continue;
@@ -969,21 +1129,17 @@ public class BigSortedMap {
             }
           }
         }
-        
-        if (b.isEmpty()) {
-          // toDelete
-          if (toDelete != null) {
-            map.remove(toDelete);
-            toDelete.free();
-            toDelete.invalidate();
-            toDelete = null;
-          } else if (!b.isFirstIndexBlock()){
-            toDelete = b;
-          }
-          break;
-        }       
         prev = b;        
+
+        if (b.isEmpty()) {
+          //TODO: fix this code
+          //toDeleteList.add(b);
+          continue;
+        }      
         long del = b.deleteRange(startKeyPtr, startKeyLength, endKeyPtr, endKeyLength, version);
+        if (b.isEmpty()) {
+          //toDeleteList.add(b);
+        }
         if (del == 0 && !firstBlock) {
           break;
         } else if (del == 0){
@@ -992,15 +1148,6 @@ public class BigSortedMap {
         }
         firstBlock = false;
         deleted += del; 
-        if (toDelete != null) {
-          map.remove(toDelete);
-          toDelete.free();
-          toDelete.invalidate();
-          toDelete = null;
-        }
-        if (b.isEmpty() && !b.isFirstIndexBlock()) {
-          toDelete = b;
-        }
         // and continue loop
       } catch (RetryOperationException e) {
         continue;
@@ -1009,15 +1156,41 @@ public class BigSortedMap {
           writeUnlock(b);
         }
       }
-    }
-    if (toDelete != null) {
-      map.remove(toDelete);
-      toDelete.free();
-      toDelete.invalidate();
-      toDelete = null;
-    }
+    } 
+    
+    //procesDeleteList(toDeleteList);
+    
     return deleted;
   }
+  
+  private void procesDeleteList(List<IndexBlock> toDeleteList) {
+    if (toDeleteList.isEmpty()) {
+      return;
+    }
+    IndexBlock ib = null;
+    while(!toDeleteList.isEmpty()) {
+      ib = toDeleteList.get(0);
+      try {
+        ib.writeLock();
+        if (ib.isValid()) {
+          map.remove(ib);
+          ib.free();
+          ib.invalidate();
+        }
+        toDeleteList.remove(0);
+      } catch(RetryOperationException e) {
+        if (!ib.isValid()) {
+          // Remove from the list
+          toDeleteList.remove(0);
+        }
+        continue;
+      } finally {
+        ib.writeUnlock();
+      }
+    }
+  }
+
+
   /**
    * Delete key operation
    * @param keyPtr key address
