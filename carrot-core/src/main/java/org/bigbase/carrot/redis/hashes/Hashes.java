@@ -533,10 +533,27 @@ public class Hashes {
    * @param keySize hash key size
    * @return number of elements(fields)
    */
+  
+  public static ThreadLocal<int[]> elarr = new ThreadLocal<int[]> () {
+    @Override
+    protected int[] initialValue() {
+      return new int[10000];
+    } 
+  };
+  
+  public static ThreadLocal<Integer> elsize = new ThreadLocal<Integer>() {
+    @Override
+    protected Integer initialValue() {
+      return 0;
+    } 
+  };
+  
   public static long HLEN(BigSortedMap map, long keyPtr, int keySize) {
     
     Key k = getKey(keyPtr, keySize);
     long endKeyPtr = 0;
+    int index = 0;
+
     try {
       readLock(k);
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
@@ -547,18 +564,25 @@ public class Hashes {
         return 0; // empty or does not exists
       }
       long total = 0;
+      int[] arr = elarr.get();
       try {
         while (scanner.hasNext()) {
           long valuePtr = scanner.valueAddress();
-          total += numElementsInValue(valuePtr);
+          int num = numElementsInValue(valuePtr);
+          arr[index++] = num;
+          total += num;
           scanner.next();
         } 
         scanner.close();
       } catch (IOException e) {
         // should never be thrown
+        e.printStackTrace();
       }
       return total;
     } finally {
+      
+      elsize.set(index);
+      
       if (endKeyPtr > 0) {
         UnsafeAccess.free(endKeyPtr);
       }

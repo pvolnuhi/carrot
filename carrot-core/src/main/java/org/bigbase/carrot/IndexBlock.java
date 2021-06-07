@@ -70,9 +70,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * to a particular CPU cores - this value can be very low. The lower value is the better
 	 * performance is for put/delete operations.
 	 */
-	private static long SAFE_UNSAFE_THRESHOLD = 500;// in ms
+	private static long SAFE_UNSAFE_THRESHOLD = 1000;// in ms
 
-	 private static long SAFE_UNSAFE_THRESHOLD_A = 500;// in ms
+	 private static long SAFE_UNSAFE_THRESHOLD_A = 1000;// in ms
 
 	// bytes
 
@@ -2046,7 +2046,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 				return b;
 			}
 		} finally {
-		  //TODO: why unlock w/o lock?
 			readUnlock();
 		}
 	}
@@ -2664,6 +2663,21 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       //b.compressDataBlockIfNeeded();
     }
   }
+  /**
+   * This method is not a public API
+   * @param ptr
+   * @param size
+   * @return
+   */
+  boolean inside(long ptr, int size) {
+    if (Utils.compareTo(firstKey, 0, firstKey.length, ptr, size) > 0) {
+      return false;
+    }
+    long lastPtr = lastRecordAddress();
+    long address = DataBlock.keyAddress(lastPtr);
+    int sz = DataBlock.keyLength(lastPtr);
+    return Utils.compareTo(ptr, size, address, sz) <= 0;
+  }
   
   /**
    * WARNING: Public API
@@ -3015,18 +3029,19 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		byte[] firstKey = getFirstKey();
 		byte[] firstKey1 = o.getFirstKey();
 		int res = Utils.compareTo(firstKey, 0, firstKey.length, firstKey1, 0, firstKey1.length);
-		if (res == 0) {
-			//long ver = o.version;
-			//if (version == ver) {
-				return type - o.type;
-			//} else if (ver < version) {
-			//	return -1;
-			//} else {
-			//	return 1;
-			//}
-		} else {
-			return res;
-		}
+//		if (res == 0) {
+//			//long ver = o.version;
+//			//if (version == ver) {
+//				return type - o.type;
+//			//} else if (ver < version) {
+//			//	return -1;
+//			//} else {
+//			//	return 1;
+//			//}
+//		} else {
+//			return res;
+//		}
+		return res;
 	}
 
 	public byte[] getFirstKey() {

@@ -668,24 +668,25 @@ public class BigSortedMap {
         b.compressLastUsedDataBlock();
 
         if (updateType == true) { // DELETE
-          // Single update can be delete - NOW WE DO NOT INSERT DELETE MARKERS
-          // So DELETE will always succeed (true or false)
           // This call compress data block in b
           OpResult res = b.delete(keyPtr, keyLength, version);
-          if (res == OpResult.OK) {
-            if (b.isEmpty() && !firstBlock) {
-              map.remove(b);
-              b.free();
-              b.invalidate();
-            }
-          } else {
-            //TODO: remove this
-            System.err.println("PANIC! Unexpected result of a delete operation");
+          if (res == OpResult.SPLIT_REQUIRED){
+            // delete can fail if the key is the first one in the block
+            // the next key is larger and index block does not have enough space
+            boolean r = delete(keyPtr,keyLength);
+            // MUST ALWAYS BE true
+            assert(r);
+          } else if (res != OpResult.OK){
+            System.err.println("PANIC! Unexpected result of delete operation: " + res);
             Thread.dumpStack();
             System.exit(-1);
           }
+          if (b.isEmpty() && !firstBlock) {
+            map.remove(b);
+            b.free();
+            b.invalidate();
+          }
           return true;
-          
         } else { // PUT
           // This call compress data block in b
           result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);

@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -24,7 +25,7 @@ public class HashesMultithreadedTest {
   int keySize = 16;
   int setSize = 10000;
   int keysNumber = 10000; // per thread
-  int numThreads = 8;
+  int numThreads = 6;
   List<Value> values;
 
   private List<Value> getValues() {
@@ -113,14 +114,34 @@ public class HashesMultithreadedTest {
           }
           int card = (int) Hashes.HLEN(map, ptr, keySize);
           if (card != values.size()) {
+            System.err.println("First CARD=" + card);
+            int total = Hashes.elsize.get();
+            int[] prev = Arrays.copyOf(Hashes.elarr.get(), total);
             card = (int) Hashes.HLEN(map, ptr, keySize);
             System.err.println("Second CARD=" + card);
+
+            int total2 = Hashes.elsize.get();
+            int[] prev2 = Arrays.copyOf(Hashes.elarr.get(), total2);
+            dump(prev, total, prev2, total2);
+            
             Thread.dumpStack();
             System.exit(-1);
           }
           assertEquals(values.size(), card);
         }
         UnsafeAccess.free(ptr);
+      }
+
+      private void dump(int[] prev, int total, int[] prev2, int total2) {
+        // total2 > total
+        System.err.println("total=" + total + " total2="+ total2);
+        int i = 0;
+        for (; i < total; i++) {
+          System.err.println(prev[i] + " " + prev2[i]);
+        }
+        for (; i < total2; i++ ) {
+          System.err.println("** " + prev2[i]);
+        }
       }
     };
     Runnable get = new Runnable() {

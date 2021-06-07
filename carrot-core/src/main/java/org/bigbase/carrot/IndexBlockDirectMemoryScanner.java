@@ -128,6 +128,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
   public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId, boolean reverse)
       throws RetryOperationException {
+    //FIXME: move this code under lock
     if (stopRowPtr != 0) {
       byte[] firstKey = b.getFirstKey();
       int res = Utils.compareTo(firstKey, 0, firstKey.length, stopRowPtr, stopRowLength);
@@ -145,10 +146,10 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     } catch (RetryOperationException e) {
       b.readUnlock();
       throw e;
-    } catch (RuntimeException ee) {
+    } /*catch (RuntimeException ee) {
       b.readUnlock();
       return null;
-    }
+    }*/
   }
   /**
    * Get new scanner instance
@@ -250,8 +251,8 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     }
     
     if (b == null) {
-      // FATAL
-      //throw new RuntimeException("Index block scanner");
+      //TODO: is it normal?
+      ///*DEBUG*/ System.err.println(Thread.currentThread().getName() +": BLOCK is null in IndexBlockDirectMemoryScanner.setStartStopRows");
       try {
         close();
       } catch (IOException e) {

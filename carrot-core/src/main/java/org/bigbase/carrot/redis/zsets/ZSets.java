@@ -181,7 +181,7 @@ public class ZSets {
   }
   
   /**
-   * Checks value arena size
+   * Checks auxiliary arena size
    * @param required size
    */
   static void checkAuxArena (int required) {

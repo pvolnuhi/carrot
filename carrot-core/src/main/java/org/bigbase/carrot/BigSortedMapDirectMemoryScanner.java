@@ -106,7 +106,7 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
   }
 
   private void init() throws IOException {
-    
+
     ConcurrentSkipListMap<IndexBlock, IndexBlock> cmap = map.getMap();
     IndexBlock key = null;
     long ptr = 0;
@@ -118,54 +118,60 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
       ptr = startRowPtr;
       length = startRowLength;
     }
-    
+
     if (ptr != 0) {
-      key = tlKey.get();   
+      key = tlKey.get();
       key.reset();
       key.putForSearch(ptr, length, snapshotId);
     }
-    while(true) {
+    while (true) {
       try {
-        currentIndexBlock = key != null? reverse? 
-            cmap.lowerKey(key):cmap.floorKey(key):reverse? cmap.lastKey(): cmap.firstKey();
-        if (reverse) {
-          currentIndexBlock.readLock();
-          if(currentIndexBlock.hasRecentUnsafeModification()) {
-            IndexBlock tmp =  key != null? reverse? cmap.lowerKey(key):
-              cmap.floorKey(key):cmap.lastKey();
-              if (tmp != currentIndexBlock) {
-              continue;
-            }
+        currentIndexBlock = key != null ? reverse ? cmap.lowerKey(key) : cmap.floorKey(key)
+            : reverse ? cmap.lastKey() : cmap.firstKey();
+        
+        currentIndexBlock.readLock();
+//        if (ptr > 0 && !currentIndexBlock.inside(ptr, length)) {
+//          /*DEBUG*/ System.err.println("NOT INSIDE INDEX BLOCK");
+//          continue;
+//        }
+//        // TODO: Fix the code
+        if (currentIndexBlock.hasRecentUnsafeModification()) {
+          IndexBlock tmp =
+              key != null ? reverse ? cmap.lowerKey(key) : cmap.floorKey(key) : cmap.lastKey();
+          if (tmp != currentIndexBlock) {
+            continue;
           }
         }
-                
+
         if (!isMultiSafe) {
-          indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
-            this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId, reverse);
+          indexScanner =
+              IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr,
+                this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId, reverse);
         } else {
-          indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr, 
-            this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId, indexScanner, reverse);
+          indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock,
+            this.startRowPtr, this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId,
+            indexScanner, reverse);
         }
         if (indexScanner != null) {
-          blockScanner = reverse? indexScanner.previousBlockScanner(): indexScanner.nextBlockScanner(); 
+          blockScanner =
+              reverse ? indexScanner.previousBlockScanner() : indexScanner.nextBlockScanner();
           updateNextFirstKey();
         }
         break;
-        //TODO null
-      } catch(RetryOperationException e) {
+        // TODO null
+      } catch (RetryOperationException e) {
         if (this.indexScanner != null) {
           try {
             this.indexScanner.close();
+            this.indexScanner = null;
           } catch (IOException e1) {
           }
         }
         continue;
       } finally {
-        if (reverse) {
-          currentIndexBlock.readUnlock();
-        }
+        currentIndexBlock.readUnlock();
       }
-    } 
+    }
     if (blockScanner == null) {
       close();
       throw new IOException("empty scanner");
@@ -270,6 +276,11 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
       this.indexScanner.close();
       this.indexScanner = null;
     }
+    // Now currentIndexBlock is totally unlocked!!!
+    // Block can be deleted (invalidated) or split !!!
+    // 
+    IndexBlock current = this.currentIndexBlock;
+    
     while (true) {
       IndexBlock tmp = null;
       try {
@@ -289,12 +300,17 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
           // We need this lock to get current first key,
           // because previous one could have been deleted
           byte[] firstKey = tmp.getFirstKey();
-          if (Utils.compareTo(firstKey, 0, firstKey.length, 
-            nextBlockFirstKey, nextBlockFirstKeySize) > 0) {
+          int res = Utils.compareTo(firstKey, 0, firstKey.length, 
+            nextBlockFirstKey, nextBlockFirstKeySize);
+          if ( res > 0) {
             // set new next block first key
             UnsafeAccess.free(nextBlockFirstKey);
             nextBlockFirstKey = UnsafeAccess.allocAndCopy(firstKey, 0, firstKey.length);
             nextBlockFirstKeySize = firstKey.length;
+          } else if (res < 0) {
+            /*DEBUG*/ System.err.println("index block split on-the-fly");
+            this.currentIndexBlock  = tmp;
+            continue;
           }
           // set startRow to null, because it is out of range of a IndexBlockScanner
           if (!isMultiSafe) {
@@ -313,17 +329,21 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
         } finally {
           tmp.readUnlock();
         }
+        // We set new index block and later ...
         this.currentIndexBlock = tmp;
         this.blockScanner = this.indexScanner.nextBlockScanner();
         if (this.blockScanner == null) {
           return false;
         }
+        // Here we can fail with RetryOperationException
         updateNextFirstKey();
         return true;
       } catch (RetryOperationException e) {
         if(this.indexScanner != null) {
             this.indexScanner.close();
         }
+        // Set currentIndexBlock to be current again
+        this.currentIndexBlock = current;
         continue;
       }
     }
@@ -378,11 +398,11 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
         } finally {
           tmp.readUnlock();
         }
-        this.currentIndexBlock = tmp;
         this.blockScanner = this.indexScanner.previousBlockScanner();
         if (this.blockScanner == null) {
           return false;
         }
+        this.currentIndexBlock = tmp;
         return true;
       } catch (RetryOperationException e) {
         if(this.indexScanner != null) {
