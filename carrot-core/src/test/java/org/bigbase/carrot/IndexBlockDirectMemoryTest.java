@@ -430,8 +430,8 @@ public class IndexBlockDirectMemoryTest {
     long buffer = 0;
     long tmp = 0;
     int prevLength = 0;
-    IndexBlockDirectMemoryScanner is = IndexBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
-    DataBlockDirectMemoryScanner bs = null;
+    IndexBlockScanner is = IndexBlockScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
+    DataBlockScanner bs = null;
     int count = 0;
     while ((bs = is.nextBlockScanner()) != null) {
       while (bs.hasNext()) {

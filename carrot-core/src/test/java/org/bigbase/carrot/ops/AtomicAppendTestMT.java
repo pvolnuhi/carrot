@@ -8,7 +8,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.ops.Append;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.junit.Test;
@@ -100,7 +100,7 @@ public class AtomicAppendTestMT {
         }
         
         long end = System.currentTimeMillis();
-        BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+        BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
         long total = 0;
         long count = 0;
         while (scanner.hasNext()) {

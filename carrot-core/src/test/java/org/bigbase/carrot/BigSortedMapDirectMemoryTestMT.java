@@ -67,7 +67,7 @@ public class BigSortedMapDirectMemoryTestMT {
       long startPtr = UnsafeAccess.allocAndCopy(startKey, 0, startKey.length);
       long endPtr = UnsafeAccess.allocAndCopy(endKey, 0, endKey.length);
       int size = startKey.length;
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(startPtr, size,  endPtr, size);
+      BigSortedMapScanner scanner = map.getScanner(startPtr, size,  endPtr, size);
       long counter = 0;
       //TODO: change this if keys are diff sizes
 //      byte[] current = new byte[key.length];

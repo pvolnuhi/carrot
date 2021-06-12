@@ -9,7 +9,7 @@ import org.bigbase.carrot.util.Utils;
 /**
  * Thread unsafe implementation
  */
-public final class DataBlockDirectMemoryScanner extends Scanner{
+public final class DataBlockScanner extends Scanner{
 
   /*
    * Start Row pointer
@@ -71,11 +71,11 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
    * Multiple instances UNSAFE (can not be used in multiple 
    * instances in context of a one thread)
    */
-  static ThreadLocal<DataBlockDirectMemoryScanner> scanner = 
-      new ThreadLocal<DataBlockDirectMemoryScanner>() {
+  static ThreadLocal<DataBlockScanner> scanner = 
+      new ThreadLocal<DataBlockScanner>() {
     @Override
-    protected DataBlockDirectMemoryScanner initialValue() {
-      return new DataBlockDirectMemoryScanner();
+    protected DataBlockScanner initialValue() {
+      return new DataBlockScanner();
     }    
   };
       
@@ -90,11 +90,11 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
    * @return new instance of a scanner
    * @throws RetryOperationException
    */
-  public static DataBlockDirectMemoryScanner getScanner(DataBlock b, long startRowPtr,
+  public static DataBlockScanner getScanner(DataBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId)
       throws RetryOperationException {
 
-    DataBlockDirectMemoryScanner bs = scanner.get();
+    DataBlockScanner bs = scanner.get();
     bs.reset();
     if (!b.isValid()) {
       // Return null for now
@@ -133,13 +133,13 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
    * @return new instance of a scanner
    * @throws RetryOperationException
    */
-  public static DataBlockDirectMemoryScanner getScanner(DataBlock b, long startRowPtr,
+  public static DataBlockScanner getScanner(DataBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId, 
-      DataBlockDirectMemoryScanner bs)
+      DataBlockScanner bs)
       throws RetryOperationException {
 
     if (bs == null) { 
-      bs = new DataBlockDirectMemoryScanner();
+      bs = new DataBlockScanner();
     }
     if (!b.isValid() /*|| b.isEmpty()*/) {
       // Return null for now
@@ -168,7 +168,7 @@ public final class DataBlockDirectMemoryScanner extends Scanner{
   /** 
    * Private ctor
    */
-  private DataBlockDirectMemoryScanner() {
+  private DataBlockScanner() {
   }
   
   private void reset() {

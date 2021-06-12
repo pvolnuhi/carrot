@@ -155,7 +155,7 @@ public class BigSortedMap {
   };
   
   public static long countRecords(BigSortedMap map) {
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
     long count = 0;
     if (scanner == null) {
       return 0;
@@ -177,7 +177,7 @@ public class BigSortedMap {
   }
 
   public static long dumpRecords(BigSortedMap map) {
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
     long count = 0;
     if (scanner == null) {
       return 0;
@@ -1618,7 +1618,7 @@ public class BigSortedMap {
    * @throws IOException 
    */
   public byte[] getFirstKey() throws IOException {
-    IndexBlockDirectMemoryScanner scanner = null;
+    IndexBlockScanner scanner = null;
     try {
       while (true) {
         try {
@@ -1627,8 +1627,8 @@ public class BigSortedMap {
             // TODO: race conditions?
             b = b == null ? map.firstKey() : map.higherKey(b);
             if (b == null) return null;
-            scanner = IndexBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
-            DataBlockDirectMemoryScanner sc = null;
+            scanner = IndexBlockScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
+            DataBlockScanner sc = null;
             while ((sc = scanner.nextBlockScanner()) != null) {
               if (!sc.hasNext()) {                
                 continue;
@@ -1660,12 +1660,12 @@ public class BigSortedMap {
    * @param stopRowLength stop row length
    * @return scanner
    */
-  public BigSortedMapDirectMemoryScanner getScanner(long startRowPtr, int startRowLength, 
+  public BigSortedMapScanner getScanner(long startRowPtr, int startRowLength, 
       long stopRowPtr, int stopRowLength) {
     long snapshotId = getSequenceId();
     while(true) {
       try {
-        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+        return new BigSortedMapScanner(this, startRowPtr, startRowLength, 
           stopRowPtr, stopRowLength, snapshotId); 
       } catch (RetryOperationException e) {
         continue;
@@ -1685,12 +1685,12 @@ public class BigSortedMap {
    * @param reverse is reverse scanner
    * @return scanner
    */
-  public BigSortedMapDirectMemoryScanner getScanner(long startRowPtr, int startRowLength, 
+  public BigSortedMapScanner getScanner(long startRowPtr, int startRowLength, 
       long stopRowPtr, int stopRowLength, boolean reverse) {
     long snapshotId = getSequenceId();
     while(true) {
       try {
-        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+        return new BigSortedMapScanner(this, startRowPtr, startRowLength, 
           stopRowPtr, stopRowLength, snapshotId, false, reverse); 
       } catch (RetryOperationException e) {
         continue;
@@ -1708,12 +1708,12 @@ public class BigSortedMap {
    * @param stopRowLength stop row length
    * @return scanner
    */
-  public BigSortedMapDirectMemoryScanner getSafeScanner(long startRowPtr, int startRowLength, 
+  public BigSortedMapScanner getSafeScanner(long startRowPtr, int startRowLength, 
       long stopRowPtr, int stopRowLength) {
     long snapshotId = getSequenceId();
     while(true) {
       try {
-        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+        return new BigSortedMapScanner(this, startRowPtr, startRowLength, 
           stopRowPtr, stopRowLength, snapshotId, true, false); 
       } catch (RetryOperationException e) {
         continue;
@@ -1732,12 +1732,12 @@ public class BigSortedMap {
    * @param reverse is reverse scanner
    * @return scanner
    */
-  public BigSortedMapDirectMemoryScanner getSafeScanner(long startRowPtr, int startRowLength, 
+  public BigSortedMapScanner getSafeScanner(long startRowPtr, int startRowLength, 
       long stopRowPtr, int stopRowLength, boolean reverse) {
     long snapshotId = getSequenceId();
     while(true) {
       try {
-        return new BigSortedMapDirectMemoryScanner(this, startRowPtr, startRowLength, 
+        return new BigSortedMapScanner(this, startRowPtr, startRowLength, 
           stopRowPtr, stopRowLength, snapshotId, true, reverse); 
       } catch (RetryOperationException e) {
         continue;
@@ -1754,13 +1754,13 @@ public class BigSortedMap {
    * @return scanner
    */
   
-  public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength) {
+  public BigSortedMapScanner getPrefixScanner(long startRowPtr, int startRowLength) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
     if (endRowPtr == -1) {
       endRowPtr = 0;
     }
     int endRowLength = endRowPtr == 0? 0: startRowLength;
-    BigSortedMapDirectMemoryScanner scanner =
+    BigSortedMapScanner scanner =
         getScanner(startRowPtr, startRowLength, endRowPtr, endRowLength);
     if (scanner == null && endRowPtr > 0) {
       UnsafeAccess.free(endRowPtr);
@@ -1778,14 +1778,14 @@ public class BigSortedMap {
    * @return scanner
    */
   
-  public BigSortedMapDirectMemoryScanner getPrefixScanner(long startRowPtr, int startRowLength, boolean reverse) {
+  public BigSortedMapScanner getPrefixScanner(long startRowPtr, int startRowLength, boolean reverse) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
     if (endRowPtr == -1) {
       endRowPtr = 0;
     }
     int endRowLength = endRowPtr == 0? 0: startRowLength;
 
-    BigSortedMapDirectMemoryScanner scanner =
+    BigSortedMapScanner scanner =
         getScanner(startRowPtr, startRowLength, endRowPtr, endRowLength, reverse);
     //TODO: is this right?
     if (scanner == null && endRowPtr > 0) {
@@ -1804,7 +1804,7 @@ public class BigSortedMap {
    * @return scanner
    */
   
-  public BigSortedMapDirectMemoryScanner getSafePrefixScanner(long startRowPtr, int startRowLength) {
+  public BigSortedMapScanner getSafePrefixScanner(long startRowPtr, int startRowLength) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
     if (endRowPtr == -1) {
       return null;
@@ -1821,7 +1821,7 @@ public class BigSortedMap {
    * @return scanner
    */
   
-  public BigSortedMapDirectMemoryScanner getSafePrefixScanner(long startRowPtr, int startRowLength, 
+  public BigSortedMapScanner getSafePrefixScanner(long startRowPtr, int startRowLength, 
       boolean reverse) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
     if (endRowPtr == -1) {

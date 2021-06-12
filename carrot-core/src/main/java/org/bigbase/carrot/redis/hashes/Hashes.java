@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
@@ -589,7 +589,7 @@ public class Hashes {
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
       long ptr = keyArena.get();
       endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
+      BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -641,7 +641,7 @@ public class Hashes {
       
       endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
       
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
+      BigSortedMapScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
       if (scanner == null) {
         return true; // empty or does not exists
       }
@@ -685,7 +685,7 @@ public class Hashes {
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
       long ptr = keyArena.get();
       endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize -1);
+      BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize -1);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -1996,7 +1996,7 @@ public class Hashes {
     if (stopKeyPtr == -1) {
       return null;
     }
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(lastSeenKeyPtr, lastSeenKeySize, 
+    BigSortedMapScanner scanner = map.getScanner(lastSeenKeyPtr, lastSeenKeySize, 
       stopKeyPtr, startKeySize);
     // TODO - test this call
     HashScanner hs = null;
@@ -2048,7 +2048,7 @@ public class Hashes {
     long endPtr = Utils.prefixKeyEnd(kPtr, keySize - 1);
     int endKeySize = keySize - 1; 
         
-    BigSortedMapDirectMemoryScanner scanner = safe? 
+    BigSortedMapScanner scanner = safe? 
         map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
           map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
     if (scanner == null) {
@@ -2149,7 +2149,7 @@ public class Hashes {
 
     
     //TODO do not use thread local in scanners - check it
-    BigSortedMapDirectMemoryScanner scanner = safe? 
+    BigSortedMapScanner scanner = safe? 
         map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse):
           map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     if (scanner == null) {

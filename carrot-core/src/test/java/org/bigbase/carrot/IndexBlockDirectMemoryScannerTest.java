@@ -68,8 +68,8 @@ public class IndexBlockDirectMemoryScannerTest {
     List<Key> keys = fillIndexBlock(ib);
     Utils.sortKeys(keys);
     System.out.println("Loaded "+ keys.size()+" kvs");
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, 0, 0, Long.MAX_VALUE);
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, 0, 0, 0, 0, Long.MAX_VALUE);
     verifyScanner(scanner, keys);
     scanner.close();
     dispose(keys);
@@ -103,8 +103,8 @@ public class IndexBlockDirectMemoryScannerTest {
     Utils.sortKeys(keys);
     System.out.println("Loaded "+ keys.size()+" kvs");
     // This creates reverse scanner
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, 0, 0, Long.MAX_VALUE, null, true);
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, 0, 0, 0, 0, Long.MAX_VALUE, null, true);
     verifyScannerReverse(scanner, keys);
     if (scanner != null) {
       scanner.close();
@@ -153,8 +153,8 @@ public class IndexBlockDirectMemoryScannerTest {
     System.out.println("Loaded "+ keys.size()+" kvs");
     List<Key> newkeys = keys.subList(0, stopRowIndex);
     System.out.println("Selected "+ newkeys.size()+" kvs");
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, stopRow.length, Long.MAX_VALUE);
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, 0, 0, stopRow.address, stopRow.length, Long.MAX_VALUE);
     verifyScanner(scanner, newkeys);
     scanner.close();
     dispose(keys);
@@ -196,8 +196,8 @@ public class IndexBlockDirectMemoryScannerTest {
     System.out.println("Loaded "+ keys.size()+" kvs");
     List<Key> newkeys = keys.subList(0, stopRowIndex);
     System.out.println("Selected "+ newkeys.size()+" kvs");
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, 0, 0, stopRow.address, 
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, 0, 0, stopRow.address, 
           stopRow.length, Long.MAX_VALUE, null, true);
     verifyScannerReverse(scanner, newkeys);
     if (scanner != null) {
@@ -239,8 +239,8 @@ public class IndexBlockDirectMemoryScannerTest {
     System.out.println("Loaded "+ keys.size()+" kvs");
     List<Key> newkeys = keys.subList(startRowIndex, keys.size());
     System.out.println("Selected "+ newkeys.size()+" kvs");
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, 
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, startRow.address, 
           startRow.length,0 , 0, Long.MAX_VALUE);
     verifyScanner(scanner, newkeys);
     scanner.close();
@@ -284,8 +284,8 @@ public class IndexBlockDirectMemoryScannerTest {
     System.out.println("Loaded "+ keys.size()+" kvs");
     List<Key> newkeys = keys.subList(startRowIndex, keys.size());
     System.out.println("Selected "+ newkeys.size()+" kvs");
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length,0 , 0, 
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, startRow.address, startRow.length,0 , 0, 
           Long.MAX_VALUE, null, true);
     verifyScannerReverse(scanner, newkeys);
     if (scanner != null) {
@@ -333,8 +333,8 @@ public class IndexBlockDirectMemoryScannerTest {
     System.out.println("Loaded "+ keys.size()+" kvs");
     List<Key> newkeys = keys.subList(startRowIndex, stopRowIndex);
     System.out.println("Selected "+ newkeys.size()+" kvs");
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length, 
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, startRow.address, startRow.length, 
           stopRow.address, stopRow.length, Long.MAX_VALUE);
     verifyScanner(scanner, newkeys);
     scanner.close();
@@ -386,8 +386,8 @@ public class IndexBlockDirectMemoryScannerTest {
     System.out.println("Loaded "+ keys.size()+" kvs");
     List<Key> newkeys = keys.subList(startRowIndex, stopRowIndex);
     System.out.println("Selected "+ keys.size()+" kvs");
-    IndexBlockDirectMemoryScanner scanner = 
-        IndexBlockDirectMemoryScanner.getScanner(ib, startRow.address, startRow.length, 
+    IndexBlockScanner scanner = 
+        IndexBlockScanner.getScanner(ib, startRow.address, startRow.length, 
           stopRow.address, stopRow.length, Long.MAX_VALUE, null, true);
     verifyScannerReverse(scanner, newkeys);
     if (scanner != null) {
@@ -416,9 +416,9 @@ public class IndexBlockDirectMemoryScannerTest {
   }
   
   
-  private void verifyScanner(IndexBlockDirectMemoryScanner scanner, List<Key> keys) {
+  private void verifyScanner(IndexBlockScanner scanner, List<Key> keys) {
     int count = 0;
-    DataBlockDirectMemoryScanner dbscn = null;
+    DataBlockScanner dbscn = null;
     
     while ((dbscn = scanner.nextBlockScanner()) != null){
       while(dbscn.hasNext()) {
@@ -440,14 +440,14 @@ public class IndexBlockDirectMemoryScannerTest {
     assertEquals(keys.size(), count);
   }
   
-  private void verifyScannerReverse(IndexBlockDirectMemoryScanner scanner, List<Key> keys) 
+  private void verifyScannerReverse(IndexBlockScanner scanner, List<Key> keys) 
       throws IOException {
     if (scanner == null) {
       assertEquals(0, keys.size());
       return;
     }
     int count = 0;
-    DataBlockDirectMemoryScanner dbscn= scanner.lastBlockScanner();
+    DataBlockScanner dbscn= scanner.lastBlockScanner();
     if (dbscn == null) {
       assertEquals(0, keys.size());
       return;

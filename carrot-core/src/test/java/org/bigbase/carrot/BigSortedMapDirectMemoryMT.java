@@ -273,7 +273,7 @@ public class BigSortedMapDirectMemoryMT {
       getKey(n);
       int toScan = 221;
       
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(key, keySize, 0, 0);
+      BigSortedMapScanner scanner = map.getScanner(key, keySize, 0, 0);
       int count = 0;
       long prev = UnsafeAccess.malloc(keySize) ;
       long current = UnsafeAccess.malloc(keySize);
@@ -300,7 +300,7 @@ public class BigSortedMapDirectMemoryMT {
         barrier.reset();
       }
       
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+      BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
       int count = 0;
       long prev = UnsafeAccess.malloc(keySize) ;
       long prevVersion = 0;

@@ -3,7 +3,7 @@ package org.bigbase.carrot.redis;
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -119,7 +119,7 @@ public class Commons {
    */
   public static boolean nextKVisInType(BigSortedMap map, long ptr)  {
     int keySize = keySize(ptr) + KEY_SIZE;
-    BigSortedMapDirectMemoryScanner scanner = map.getPrefixScanner(ptr, keySize);
+    BigSortedMapScanner scanner = map.getPrefixScanner(ptr, keySize);
     try {
       // should not be null
       return scanner.next();
@@ -157,7 +157,7 @@ public class Commons {
   }
   
   public static long countRecords(BigSortedMap map) throws IOException {
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
     long count = 0;
     while(scanner.hasNext()) {
       count++;

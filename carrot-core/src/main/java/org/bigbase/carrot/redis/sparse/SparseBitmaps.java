@@ -5,7 +5,7 @@ import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
@@ -458,7 +458,7 @@ public class SparseBitmaps {
   
   public static long SBITCOUNT(BigSortedMap map, long keyPtr, int keySize, long start, long end) {
     Key kk = getKey(keyPtr, keySize);
-    BigSortedMapDirectMemoryScanner scanner = null;
+    BigSortedMapScanner scanner = null;
     long endKeyPtr = 0;
     try {
       KeysLocker.readLock(kk);
@@ -683,7 +683,7 @@ public class SparseBitmaps {
   //TODO: update bitmap length?
   public static long SBITPOS(BigSortedMap map, long keyPtr, int keySize, int bit, long start, long end) {
     Key kk = getKey(keyPtr, keySize);
-    BigSortedMapDirectMemoryScanner scanner = null;
+    BigSortedMapScanner scanner = null;
     long endKeyPtr = 0;
     try {
       KeysLocker.readLock(kk);
@@ -878,7 +878,7 @@ public class SparseBitmaps {
   public static long SGETRANGE(BigSortedMap map, long keyPtr, int keySize, long start, long end,
       long bufferPtr, int bufferSize) {
     Key kk = getKey(keyPtr, keySize);
-    BigSortedMapDirectMemoryScanner scanner = null;
+    BigSortedMapScanner scanner = null;
     long endKeyPtr = 0;
     try {
       KeysLocker.readLock(kk);

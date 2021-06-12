@@ -47,8 +47,8 @@ public class DataBlockTestBase {
     long buffer ;
     long tmp =0;
 
-    DataBlockDirectMemoryScanner bs = 
-        DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
+    DataBlockScanner bs = 
+        DataBlockScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
     int prevKeySize=0;
     int count = 0;
     while (bs.hasNext()) {

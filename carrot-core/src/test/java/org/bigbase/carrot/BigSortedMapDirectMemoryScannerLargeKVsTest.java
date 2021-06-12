@@ -51,7 +51,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     long end = System.currentTimeMillis();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
     verifyGets(keys);
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
     long scanned = verifyScanner(scanner, keys);
     scanner.close();
     System.out.println("Scanned="+ scanned);
@@ -134,7 +134,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     }
   }
   
-  private long verifyScanner(BigSortedMapDirectMemoryScanner scanner, List<Key> keys) 
+  private long verifyScanner(BigSortedMapScanner scanner, List<Key> keys) 
       throws IOException {
     int counter = 0;
     int delta = 0;
@@ -192,7 +192,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
   @Test  
   public void testDirectMemoryFullMapScanner() throws IOException {
     System.out.println("testDirectMemoryFullMapScanner ");
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
     long start = System.currentTimeMillis();
     long count = 0;
 
@@ -222,7 +222,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
   @Test
   public void testDirectMemoryFullMapScannerReverse() throws IOException {
     System.out.println("testDirectMemoryFullMapScanner ");
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0, true);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0, true);
     long start = System.currentTimeMillis();
     long count = 0;
     
@@ -267,7 +267,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     Key startKey = keys.get(startIndex); 
     Key stopKey  = keys.get(stopIndex);
     
-    BigSortedMapDirectMemoryScanner scanner = 
+    BigSortedMapScanner scanner = 
         map.getScanner(0, 0, startKey.address, startKey.length);
     long count1 = countRows(scanner);
     scanner.close();
@@ -298,7 +298,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     Key startKey = keys.get(startIndex); 
     Key stopKey  = keys.get(stopIndex);
     
-    BigSortedMapDirectMemoryScanner scanner = 
+    BigSortedMapScanner scanner = 
         map.getScanner(0, 0, startKey.address, startKey.length, true);
     long count1 = countRowsReverse(scanner);
     if (scanner != null) {
@@ -331,7 +331,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     System.out.println("testDirectMemoryFullMapScannerWithDeletes SEED="+ seed +
       " toDelete="+toDelete);
     List<Key> deletedKeys = delete(toDelete);
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
     long start = System.currentTimeMillis();
     long count = 0;
 
@@ -373,7 +373,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     System.out.println("testDirectMemoryFullMapScannerWithDeletesReverse SEED="+ seed +
       " toDelete="+toDelete+" expected=" +(totalLoaded - toDelete));
     List<Key> deletedKeys = delete(toDelete);
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0, true);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0, true);
     long start = System.currentTimeMillis();
     long count = 0;
 
@@ -404,7 +404,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
 
   }
   
-  private long countRows(BigSortedMapDirectMemoryScanner scanner) throws IOException {
+  private long countRows(BigSortedMapScanner scanner) throws IOException {
     long start = System.currentTimeMillis();
     long count = 0;
     long prev = 0;
@@ -431,7 +431,7 @@ public class BigSortedMapDirectMemoryScannerLargeKVsTest {
     return count;
   }
   
-  private long countRowsReverse(BigSortedMapDirectMemoryScanner scanner) throws IOException {
+  private long countRowsReverse(BigSortedMapScanner scanner) throws IOException {
     long start = System.currentTimeMillis();
     long count = 0;
     long prev = 0;

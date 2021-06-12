@@ -13,7 +13,7 @@ import org.bigbase.carrot.util.Utils;
  * to make sure that index block is still valid
  * TODO: stopRow logic
  */
-public final class IndexBlockDirectMemoryScanner implements Closeable{
+public final class IndexBlockScanner implements Closeable{
 
   /*
    * Start Row pointer
@@ -40,7 +40,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
   /*
    * Current block scanner
    */
-  private DataBlockDirectMemoryScanner curDataBlockScanner;
+  private DataBlockScanner curDataBlockScanner;
   
   
   /*
@@ -72,11 +72,11 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * Multiple instances UNSAFE (can not be used in multiple 
    * instances in context of a one thread)
    */
-  static ThreadLocal<IndexBlockDirectMemoryScanner> scanner = 
-      new ThreadLocal<IndexBlockDirectMemoryScanner>() {
+  static ThreadLocal<IndexBlockScanner> scanner = 
+      new ThreadLocal<IndexBlockScanner>() {
     @Override
-    protected IndexBlockDirectMemoryScanner initialValue() {
-      return new IndexBlockDirectMemoryScanner();
+    protected IndexBlockScanner initialValue() {
+      return new IndexBlockScanner();
     }    
   };
   
@@ -87,9 +87,9 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return scanner 
    * @throws RetryOperationException
    */
-  private static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long snapshotId) 
+  private static IndexBlockScanner getScanner(IndexBlock b, long snapshotId) 
       throws RetryOperationException {
-    IndexBlockDirectMemoryScanner bs = scanner.get();
+    IndexBlockScanner bs = scanner.get();
     bs.reset();
     bs.setBlock(b);
     bs.snapshotId = snapshotId;
@@ -107,7 +107,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return scanner
    * @throws RetryOperationException
    */
-  public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long startRowPtr,
+  public static IndexBlockScanner getScanner(IndexBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId)
       throws RetryOperationException {
     return getScanner(b, startRowPtr, startRowLength, stopRowPtr, stopRowLength, snapshotId, false);
@@ -125,7 +125,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return scanner
    * @throws RetryOperationException
    */
-  public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long startRowPtr,
+  public static IndexBlockScanner getScanner(IndexBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId, boolean reverse)
       throws RetryOperationException {
     //FIXME: move this code under lock
@@ -139,7 +139,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     try {
       // Lock index block
       b.readLock();
-      IndexBlockDirectMemoryScanner bs = getScanner(b, snapshotId);
+      IndexBlockScanner bs = getScanner(b, snapshotId);
       bs.setReverse(reverse);
       bs.setStartStopRows(startRowPtr, startRowLength, stopRowPtr, stopRowLength);
       return bs;
@@ -162,9 +162,9 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return scanner
    * @throws RetryOperationException
    */
-  public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long startRowPtr,
+  public static IndexBlockScanner getScanner(IndexBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId,
-      IndexBlockDirectMemoryScanner bs, boolean reverse)
+      IndexBlockScanner bs, boolean reverse)
       throws RetryOperationException {
     if (stopRowPtr != 0) {
       byte[] firstKey = b.getFirstKey();
@@ -177,7 +177,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
       // Lock index block
       b.readLock();
       if(bs == null) {
-        bs = new IndexBlockDirectMemoryScanner();
+        bs = new IndexBlockScanner();
       }
       bs.setMultiInstanceSafe(true);
       bs.setReverse(reverse);
@@ -203,15 +203,15 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * @return scanner
    * @throws RetryOperationException
    */
-  public static IndexBlockDirectMemoryScanner getScanner(IndexBlock b, long startRowPtr,
+  public static IndexBlockScanner getScanner(IndexBlock b, long startRowPtr,
       int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId,
-      IndexBlockDirectMemoryScanner bs) {
+      IndexBlockScanner bs) {
     return getScanner(b, startRowPtr, startRowLength, stopRowPtr, stopRowLength, snapshotId, bs, false);
   }
   /** 
    * Private ctor
    */
-  private IndexBlockDirectMemoryScanner() {
+  private IndexBlockScanner() {
   }
   
   private void reset() {
@@ -313,7 +313,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * Advance scanner by one data block
    * @return data block scanner or null
    */
-  public final DataBlockDirectMemoryScanner nextBlockScanner() {
+  public final DataBlockScanner nextBlockScanner() {
 
     if (isClosed()) {
       return null;
@@ -329,7 +329,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
   }
 
   
-  private DataBlockDirectMemoryScanner setBlockAndReturnScanner(DataBlock b) {
+  private DataBlockScanner setBlockAndReturnScanner(DataBlock b) {
     
     this.currentDataBlock = b;
     if (this.currentDataBlock != null) {
@@ -365,22 +365,22 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
 
       if (!isMultiSafe) {
         this.curDataBlockScanner =
-          DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
+          DataBlockScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
             this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
       } else {
         this.curDataBlockScanner =
-            DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
+            DataBlockScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
               this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId,
               this.curDataBlockScanner);
       }
     } else if(!closed){
       if (!isMultiSafe) {
         this.curDataBlockScanner =
-          DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
+          DataBlockScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
             this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId);
       } else {
         this.curDataBlockScanner =
-            DataBlockDirectMemoryScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
+            DataBlockScanner.getScanner(this.currentDataBlock, this.startRowPtr, 
               this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId,
               this.curDataBlockScanner);
       }
@@ -404,7 +404,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * Get last block scanner
    * @return last block scanner
    */
-  DataBlockDirectMemoryScanner lastBlockScanner() {
+  DataBlockScanner lastBlockScanner() {
 
     if (isClosed()) {
       return null;
@@ -416,7 +416,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     if (this.curDataBlockScanner != null) {    
       b = this.indexBlock.lastBlock(this.currentDataBlock, stopRowPtr, stopRowLength);
     }
-    DataBlockDirectMemoryScanner scanner =  setBlockAndReturnScanner(b);
+    DataBlockScanner scanner =  setBlockAndReturnScanner(b);
     if (scanner != null) {
       return scanner;
     }
@@ -427,7 +427,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * Gets first block scanner
    * @return first block scanner
    */
-  DataBlockDirectMemoryScanner firstBlockScanner() {
+  DataBlockScanner firstBlockScanner() {
     // No checks are required
     if (isClosed()) {
       return null;
@@ -446,7 +446,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
    * Gets previous block scanner
    * @return previous block scanner
    */
-  DataBlockDirectMemoryScanner previousBlockScanner() {
+  DataBlockScanner previousBlockScanner() {
     if (isClosed()) {
       return null;
     }
@@ -460,7 +460,7 @@ public final class IndexBlockDirectMemoryScanner implements Closeable{
     return setBlockAndReturnScanner(b);
   }
   
-  public DataBlockDirectMemoryScanner getBlockScanner() {
+  public DataBlockScanner getBlockScanner() {
     return this.curDataBlockScanner;
   }
   

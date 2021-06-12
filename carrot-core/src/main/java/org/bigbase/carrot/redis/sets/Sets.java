@@ -13,7 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.redis.Commons;
@@ -444,7 +444,7 @@ public class Sets {
       startKeyPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE) ;
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1, startKeyPtr);
       endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, kSize - 1);      
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(startKeyPtr, kSize, endKeyPtr, kSize - 1);
+      BigSortedMapScanner scanner = map.getScanner(startKeyPtr, kSize, endKeyPtr, kSize - 1);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -487,7 +487,7 @@ public class Sets {
       
       endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
       
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
+      BigSortedMapScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
       if (scanner == null) {
         return true; // empty or does not exists
       }
@@ -532,7 +532,7 @@ public class Sets {
     long ptr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
     int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1, ptr);
     long endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
+    BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
 
     long total = 0;
     try {
@@ -1451,7 +1451,7 @@ public class Sets {
     keySize += KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
     long endPtr = Utils.prefixKeyEnd(kPtr, keySize - 1);
     int endKeySize = keySize - 1;     
-    BigSortedMapDirectMemoryScanner scanner = safe? 
+    BigSortedMapScanner scanner = safe? 
         map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
           map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
     if (scanner == null) {
@@ -1559,7 +1559,7 @@ public class Sets {
     }
 
     //TODO do not use thread local in scanners - check it
-    BigSortedMapDirectMemoryScanner scanner = safe? 
+    BigSortedMapScanner scanner = safe? 
         map.getSafeScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse):
           map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     if (scanner == null) {

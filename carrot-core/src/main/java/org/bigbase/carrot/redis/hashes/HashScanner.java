@@ -4,7 +4,7 @@ import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
 
 import java.io.IOException;
 
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.Scanner;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -38,7 +38,7 @@ public class HashScanner extends Scanner{
   /*
    * Base Map scanner
    */
-  private BigSortedMapDirectMemoryScanner mapScanner;
+  private BigSortedMapScanner mapScanner;
   /*
    * Minimum field (inclusive)
    */
@@ -112,7 +112,7 @@ public class HashScanner extends Scanner{
    * @param scanner base scanner
    * @throws IOException 
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner) throws IOException {
+  public HashScanner(BigSortedMapScanner scanner) throws IOException {
     this(scanner, 0, 0, 0, 0);
   }
   
@@ -123,7 +123,7 @@ public class HashScanner extends Scanner{
    * @param reverse true, if reverse scanner, false - otherwise
    * @throws IOException 
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner, boolean reverse) throws IOException {
+  public HashScanner(BigSortedMapScanner scanner, boolean reverse) throws IOException {
     this(scanner, 0, 0, 0, 0, reverse);
   }
   
@@ -136,7 +136,7 @@ public class HashScanner extends Scanner{
    * @param stopSize stop field size
    * @throws IOException 
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
+  public HashScanner(BigSortedMapScanner scanner, long start, int startSize, 
       long stop, int stopSize) throws IOException {
    this(scanner, start, startSize, stop, stopSize, false);
   }
@@ -151,7 +151,7 @@ public class HashScanner extends Scanner{
    * @param reverse reverse scanner
    * @throws IOException 
    */
-  public HashScanner(BigSortedMapDirectMemoryScanner scanner, long start, int startSize, 
+  public HashScanner(BigSortedMapScanner scanner, long start, int startSize, 
       long stop, int stopSize, boolean reverse) throws IOException {
     this.mapScanner = scanner;
     this.startFieldPtr = start;

@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.IndexBlock;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
@@ -185,7 +185,7 @@ public class TestCarrotTwitter {
   }
   
   private static long countRecords(BigSortedMap map)  {
-    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
     long count = 0;
     try {
       while(scanner.hasNext()) {

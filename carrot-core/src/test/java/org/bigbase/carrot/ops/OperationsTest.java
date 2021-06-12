@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapDirectMemoryScanner;
+import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.ops.Append;
 import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -68,7 +68,7 @@ public class OperationsTest {
       }
       long end = System.currentTimeMillis();
       System.out.println("Time to increment " + totalIncrement + " " + (end - start) + "ms");
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+      BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
       long total = 0;
       while (scanner.hasNext()) {
         long addr = scanner.valueAddress();
@@ -115,7 +115,7 @@ public class OperationsTest {
       }
       long end = System.currentTimeMillis();
       System.out.println("Time to append " + totalAppend + " " + (end - start) + "ms");
-      BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
+      BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
       long total = 0;
       while (scanner.hasNext()) {
         int size = scanner.valueSize();

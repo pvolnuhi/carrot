@@ -14,7 +14,7 @@ import org.bigbase.carrot.util.Utils;
  * @author jenium65
  *
  */
-public class BigSortedMapDirectMemoryScanner extends Scanner{
+public class BigSortedMapScanner extends Scanner{
 
   private BigSortedMap map;
   private long startRowPtr;
@@ -24,8 +24,8 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
   private long nextBlockFirstKey;
   private int nextBlockFirstKeySize;
   private long toFree;
-  private DataBlockDirectMemoryScanner blockScanner;
-  private IndexBlockDirectMemoryScanner indexScanner;
+  private DataBlockScanner blockScanner;
+  private IndexBlockScanner indexScanner;
   private IndexBlock currentIndexBlock;
   private long snapshotId;
   private boolean isMultiSafe = false;
@@ -53,7 +53,7 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
    * @param snapshotId snapshot id
    * @throws IOException 
    */
-  BigSortedMapDirectMemoryScanner(BigSortedMap map, long startRowPtr, 
+  BigSortedMapScanner(BigSortedMap map, long startRowPtr, 
     int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId) throws IOException {
     this(map, startRowPtr, startRowLength, stopRowPtr, stopRowLength, snapshotId, false, false);
   }
@@ -69,7 +69,7 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
    * @param reverse - is reverse scanner
    * @throws IOException 
    */
-  BigSortedMapDirectMemoryScanner(BigSortedMap map, long startRowPtr, 
+  BigSortedMapScanner(BigSortedMap map, long startRowPtr, 
     int startRowLength, long stopRowPtr, int stopRowLength, long snapshotId,
     boolean isMultiSafe, boolean reverse) throws IOException {
     checkArgs(startRowPtr, startRowLength, stopRowPtr, stopRowLength);
@@ -84,7 +84,7 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
     init();
   }
   
-  public DataBlockDirectMemoryScanner getBlockScanner()
+  public DataBlockScanner getBlockScanner()
   {
     return this.blockScanner;
   }
@@ -141,10 +141,10 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
 
         if (!isMultiSafe) {
           indexScanner =
-              IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock, this.startRowPtr,
+              IndexBlockScanner.getScanner(currentIndexBlock, this.startRowPtr,
                 this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId, reverse);
         } else {
-          indexScanner = IndexBlockDirectMemoryScanner.getScanner(currentIndexBlock,
+          indexScanner = IndexBlockScanner.getScanner(currentIndexBlock,
             this.startRowPtr, this.startRowLength, this.stopRowPtr, this.stopRowLength, snapshotId,
             indexScanner, reverse);
         }
@@ -325,11 +325,11 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
 //          }
           // set startRow to null, because it is out of range of a IndexBlockScanner
           if (!isMultiSafe) {
-            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, 0/*nextBlockFirstKey*/, 
+            this.indexScanner = IndexBlockScanner.getScanner(tmp, 0/*nextBlockFirstKey*/, 
               /*nextBlockFirstKeySize*/0, stopRowPtr, 
               stopRowLength, snapshotId);
           } else {
-            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, 0/*nextBlockFirstKey*/, 
+            this.indexScanner = IndexBlockScanner.getScanner(tmp, 0/*nextBlockFirstKey*/, 
               /*nextBlockFirstKeySize*/0, stopRowPtr, 
               stopRowLength, snapshotId, indexScanner);
           }
@@ -394,11 +394,11 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
           }
           // Check startRow and index block
           if (!isMultiSafe) {
-            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, startRowPtr, 
+            this.indexScanner = IndexBlockScanner.getScanner(tmp, startRowPtr, 
               startRowLength, stopRowPtr, 
               stopRowLength, snapshotId, reverse);
           } else {
-            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, startRowPtr, 
+            this.indexScanner = IndexBlockScanner.getScanner(tmp, startRowPtr, 
               startRowLength, stopRowPtr, 
               stopRowLength, snapshotId, indexScanner, reverse);
           }
