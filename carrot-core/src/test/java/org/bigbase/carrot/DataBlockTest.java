@@ -89,7 +89,8 @@ public class DataBlockTest extends DataBlockTestBase{
     byte[] buffer = new byte[keys.get(0).length * 2];
     int N = 100000;
     for(int i = 0 ; i < N; i++) {
-      DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+      DataBlockDirectMemoryScanner bs = 
+          DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
       int count =0;
       while(bs.hasNext()) {
         bs.keyValue(buffer, 0);
@@ -258,7 +259,8 @@ public class DataBlockTest extends DataBlockTestBase{
       throws RetryOperationException, IOException {
     byte[] buffer = null;
     byte[] tmp = null;
-    try (DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);) {
+    try (DataBlockDirectMemoryScanner bs = 
+        DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);) {
       int count = 0;
       // skip first system
       if (b.isFirstBlock()) {
@@ -541,7 +543,8 @@ public class DataBlockTest extends DataBlockTestBase{
     
     scanAndVerify(b, keys);
     
-    DataBlockScanner scanner = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);    
+    DataBlockDirectMemoryScanner scanner = 
+        DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);    
     int keySize = scanner.keySize();    
     byte[] key = new byte[keySize];    
     scanner.key(key, 0);
@@ -554,7 +557,7 @@ public class DataBlockTest extends DataBlockTestBase{
     // We can't delete first system key
     assertEquals( OpResult.NOT_FOUND, res);
     kkey = b.getFirstKey();   
-    scanner = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+    scanner = DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
     // Skip system key
     scanner.next();
     keySize = scanner.keySize();    

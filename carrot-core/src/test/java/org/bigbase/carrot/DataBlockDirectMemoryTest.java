@@ -116,7 +116,8 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     long buffer = UnsafeAccess.malloc(16384);
     int N = 1000000;
     for(int i = 0 ; i < N; i++) {
-      DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+      DataBlockDirectMemoryScanner bs = 
+          DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
       int count =0;
       while(bs.hasNext()) {
         bs.keyValue(buffer, 0);
@@ -392,7 +393,8 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     
     scanAndVerify(b, keys);
     
-    DataBlockScanner scanner = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);    
+    DataBlockDirectMemoryScanner scanner = 
+        DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);    
     int keySize = scanner.keySize();    
     byte[] key = new byte[keySize];    
     scanner.key(key, 0);
@@ -407,7 +409,7 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     OpResult res = b.delete(addr, keySize, Long.MAX_VALUE);
     // We can't delete first system key
     assertEquals( OpResult.NOT_FOUND, res);
-    scanner = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+    scanner = DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
     // Skip system key
     scanner.next();
     keySize = scanner.keySize();    
@@ -595,7 +597,8 @@ public class DataBlockDirectMemoryTest extends DataBlockTestBase {
     long buffer = 0;
     long tmp = 0;
 
-    DataBlockScanner bs = DataBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
+    DataBlockDirectMemoryScanner bs = 
+        DataBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
     int count = 0;
     int prevKeySize = 0;
     // skip first system key-value

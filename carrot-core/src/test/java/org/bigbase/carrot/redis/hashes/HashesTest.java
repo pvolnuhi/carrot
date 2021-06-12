@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.Value;
 import org.bigbase.carrot.compression.CodecFactory;
@@ -127,17 +126,7 @@ public class HashesTest {
   }
   
   long countRecords(BigSortedMap map) throws IOException {
-    BigSortedMapScanner scanner = map.getScanner(null, null);
-    long count = 0;
-    while(scanner.hasNext()) {
-      //long ptr = scanner.keyAddress();
-      //int size = scanner.keySize();
-      //System.out.println("count records found key="+ Utils.toString(ptr, size) + " size=" + size);
-      count++;
-      scanner.next();
-    }
-    scanner.close();
-    return count;
+    return BigSortedMap.countRecords(map);
   }
   
   @Ignore

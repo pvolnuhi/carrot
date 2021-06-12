@@ -1610,13 +1610,15 @@ public class BigSortedMap {
     return get(key, len,  key, 0, Long.MAX_VALUE) > 0;
 
   }
+  
   /**
+   * TODO: this can have race conditions 
    * Get first key in a map
    * @return first key
    * @throws IOException 
    */
   public byte[] getFirstKey() throws IOException {
-    IndexBlockScanner scanner = null;
+    IndexBlockDirectMemoryScanner scanner = null;
     try {
       while (true) {
         try {
@@ -1625,8 +1627,8 @@ public class BigSortedMap {
             // TODO: race conditions?
             b = b == null ? map.firstKey() : map.higherKey(b);
             if (b == null) return null;
-            scanner = IndexBlockScanner.getScanner(b, null, null, Long.MAX_VALUE);
-            DataBlockScanner sc = null;
+            scanner = IndexBlockDirectMemoryScanner.getScanner(b, 0, 0, 0, 0, Long.MAX_VALUE);
+            DataBlockDirectMemoryScanner sc = null;
             while ((sc = scanner.nextBlockScanner()) != null) {
               if (!sc.hasNext()) {                
                 continue;
@@ -1649,43 +1651,6 @@ public class BigSortedMap {
     }
   }
 
-  /**
-   *  Get scanner (single instance per thread)
-   *  @param start start row (inclusive)
-   *  @param stop stop row (exclusive)
-   *  @return scanner
-   */
-  public BigSortedMapScanner getScanner(byte[] start, byte[] stop) {
-    long snapshotId = getSequenceId();
-    while(true) {
-      try {
-        return new BigSortedMapScanner(this, start, stop, snapshotId);
-      } catch (RetryOperationException e) {
-        continue;
-      } catch(IllegalArgumentException ee) {
-        return null;
-      }
-    }
-  }
-  
-  
-  /**
-   *  Get safe scanner, which is safe to run in multiple instances
-   *  @param start start row (inclusive)
-   *  @param stop stop row (exclusive)
-   */
-  public BigSortedMapScanner getSafeScanner(byte[] start, byte[] stop) {
-    long snapshotId = getSequenceId();
-    while(true) {
-      try {
-        return new BigSortedMapScanner(this, start, stop, snapshotId, true);
-      } catch (RetryOperationException e) {
-        continue;
-      } catch(IllegalArgumentException ee) {
-        return null;
-      }
-    }
-  }
   
   /**
    * Get scanner (single instance per thread)

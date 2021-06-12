@@ -28,7 +28,7 @@ public class BigSortedMapDirectMemoryTest {
   }
 
   long countRecords() throws IOException {
-    BigSortedMapScanner scanner = map.getScanner(null, null);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
     long counter = 0;
     while (scanner.hasNext()) {
       counter++;

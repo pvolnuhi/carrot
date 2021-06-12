@@ -49,7 +49,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     long end = System.currentTimeMillis();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
     verifyGets(keys);
-    BigSortedMapScanner scanner = map.getScanner(null, null);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
     long scanned = verifyScanner(scanner, keys);
     scanner.close();
     System.out.println("Scanned="+ scanned);
@@ -184,7 +184,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
   @Test  
   public void testFullMapScanner() throws IOException {
     System.out.println("testFullMap ");
-    BigSortedMapScanner scanner = map.getScanner(null, null);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
     long start = System.currentTimeMillis();
     long count = 0;
 
@@ -308,7 +308,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     System.out.println("testFullMapScannerWithDeletes SEED="+ seed +
       " toDelete="+toDelete);
     List<Key> deletedKeys = delete(toDelete);
-    BigSortedMapScanner scanner = map.getScanner(null, null);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
     long start = System.currentTimeMillis();
     long count = 0;
 
@@ -440,7 +440,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
   }
   
   private long countRecords() throws IOException {
-    BigSortedMapScanner scanner = map.getScanner(null, null);
+    BigSortedMapDirectMemoryScanner scanner = map.getScanner(0, 0, 0, 0);
     long counter = 0;
     while(scanner.hasNext()) {
       counter++;
@@ -450,7 +450,7 @@ public class BigSortedMapDirectMemoryLargeKVsTest {
     return counter;
   }
   
-  private long verifyScanner(BigSortedMapScanner scanner, List<Key> keys) 
+  private long verifyScanner(BigSortedMapDirectMemoryScanner scanner, List<Key> keys) 
       throws IOException {
     int counter = 0;
     int delta = 0;
