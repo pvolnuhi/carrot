@@ -30,7 +30,7 @@ public class ZSetsAPITest {
   static Random rnd = new Random();
 
   static {
-    long seed = -3824502021763433509L;//rnd.nextLong();
+    long seed = rnd.nextLong();
     rnd.setSeed(seed);
     System.out.println("Global seed=" + seed);
   }
@@ -186,15 +186,19 @@ public class ZSetsAPITest {
     setUp();
     testAddDelete();
     tearDown();
+
     setUp();
     testAddRemove();
     tearDown();
+    
     setUp();
     testIncrement();
     tearDown();
+
     setUp();
     testADDCorrectness();
     tearDown();
+    
     setUp();
     testZCOUNT();
     tearDown();
@@ -249,6 +253,23 @@ public class ZSetsAPITest {
     setUp();
     testZREMRANGEBYLEX();
     tearDown();
+    
+    setUp();
+    testZLEXCOUNT();
+    tearDown();
+    
+    setUp();
+    testZPOPMAX();
+    tearDown();
+    
+    setUp();
+    testZPOPMIN();
+    tearDown();
+    
+    setUp();
+    testZREVRANGE();
+    tearDown();
+    
     long end = System.currentTimeMillis();
     System.out.println("Run time=" + (end - start)+"ms");
   }
@@ -576,6 +597,9 @@ public class ZSetsAPITest {
     // ZADDNX adds only if not exists
     // ZADDXX replaces existing one
     Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("Test seed="+ seed);
     int numMembers = 10000;
     String key = "key";
     List<Pair<String>> data = loadData(key, numMembers);
@@ -612,9 +636,12 @@ public class ZSetsAPITest {
     // Delete set
     boolean result = ZSets.DELETE(map, key);
     assertTrue(result);
-
+    assertEquals(0L, BigSortedMap.countRecords(map));
+    
     // load again with ZADDNX
+    int count = 0;
     for (Pair<String> p : data) {
+      //System.out.println(count);
       double score = r.nextDouble() * r.nextInt();
       long res =
           ZSets.ZADDNX(map, key, new String[] { p.getFirst() }, new double[] { score }, false);
@@ -622,8 +649,10 @@ public class ZSetsAPITest {
       Double newScore = ZSets.ZSCORE(map, key, p.getFirst());
       assertNotNull(newScore);
       assertEquals(score, newScore);
+      count++;
     }
 
+    count = 0;
     // ZADDXX
     for (Pair<String> p : data) {
       Double score = ZSets.ZSCORE(map, key, p.getFirst());
@@ -632,6 +661,7 @@ public class ZSetsAPITest {
       long res =
           ZSets.ZADDXX(map, key, new String[] { p.getFirst() }, new double[] { score }, true);
       assertEquals(1, (int) res);
+      count++;
     }
 
     // Delete set

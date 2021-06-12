@@ -130,11 +130,7 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
             : reverse ? cmap.lastKey() : cmap.firstKey();
         
         currentIndexBlock.readLock();
-//        if (ptr > 0 && !currentIndexBlock.inside(ptr, length)) {
-//          /*DEBUG*/ System.err.println("NOT INSIDE INDEX BLOCK");
-//          continue;
-//        }
-//        // TODO: Fix the code
+        // TODO: Fix the code
         if (currentIndexBlock.hasRecentUnsafeModification()) {
           IndexBlock tmp =
               key != null ? reverse ? cmap.lowerKey(key) : cmap.floorKey(key) : cmap.lastKey();
@@ -155,7 +151,7 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
         if (indexScanner != null) {
           blockScanner =
               reverse ? indexScanner.previousBlockScanner() : indexScanner.nextBlockScanner();
-          updateNextFirstKey();
+//          updateNextFirstKey();
         }
         break;
         // TODO null
@@ -224,7 +220,12 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
       byte[] firstKey = next.getFirstKey();
       this.nextBlockFirstKey = UnsafeAccess.allocAndCopy(firstKey, 0, firstKey.length);
       this.nextBlockFirstKeySize = firstKey.length;
-    }    
+    }   
+//    long address = this.currentIndexBlock.lastRecordAddress();
+//    long ptr = DataBlock.keyAddress(address);
+//    int size = DataBlock.keyLength(address);
+//    this.nextBlockFirstKey = UnsafeAccess.allocAndCopy(ptr, size);
+//    this.nextBlockFirstKeySize = size;
   }
   
   public boolean hasNext() throws IOException {
@@ -271,15 +272,19 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
       return true;
     }
     
+    // Now currentIndexBlock is totally unlocked!!!
+    // Block can be deleted (invalidated) or split !!!
+    // 
+    IndexBlock current = this.currentIndexBlock;
+    
+    int version = current.getSeqNumberSplitOrMerge();
+    
     ConcurrentSkipListMap<IndexBlock, IndexBlock> cmap = map.getMap();
     if (this.indexScanner != null) {
       this.indexScanner.close();
       this.indexScanner = null;
     }
-    // Now currentIndexBlock is totally unlocked!!!
-    // Block can be deleted (invalidated) or split !!!
-    // 
-    IndexBlock current = this.currentIndexBlock;
+
     
     while (true) {
       IndexBlock tmp = null;
@@ -291,35 +296,41 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
         // set startRow to nextBlockFirstKey, because it is out of range of a IndexBlockScanner
         try {
           tmp.readLock();
-          if (tmp.hasRecentUnsafeModification()) {
-            IndexBlock temp = cmap.higherKey(currentIndexBlock);
-            if (temp != tmp) {
-              continue;
-            }
-          }
-          // We need this lock to get current first key,
-          // because previous one could have been deleted
-          byte[] firstKey = tmp.getFirstKey();
-          int res = Utils.compareTo(firstKey, 0, firstKey.length, 
-            nextBlockFirstKey, nextBlockFirstKeySize);
-          if ( res > 0) {
-            // set new next block first key
-            UnsafeAccess.free(nextBlockFirstKey);
-            nextBlockFirstKey = UnsafeAccess.allocAndCopy(firstKey, 0, firstKey.length);
-            nextBlockFirstKeySize = firstKey.length;
-          } else if (res < 0) {
-            /*DEBUG*/ System.err.println("index block split on-the-fly");
+          int ver = currentIndexBlock.getSeqNumberSplitOrMerge();
+          if (ver != version) {
             this.currentIndexBlock  = tmp;
+            version = tmp.getSeqNumberSplitOrMerge();
             continue;
           }
+//          if (tmp.hasRecentUnsafeModification()) {
+//            IndexBlock temp = cmap.higherKey(currentIndexBlock);
+//            if (temp != tmp) {
+//              continue;
+//            }
+//          }
+          // We need this lock to get current first key,
+          // because previous one could have been deleted
+//          byte[] firstKey = tmp.getFirstKey();
+//          int res = Utils.compareTo(firstKey, 0, firstKey.length, 
+//            nextBlockFirstKey, nextBlockFirstKeySize);
+//          if ( res > 0) {
+//            // set new next block first key
+//            //UnsafeAccess.free(nextBlockFirstKey);
+//            //nextBlockFirstKey = UnsafeAccess.allocAndCopy(firstKey, 0, firstKey.length);
+//            //nextBlockFirstKeySize = firstKey.length;
+//          } else if (res < 0) {
+//            /*DEBUG*/ System.err.println("index block split on-the-fly");
+//            this.currentIndexBlock  = tmp;
+//            continue;
+//          }
           // set startRow to null, because it is out of range of a IndexBlockScanner
           if (!isMultiSafe) {
-            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, nextBlockFirstKey, 
-              nextBlockFirstKeySize, stopRowPtr, 
+            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, 0/*nextBlockFirstKey*/, 
+              /*nextBlockFirstKeySize*/0, stopRowPtr, 
               stopRowLength, snapshotId);
           } else {
-            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, nextBlockFirstKey, 
-              nextBlockFirstKeySize, stopRowPtr, 
+            this.indexScanner = IndexBlockDirectMemoryScanner.getScanner(tmp, 0/*nextBlockFirstKey*/, 
+              /*nextBlockFirstKeySize*/0, stopRowPtr, 
               stopRowLength, snapshotId, indexScanner);
           }
           
@@ -336,7 +347,7 @@ public class BigSortedMapDirectMemoryScanner extends Scanner{
           return false;
         }
         // Here we can fail with RetryOperationException
-        updateNextFirstKey();
+        //updateNextFirstKey();
         return true;
       } catch (RetryOperationException e) {
         if(this.indexScanner != null) {

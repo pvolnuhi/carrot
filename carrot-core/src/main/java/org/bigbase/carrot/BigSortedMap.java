@@ -893,11 +893,7 @@ public class BigSortedMap {
     kvBlock.putForSearch(startKeyPtr, startKeyLength, version);
     IndexBlock b = null, prev = null;
     boolean firstBlock = true;
-    //IndexBlock toDelete = null;
     int seqNumber;
-    
-    //List<IndexBlock> toDeleteList = emptyBlocks.get();
-    //toDeleteList.clear();
     
     while (true) {
       try {
@@ -907,13 +903,12 @@ public class BigSortedMap {
         b = firstBlock? map.floorKey(kvBlock): map.higherKey(prev);
         if (b == null) {
           break;
-        }
-        
+        }    
         writeLock(b);
+        
         if(!b.isValid()) {
           continue;
         }
-        
         seqNumber = b.getSeqNumberSplitOrMerge();
  
         if (b.hasRecentUnsafeModification(loopStartTime)) {
@@ -930,15 +925,16 @@ public class BigSortedMap {
           }
         }
         prev = b;        
-
         if (b.isEmpty()) {
           //TODO: fix this code
-          //toDeleteList.add(b);
           continue;
         }      
         long del = b.deleteRange(startKeyPtr, startKeyLength, endKeyPtr, endKeyLength, version);
-        if (b.isEmpty()) {
-          //toDeleteList.add(b);
+        if (b.isEmpty() && !b.isFirstIndexBlock()) {
+          // TODO: what race conditions are possible? 
+          // Do we need to lock index block?
+          map.remove(b);
+          b.invalidate();
         }
         if (del == 0 && !firstBlock) {
           break;
@@ -956,10 +952,7 @@ public class BigSortedMap {
           writeUnlock(b);
         }
       }
-    } 
-    
-    //procesDeleteList(toDeleteList);
-    
+    }     
     return deleted;
   }
   

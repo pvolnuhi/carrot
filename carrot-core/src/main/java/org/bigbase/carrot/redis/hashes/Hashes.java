@@ -229,9 +229,21 @@ public class Hashes {
    * @return true on success
    */
   public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize) {
+    return DELETE(map, keyPtr, keySize, true);
+  }
+  
+  /**
+   * Delete hash by Key
+   * @param map sorted map
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param lock lock if true
+   * @return true on success
+   */
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize, boolean lock) {
     Key k = getKey(keyPtr, keySize);
     try {
-      KeysLocker.writeLock(k);
+      if (lock) KeysLocker.writeLock(k);
       int newKeySize = keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
       long kPtr = UnsafeAccess.malloc(newKeySize);
       UnsafeAccess.putByte(kPtr, (byte) DataType.HASH.ordinal());
@@ -244,7 +256,7 @@ public class Hashes {
       UnsafeAccess.free(endKeyPtr);
       return total > 0;
     } finally {
-      KeysLocker.writeUnlock(k);
+      if (lock) KeysLocker.writeUnlock(k);
     }
   }
   
@@ -393,10 +405,28 @@ public class Hashes {
   public static int HSET(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
       long valuePtr, int valueSize) {
 
+    return HSET(map, keyPtr, keySize, fieldPtr, fieldSize, valuePtr, valueSize, true);
+  }
+  
+  /**
+   * HSET for a single field-value (zero object allocation)
+   * @param map sorted map storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param fieldPtr field name address
+   * @param fieldSize field name size
+   * @param valuePtr value name address
+   * @param valueSize value name size
+   * @param lock lock if true
+   * @return 1 or 0
+   */
+  public static int HSET(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
+      long valuePtr, int valueSize, boolean lock) {
+
     Key k = getKey(keyPtr, keySize);
     int count = 0;
     try {
-      writeLock(k);
+      if (lock) writeLock(k);
       int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
       HashSet set = hashSet.get();
       set.reset();
@@ -410,7 +440,7 @@ public class Hashes {
       }
       return count;
     } finally {
-      writeUnlock(k);
+      if (lock) writeUnlock(k);
     }
   }
   
@@ -534,19 +564,19 @@ public class Hashes {
    * @return number of elements(fields)
    */
   
-  public static ThreadLocal<int[]> elarr = new ThreadLocal<int[]> () {
-    @Override
-    protected int[] initialValue() {
-      return new int[10000];
-    } 
-  };
-  
-  public static ThreadLocal<Integer> elsize = new ThreadLocal<Integer>() {
-    @Override
-    protected Integer initialValue() {
-      return 0;
-    } 
-  };
+//  public static ThreadLocal<int[]> elarr = new ThreadLocal<int[]> () {
+//    @Override
+//    protected int[] initialValue() {
+//      return new int[10000];
+//    } 
+//  };
+//  
+//  public static ThreadLocal<Integer> elsize = new ThreadLocal<Integer>() {
+//    @Override
+//    protected Integer initialValue() {
+//      return 0;
+//    } 
+//  };
   
   public static long HLEN(BigSortedMap map, long keyPtr, int keySize) {
     
@@ -564,12 +594,12 @@ public class Hashes {
         return 0; // empty or does not exists
       }
       long total = 0;
-      int[] arr = elarr.get();
+      //int[] arr = elarr.get();
       try {
         while (scanner.hasNext()) {
           long valuePtr = scanner.valueAddress();
           int num = numElementsInValue(valuePtr);
-          arr[index++] = num;
+          //arr[index++] = num;
           total += num;
           scanner.next();
         } 
@@ -581,7 +611,7 @@ public class Hashes {
       return total;
     } finally {
       
-      elsize.set(index);
+      //elsize.set(index);
       
       if (endKeyPtr > 0) {
         UnsafeAccess.free(endKeyPtr);
@@ -758,11 +788,25 @@ public class Hashes {
    * @return 1 or 0 (number of deleted fields)
    */
   public static int HDEL(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize) {
+    return HDEL(map, keyPtr, keySize, fieldPtr, fieldSize, true);
+  }
+  
+  /**
+   * HDEL for single field ( zero object allocation)
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param fieldPtr field address
+   * @param fieldSize field size
+   * @param lock lock if true
+   * @return 1 or 0 (number of deleted fields)
+   */
+  public static int HDEL(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, boolean lock) {
 
     Key k = getKey(keyPtr, keySize);
     int deleted = 0;
     try {
-      writeLock(k);
+      if (lock) writeLock(k);
       int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
       HashDelete update = hashDelete.get();
       update.reset();
@@ -779,7 +823,7 @@ public class Hashes {
       }
       return deleted;
     } finally {
-      writeUnlock(k);
+      if (lock) writeUnlock(k);
     }
   }
   
@@ -836,10 +880,26 @@ public class Hashes {
    */
   public static int HDEL(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, 
       long buffer, int bufferSize) {
+    return HDEL(map, keyPtr, keySize, fieldPtr, fieldSize, buffer, bufferSize, true);
+  }
+  
+  /**
+   * HDEL for the single field ( zero object allocation) with a value
+   * returned to the buffer
+   * @param map sorted map storage
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param fieldPtr field address
+   * @param fieldSize field size
+   * @return 0 - not found, otherwise length of the value serialized, if greater than
+   *         buffer size, the call must be repeated with the appropriately sized buffer
+   */
+  public static int HDEL(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize, 
+      long buffer, int bufferSize, boolean lock) {
 
     Key k = getKey(keyPtr, keySize);
     try {
-      writeLock(k);
+      if (lock) writeLock(k);
       int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
       HashDelete update = hashDelete.get();
       update.reset();
@@ -854,7 +914,7 @@ public class Hashes {
       }
       return update.getValueSize();
     } finally {
-      writeUnlock(k);
+      if (lock) writeUnlock(k);
     }
   }
   
@@ -951,9 +1011,30 @@ public class Hashes {
    */
   public static int HGET (BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
       long valueBuf, int valueBufSize) {
+    return HGET(map, keyPtr, keySize, fieldPtr, fieldSize, valueBuf, valueBufSize, true);
+  }
+  
+  /**
+   *  Returns the value associated with field in the hash stored at key.
+   * @param map ordered map
+   * @param keyPtr hash key address
+   * @param keySize hash key size
+   * @param fieldPtr field to lookup address
+   * @param fieldSize field size
+   * @param valueBuf value buffer
+   * @param valueBufSize value buffer size
+   * @param lock lock if true
+   * @return size of value, one should check this and if it is greater than valueBufSize
+   *         means that call should be repeated with an appropriately sized value buffer, 
+   *         -1 - if does not exists
+   */
+  public static int HGET (BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
+      long valueBuf, int valueBufSize, boolean lock) {
     Key k = getKey(keyPtr, keySize);
     try {
-      readLock(k);
+      if (lock) {
+        readLock(k);
+      }
       int kSize = buildKey(keyPtr, keySize, fieldPtr, fieldSize);
       HashGet get = hashGet.get();
       get.reset();
@@ -965,7 +1046,9 @@ public class Hashes {
       map.execute(get);
       return get.getFoundValueSize();
     } finally {
-      readUnlock(k);
+      if (lock) {
+        readUnlock(k);
+      }
     }
   }
   

@@ -202,9 +202,24 @@ public class Sets {
    * @return 1 or 0
    */
   public static int SADD(BigSortedMap map, long keyPtr, int keySize, long elemPtr, int elemSize) {
+    return SADD(map, keyPtr, keySize, elemPtr, elemSize, true);
+  }
+  
+  
+  /**
+   * SADD for single member (zero memory allocation)
+   * @param map sorted map storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param elemPtr member value address
+   * @param elemSize member value size
+   * @param lock lock if true
+   * @return 1 or 0
+   */
+  public static int SADD(BigSortedMap map, long keyPtr, int keySize, long elemPtr, int elemSize, boolean lock) {
     Key k = getKey(keyPtr, keySize);
     try {
-      KeysLocker.writeLock(k);
+      if (lock) KeysLocker.writeLock(k);
 
       int count = 0;
       int kSize = buildKey(keyPtr, keySize, elemPtr, elemSize);
@@ -218,10 +233,9 @@ public class Sets {
       }
       return count;
     } finally {
-      KeysLocker.writeUnlock(k);
+      if (lock) KeysLocker.writeUnlock(k);
     }
   }
-  
   
   /**
    * For testing only
@@ -645,9 +659,25 @@ public class Sets {
    * @return 1 or 0
    */
   public static int SREM(BigSortedMap map, long keyPtr, int keySize, long elemPtr, int elemSize) {
+    return SREM(map, keyPtr, keySize, elemPtr, elemSize, true);
+  }
+  
+  /**
+   * SREM for single member (zero object allocation)
+   * @param map sorted set storage
+   * @param keyPtr set key address
+   * @param keySize set key size
+   * @param elemPtr member address
+   * @param elemSize member size
+   * @param lock lock if true
+   * @return 1 or 0
+   */
+  public static int SREM(BigSortedMap map, long keyPtr, int keySize, long elemPtr, int elemSize, boolean lock) {
     Key k = getKey(keyPtr, keySize);
     try {
-      KeysLocker.writeLock(k);
+      if (lock) {
+        KeysLocker.writeLock(k);
+      }
       int removed = 0;
       int kSize = buildKey(keyPtr, keySize, elemPtr, elemSize);
       SetDelete remove = setDelete.get();
@@ -659,12 +689,14 @@ public class Sets {
       if (map.execute(remove)) {
         removed++;
         if (remove.checkForEmpty && isEmpty(map, keyPtr, keySize)) {
-          DELETE(map, keyPtr, keySize);
+          DELETE(map, keyPtr, keySize, lock);
         }
       }
       return removed;
     } finally {
-      KeysLocker.writeUnlock(k);
+      if (lock) {
+        KeysLocker.writeUnlock(k);
+      }
     }
   }
   
@@ -971,8 +1003,8 @@ public class Sets {
       ptr += eSize + eSizeSize;
     }
     return deleted;
-
   }
+  
   /**
    * Delete set by Key
    * @param map sorted map
@@ -981,10 +1013,24 @@ public class Sets {
    * @return number of deleted K-Vs
    */
   public static long DELETE(BigSortedMap map, long keyPtr, int keySize) {
+    return DELETE(map, keyPtr, keySize, true);
+  }
+  
+  /**
+   * Delete set by Key
+   * @param map sorted map
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param lock lock if true
+   * @return number of deleted K-Vs
+   */
+  public static long DELETE(BigSortedMap map, long keyPtr, int keySize, boolean lock) {
     Key k = getKey(keyPtr, keySize);
     long startKeyPtr = 0, endKeyPtr = 0;
     try {
-      KeysLocker.writeLock(k);
+      if (lock) {
+        KeysLocker.writeLock(k);
+      }
       startKeyPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
       int newKeySize = buildKey(keyPtr, keySize, Commons.ZERO, 1, startKeyPtr);
       endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, newKeySize - 1);      
@@ -997,7 +1043,9 @@ public class Sets {
       if (endKeyPtr > 0) {
         UnsafeAccess.free(endKeyPtr);
       }
-      KeysLocker.writeUnlock(k);
+      if (lock) {
+        KeysLocker.writeUnlock(k);
+      }
     }
 
   }
@@ -1416,6 +1464,7 @@ public class Sets {
       sc.setDisposeKeysOnClose(true);
       return sc;
     } catch (IOException e) {
+      //e.printStackTrace();
       try {
         scanner.close();
       } catch (IOException e1) {

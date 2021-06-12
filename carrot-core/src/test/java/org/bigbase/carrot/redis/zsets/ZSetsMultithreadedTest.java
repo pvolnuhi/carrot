@@ -1,11 +1,10 @@
-package org.bigbase.carrot.redis.hashes;
+package org.bigbase.carrot.redis.zsets;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -14,19 +13,19 @@ import org.bigbase.carrot.Value;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
-import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class HashesMultithreadedTest {
+public class ZSetsMultithreadedTest {
 
   BigSortedMap map;
   int valueSize = 16;
   int keySize = 16;
   int setSize = 10000;
-  int keysNumber = 10000; // per thread
+  int keysNumber = 5000; // per thread
   int numThreads = 6;
   List<Value> values;
+  List<Double> scores;
 
   private List<Value> getValues() {
     byte[] buffer = new byte[valueSize / 2];
@@ -43,10 +42,20 @@ public class HashesMultithreadedTest {
     return values;
   }
 
+  private List<Double> getScores() {
+    Random r = new Random();
+    scores = new ArrayList<Double>();
+    for (int i = 0; i < setSize; i++) {
+      scores.add(r.nextDouble());
+    }
+    return scores;
+  }
+  
   //@Before
   private void setUp() {
     map = new BigSortedMap(100000000000L);
     values = getValues();
+    scores = getScores();
   }
 
   //@After
@@ -104,44 +113,35 @@ public class HashesMultithreadedTest {
         for (int i = 0; i < keysNumber; i++) {
           r.nextBytes(buf);
           UnsafeAccess.copy(buf, 0, ptr, keySize);
-          for (Value v : values) {
-            int res = Hashes.HSET(map, ptr, keySize, v.address, v.length, v.address, v.length);
+          long[] vptrs = new long[1];
+          int[] vsizes = new int[1];
+          double[] scs = new double[1];
+          
+          for (int j = 0; j < setSize; j++) {
+            Value v = values.get(j);
+            
+            vptrs[0] = v.address;
+            vsizes[0] = v.length;
+            scs[0] = scores.get(j);
+            int res = (int) ZSets.ZADD(map, ptr, keySize, scs, vptrs, vsizes, false);
             assertEquals(1, res);
+            Double d = ZSets.ZSCORE(map, ptr, keySize, v.address, v.length);
+            assertEquals(scs[0], d);
             loaded++;
             if (loaded % 1000000 == 0) {
               System.out.println(Thread.currentThread().getName() + " loaded "+ loaded);
             }
           }
-          int card = (int) Hashes.HLEN(map, ptr, keySize);
+          int card = (int) ZSets.ZCARD(map, ptr, keySize);
           if (card != values.size()) {
-            System.err.println("First CARD=" + card);
-            //int total = Hashes.elsize.get();
-            //int[] prev = Arrays.copyOf(Hashes.elarr.get(), total);
-            card = (int) Hashes.HLEN(map, ptr, keySize);
+            card = (int) ZSets.ZCARD(map, ptr, keySize);
             System.err.println("Second CARD=" + card);
-
-            //int total2 = Hashes.elsize.get();
-            //int[] prev2 = Arrays.copyOf(Hashes.elarr.get(), total2);
-            //dump(prev, total, prev2, total2);
-            
             Thread.dumpStack();
             System.exit(-1);
           }
           assertEquals(values.size(), card);
         }
         UnsafeAccess.free(ptr);
-      }
-
-      private void dump(int[] prev, int total, int[] prev2, int total2) {
-        // total2 > total
-        System.err.println("total=" + total + " total2="+ total2);
-        int i = 0;
-        for (; i < total; i++) {
-          System.err.println(prev[i] + " " + prev2[i]);
-        }
-        for (; i < total2; i++ ) {
-          System.err.println("** " + prev2[i]);
-        }
       }
     };
     Runnable get = new Runnable() {
@@ -159,10 +159,11 @@ public class HashesMultithreadedTest {
         for (int i = 0; i < keysNumber; i++) {
           r.nextBytes(buf);
           UnsafeAccess.copy(buf, 0, ptr, keySize);
-          for (Value v : values) {
-            int res = Hashes.HGET(map, ptr, keySize, v.address, v.length, buffer, valueSize);
-            assertEquals(valueSize, res);
-            assertEquals(0, Utils.compareTo(v.address, v.length, buffer, valueSize));
+          for (int j = 0; j < setSize; j++) {
+            Value v = values.get(j);
+            double expScore = scores.get(j);
+            Double res = ZSets.ZSCORE(map, ptr, keySize, v.address, v.length);
+            assertEquals(expScore, res);
             read++;
             if (read % 1000000 == 0) {
               System.out.println(Thread.currentThread().getName() + " read "+ read);
@@ -188,15 +189,15 @@ public class HashesMultithreadedTest {
         for (int i = 0; i < keysNumber; i++) {
           r.nextBytes(buf);
           UnsafeAccess.copy(buf, 0, ptr, keySize);
-          long card = (int) Hashes.HLEN(map, ptr, keySize);
+          long card = (int) ZSets.ZCARD(map, ptr, keySize);
           if (card != setSize) {
             Thread.dumpStack();
             System.exit(-1);
           }
           assertEquals(setSize, (int) card);
-          boolean res = Hashes.DELETE(map, ptr, keySize);
+          boolean res = ZSets.DELETE(map, ptr, keySize);
           assertTrue(res);
-          card = Hashes.HLEN(map, ptr, keySize);
+          card = ZSets.ZCARD(map, ptr, keySize);
           if (card != 0) {
             System.err.println("FAILED delete, card ="+ card);
             System.exit(-1);
@@ -226,6 +227,7 @@ public class HashesMultithreadedTest {
     }
 
     long end = System.currentTimeMillis();
+    BigSortedMap.printMemoryAllocationStats();
 
     System.out.println("Loading " + (numThreads * keysNumber * setSize) + " elements os done in "
         + (end - start) + "ms");

@@ -2,9 +2,9 @@ package org.bigbase.carrot;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -216,7 +216,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * First key of this index block (used for comparisons) including version and
 	 * type (DELETE = 0, PUT=1)
 	 */
-	byte[] firstKey;
+	volatile byte[] firstKey;
 	//long version;
 	byte type;
   boolean isFirst = false;
@@ -259,6 +259,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     byte[] kk = new byte[] { (byte) 0};
     put(kk, 0, kk.length, kk, 0, kk.length, -1, Op.PUT.ordinal());
     this.isFirst = true;
+    // set first key
+    this.firstKey = kk;
 	}
 	
 	// TODO; first system {0}{0}?
@@ -511,7 +513,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	    long before = this.seqNumberSplitOrMerge;
 	    int index = (hashCode() % locks.length);
 	    ReentrantReadWriteLock lock = locks[index];
-	    lock.readLock().lock();
+	    lock.readLock().lock();	    
 	    if (!isValid()) {
 	      //The block can become invalid only before after deletion
 	      // or after merge (which is not implemented)
@@ -532,7 +534,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		ReentrantReadWriteLock lock = locks[index];
 		lock.readLock().unlock();
 	}
-
+	
 	/**
 	 * Write lock
 	 * 
@@ -566,7 +568,6 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		ReentrantReadWriteLock lock = locks[index];
 		lock.writeLock().unlock();
 	}
-
 
 
 	private boolean insertBlock(DataBlock bb) {
@@ -755,7 +756,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  short increase = (short) Math.max(required, EXPANSION_SIZE);
 	  this.blockSize = (short)(this.blockSize + increase);
 	  this.dataPtr = UnsafeAccess.realloc(this.dataPtr, this.blockSize);
-	  incrSeqNumberSplitOrMerge();
+	  //incrSeqNumberSplitOrMerge();
 	}
 	
 	/**
@@ -2907,6 +2908,8 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 			right.numDataBlocks = (short) (oldNumRecords - this.numDataBlocks);
 			right.blockDataSize = (short) (oldDataSize - this.blockDataSize);
 			UnsafeAccess.copy(ptr, right.dataPtr, right.blockDataSize);
+			// Init first key
+			right.getFirstKey();
 			updateUnsafeModificationTime();
 			return right;
 		} finally {
@@ -3029,24 +3032,16 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		byte[] firstKey = getFirstKey();
 		byte[] firstKey1 = o.getFirstKey();
 		int res = Utils.compareTo(firstKey, 0, firstKey.length, firstKey1, 0, firstKey1.length);
-//		if (res == 0) {
-//			//long ver = o.version;
-//			//if (version == ver) {
-//				return type - o.type;
-//			//} else if (ver < version) {
-//			//	return -1;
-//			//} else {
-//			//	return 1;
-//			//}
-//		} else {
-//			return res;
-//		}
 		return res;
 	}
 
+  
 	public byte[] getFirstKey() {
 		
-		try {
+		if (this.firstKey != null) {
+		  return this.firstKey;
+		}
+	  try {
 			readLock(false);
 			if (firstKey != null) {
 	      return firstKey;
