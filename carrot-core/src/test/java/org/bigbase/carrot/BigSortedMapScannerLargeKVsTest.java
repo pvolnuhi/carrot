@@ -18,7 +18,7 @@ import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class BigSortedMapDirectMemoryScannerLargeKVsTest {
+public class BigSortedMapScannerLargeKVsTest {
 
   static long buffer = UnsafeAccess.malloc(64*1024);
   

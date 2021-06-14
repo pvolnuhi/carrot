@@ -18,8 +18,8 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class IndexBlockDirectMemoryScannerTest {
-  Logger LOG = LoggerFactory.getLogger(IndexBlockDirectMemoryScannerTest.class);
+public class IndexBlockScannerTest {
+  Logger LOG = LoggerFactory.getLogger(IndexBlockScannerTest.class);
   
   static {
     UnsafeAccess.debug = true;

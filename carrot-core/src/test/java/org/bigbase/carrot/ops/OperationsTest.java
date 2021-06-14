@@ -28,7 +28,14 @@ public class OperationsTest {
       totalLoaded++;
       byte[] key = ("KEY"+ (totalLoaded)).getBytes();
       byte[] value = LONG_ZERO;
-      boolean result = map.put(key, 0, key.length, value, 0, value.length, 0);
+      long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length);
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      int keySize = key.length;
+      int valueSize = value.length;
+      boolean result = map.put(keyPtr, keySize, valuePtr, valueSize, -1);
+      UnsafeAccess.free(keyPtr);
+      UnsafeAccess.free(valuePtr);
+      
       if (result == false) {
         totalLoaded--;
         break;
@@ -144,7 +151,13 @@ public class OperationsTest {
       totalLoaded++;
       byte[] key = ("KEY"+ (totalLoaded)).getBytes();
       byte[] value = LONG_ZERO;
-      boolean result = map.put(key, 0, key.length, value, 0, value.length, 0);
+      long keyPtr = UnsafeAccess.allocAndCopy(key, 0, key.length);
+      long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+      int keySize = key.length;
+      int valueSize = value.length;
+      boolean result = map.put(keyPtr, keySize, valuePtr, valueSize, -1);
+      UnsafeAccess.free(keyPtr);
+      UnsafeAccess.free(valuePtr);
       if (result == false) {
         totalLoaded--;
         break;

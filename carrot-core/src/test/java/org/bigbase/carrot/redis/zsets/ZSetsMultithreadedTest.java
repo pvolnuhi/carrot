@@ -26,6 +26,7 @@ public class ZSetsMultithreadedTest {
   int numThreads = 6;
   List<Value> values;
   List<Double> scores;
+  long setupTime;
 
   private List<Value> getValues() {
     byte[] buffer = new byte[valueSize / 2];
@@ -53,6 +54,7 @@ public class ZSetsMultithreadedTest {
   
   //@Before
   private void setUp() {
+    setupTime = System.currentTimeMillis();
     map = new BigSortedMap(100000000000L);
     values = getValues();
     scores = getScores();
@@ -107,7 +109,7 @@ public class ZSetsMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         byte[] buf = new byte[keySize];
         for (int i = 0; i < keysNumber; i++) {
@@ -152,7 +154,7 @@ public class ZSetsMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         long buffer = UnsafeAccess.malloc(valueSize);
         byte[] buf = new byte[keySize];
@@ -182,7 +184,7 @@ public class ZSetsMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         byte[] buf = new byte[keySize];
 

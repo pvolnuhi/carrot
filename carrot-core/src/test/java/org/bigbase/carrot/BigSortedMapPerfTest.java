@@ -17,10 +17,10 @@ public class BigSortedMapPerfTest {
   public static void setUp() {
     System.out.println("Set up: block = 4096; Mem="+ 10000000);
     
-    BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
+    //BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     
     BigSortedMap.setMaxBlockSize(4096);
-    map = new BigSortedMap(4000000000L);
+    map = new BigSortedMap(1000000000L);
     totalLoaded = 1;
     long start = System.currentTimeMillis();
     while(true) {

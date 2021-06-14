@@ -5,7 +5,7 @@ import java.util.Random;
 
 import org.bigbase.carrot.util.UnsafeAccess;
 
-public class DataBlockDirectMemoryScannerLargeKVsTest extends DataBlockDirectMemoryScannerTest{
+public class DataBlockScannerLargeKVsTest extends DataBlockScannerTest{
 
   protected ArrayList<Key> fillDataBlock (DataBlock b) throws RetryOperationException {
     ArrayList<Key> keys = new ArrayList<Key>();

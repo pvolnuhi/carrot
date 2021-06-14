@@ -15,8 +15,8 @@ import org.junit.Test;
 
 import com.google.common.util.concurrent.AtomicDouble;
 
-public class BigSortedMapDirectMemoryMT {
-  static int totalThreads = 8;
+public class BigSortedMapTestMT {
+  static int totalThreads = 6;
   static AtomicDouble putsPs = new AtomicDouble();
   static AtomicDouble comboPs = new AtomicDouble();
   static AtomicDouble scanPs = new AtomicDouble();

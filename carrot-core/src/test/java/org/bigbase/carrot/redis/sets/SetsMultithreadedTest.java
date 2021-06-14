@@ -13,8 +13,6 @@ import org.bigbase.carrot.Value;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.UnsafeAccess;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -27,6 +25,7 @@ public class SetsMultithreadedTest {
   int keysNumber = 10000; // per thread
   int numThreads = 8;
   List<Value> values;
+  long setupTime;
 
   private List<Value> getValues() {
     byte[] buffer = new byte[valueSize / 2];
@@ -45,6 +44,7 @@ public class SetsMultithreadedTest {
 
   //@Before
   private void setUp() {
+    setupTime = System.currentTimeMillis();
     map = new BigSortedMap(100000000000L);
     values = getValues();
   }
@@ -98,7 +98,7 @@ public class SetsMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         byte[] buf = new byte[keySize];
         for (int i = 0; i < keysNumber; i++) {
@@ -132,7 +132,7 @@ public class SetsMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         byte[] buf = new byte[keySize];
         for (int i = 0; i < keysNumber; i++) {
@@ -158,7 +158,7 @@ public class SetsMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         byte[] buf = new byte[keySize];
 

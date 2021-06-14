@@ -5,7 +5,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -27,6 +26,7 @@ public class HashesMultithreadedTest {
   int keysNumber = 10000; // per thread
   int numThreads = 6;
   List<Value> values;
+  long setupTime ;
 
   private List<Value> getValues() {
     byte[] buffer = new byte[valueSize / 2];
@@ -45,6 +45,7 @@ public class HashesMultithreadedTest {
 
   //@Before
   private void setUp() {
+    setupTime = System.currentTimeMillis();
     map = new BigSortedMap(100000000000L);
     values = getValues();
   }
@@ -98,7 +99,7 @@ public class HashesMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         byte[] buf = new byte[keySize];
         for (int i = 0; i < keysNumber; i++) {
@@ -152,7 +153,7 @@ public class HashesMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         long buffer = UnsafeAccess.malloc(valueSize);
         byte[] buf = new byte[keySize];
@@ -181,7 +182,7 @@ public class HashesMultithreadedTest {
         // Name is string int
         String name = Thread.currentThread().getName();
         int id = Integer.parseInt(name);
-        Random r = new Random(id);
+        Random r = new Random(setupTime + id);
         long ptr = UnsafeAccess.malloc(keySize);
         byte[] buf = new byte[keySize];
 

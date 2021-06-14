@@ -6,7 +6,7 @@ import java.util.Random;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 
-public class IndexBlockDirectMemoryScannerLargeKVsTest extends IndexBlockDirectMemoryScannerTest{
+public class IndexBlockScannerLargeKVsTest extends IndexBlockScannerTest{
 
   protected ArrayList<Key> fillIndexBlock (IndexBlock b) throws RetryOperationException {
     ArrayList<Key> keys = new ArrayList<Key>();

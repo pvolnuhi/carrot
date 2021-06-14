@@ -15,7 +15,7 @@ import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class BigSortedMapDirectMemoryScannerTest {
+public class BigSortedMapScannerTest {
 
   static {
     //UnsafeAccess.debug = true;

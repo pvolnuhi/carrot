@@ -470,102 +470,12 @@ public class BigSortedMap {
   public ConcurrentSkipListMap<IndexBlock, IndexBlock> getMap() {
     return map;
   }
-  
-  /**
-   * Verifies arguments are valid
-   * @param buf buffer
-   * @param off offset
-   * @param len length
-   * @throws NullPointerException
-   * @throws IllegalArgumentException
-   */
-  private void verifyArgs(byte[] buf, int off, int len) 
-  	throws NullPointerException, IllegalArgumentException
-  {
-	  if (buf == null) {
-		  throw new NullPointerException("buffer is null");
-	  }
-	  if (off < 0 || off >= buf.length) {
-		  throw new IllegalArgumentException("illegal offset: "+ off);
-	  }
-	  if (len <=0 || len > buf.length - off) {
-		  throw new IllegalArgumentException("illegal length: "+ len);
-
-	  }
-  }
-  
+    
   private long getSequenceId() {
     return sequenceID.get();
   }
   
-  
-  /**
-   * Put key -value operation
-   * @param key key buffer
-   * @param keyOffset key offset in a buffer
-   * @param keyLength key length
-   * @param value value buffer
-   * @param valueOffset value offset in a buffer
-   * @param valueLength value length
-   * @return true, if success, false otherwise (no room, split block)
-   * @throws RetryOperationException 
-   */
-  public boolean put(byte[] key, int keyOffset, int keyLength, byte[] value, int valueOffset,
-      int valueLength, long expire) {
 
-    verifyArgs(key, keyOffset, keyLength);
-    verifyArgs(value, valueOffset, valueLength);
-    long version = getSequenceId();
-    IndexBlock kvBlock = getThreadLocalBlock();
-    kvBlock.putForSearch(key, keyOffset, keyLength, version);
-
-    while (true) {
-      IndexBlock b = null;
-      int seqNumber;
-      try {
-        b = map.floorKey(kvBlock);
-        // TODO: we do a lot of locking        
-        writeLock(b);
-        seqNumber = b.getSeqNumberSplitOrMerge();
-        // TODO: optimize - last time split? what is the safest threshold? 100ms
-        if(b.hasRecentUnsafeModification()) {
-          IndexBlock bbb = map.floorKey(kvBlock);
-          if (b != bbb) {
-            continue;
-          } else {
-            int sn = b.getSeqNumberSplitOrMerge();
-            if (sn != seqNumber) {
-              seqNumber = sn;
-              continue;
-            }
-          }
-        } 
-        boolean result =
-            b.put(key, keyOffset, keyLength, value, valueOffset, valueLength, version, expire);
-        if (!result && getTotalAllocatedMemory() < maxMemory) {
-          // In sequential pattern of puts, we do not need to split
-          // but need to add new block with a given K-V
-          IndexBlock bb = null;
-          bb = b.split();
-          // block into
-          putBlock(bb);
-          continue;
-        } else if (!result) {
-          // MAP is FULL
-          return false;
-        } else {
-          return true;
-        }
-      } catch (RetryOperationException e) {
-        continue;
-      } finally {
-        if (b != null) {
-          writeUnlock(b);
-        }
-      }
-    }
-  }
-  
   /**
    * Put index block into map
    * @param b index block
@@ -724,6 +634,29 @@ public class BigSortedMap {
       }
     }
   }
+  
+  /**
+   * 
+   * @param key
+   * @param off
+   * @param len
+   * @param value
+   * @param valoff
+   * @param vallen
+   * @param expire
+   * @return
+   */
+  public boolean put(byte[] key, int off, int len, byte[] value, int valoff, int vallen, long expire) {
+    long keyPtr = UnsafeAccess.allocAndCopy(key, off, len);
+    long valuePtr = UnsafeAccess.allocAndCopy(value, valoff, vallen);
+    int keySize = len;
+    int valueSize = vallen;
+    boolean result = put(keyPtr, keySize, valuePtr, valueSize, expire);
+    UnsafeAccess.free(keyPtr);
+    UnsafeAccess.free(valuePtr);
+    return result;
+  }
+  
   /**
    * Put key-value operation
    * @param keyPtr key address
@@ -800,70 +733,6 @@ public class BigSortedMap {
     }
   }
   
-  /**
-   * Delete key operation
-   * 
-   * @param key key buffer
-   * @param keyOffset key offset
-   * @param keyLength key length
-   * @return true, if success, false otherwise
-   */
-  
-  public boolean delete(byte[] key, int keyOffset, int keyLength) {
-
-    verifyArgs(key, keyOffset, keyLength);
-    IndexBlock kvBlock = getThreadLocalBlock();
-    long version = getSequenceId();
-    kvBlock.putForSearch(key, keyOffset, keyLength, version);
-    while (true) {
-      IndexBlock b = null;
-      int seqNumber ;
-      try {
-        b = map.floorKey(kvBlock);
-        // Top level lock
-        writeLock(b);
-        // Check if block is still valid
-        if (!b.isValid()) {
-          continue;
-        }
-        seqNumber = b.getSeqNumberSplitOrMerge();
-        if (b.hasRecentUnsafeModification()) {
-          IndexBlock bbb = map.floorKey(kvBlock);
-          if (b != bbb) {
-            continue;
-          } else {
-            int sn = b.getSeqNumberSplitOrMerge();
-            if (seqNumber != sn) {
-              seqNumber = sn;
-              continue;
-            }
-          }
-        }
-        // Now we get the correct index block - perform the operation
-        OpResult result = b.delete(key, keyOffset, keyLength, version);
-        if (result == OpResult.OK) {
-          if (b.isEmpty() && !b.isFirstIndexBlock()) {
-            map.remove(b);
-            b.free();
-            b.invalidate();
-          }
-          return true;
-        } else if (result == OpResult.NOT_FOUND) {
-          return false;
-        }
-        // split is required
-        IndexBlock bb = b.split();
-        putBlock(bb);
-        // and continue loop
-      } catch (RetryOperationException e) {
-        continue;
-      } finally {
-        if (b != null) {
-          writeUnlock(b);
-        }
-      }
-    }
-  }
   
   /**
    * To keep list of empty blocks
@@ -956,34 +825,6 @@ public class BigSortedMap {
     return deleted;
   }
   
-  private void procesDeleteList(List<IndexBlock> toDeleteList) {
-    if (toDeleteList.isEmpty()) {
-      return;
-    }
-    IndexBlock ib = null;
-    while(!toDeleteList.isEmpty()) {
-      ib = toDeleteList.get(0);
-      try {
-        ib.writeLock();
-        if (ib.isValid()) {
-          map.remove(ib);
-          ib.free();
-          ib.invalidate();
-        }
-        toDeleteList.remove(0);
-      } catch(RetryOperationException e) {
-        if (!ib.isValid()) {
-          // Remove from the list
-          toDeleteList.remove(0);
-        }
-        continue;
-      } finally {
-        ib.writeUnlock();
-      }
-    }
-  }
-
-
   /**
    * Delete key operation
    * @param keyPtr key address
@@ -1042,58 +883,6 @@ public class BigSortedMap {
     }
   }
   
-  /**
-   * Get value by key
-   * @param key key buffer
-   * @param keyOffset key offset
-   * @param keyLength key length
-   * @param valueBuf value buffer
-   * @param valueOffset value offset
-   * @param version version
-   * @return value length or NOT_FOUND if not found
-   *         caller MUST verify that valueBuf.length > value length + valOffset   
-   */
-  public long get(byte[] key, int keyOffset, int keyLength, byte[] valueBuf, int valOffset,
-      long version) {
-
-    IndexBlock kvBlock = getThreadLocalBlock();
-    kvBlock.putForSearch(key, keyOffset, keyLength, version);
-
-    boolean locked = false;
-    IndexBlock b = null;
-    while (true) {
-      try {
-        b = map.floorKey(kvBlock);
-        long result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
-        if (result < 0 && b.hasRecentUnsafeModification()) {
-          // check one more time with lock
-          // - we caught split in flight
-          IndexBlock bb = null;
-          while (true) {
-            b = map.floorKey(kvBlock);
-            readLock(b);
-            locked = true;
-            bb = map.floorKey(kvBlock);
-            if (bb != b) {
-              readUnlock(b);
-              locked = false;
-              continue;
-            } else {
-              break;
-            }
-          }
-          result = b.get(key, keyOffset, keyLength, valueBuf, valOffset, version);
-        }
-        return result;
-      } catch (RetryOperationException e) {
-        continue;
-      } finally {
-        if (locked && b != null) {
-          readUnlock(b);
-        }
-      }
-    }
-  }
   
   /**
    * Get value by key 
@@ -1589,16 +1378,6 @@ public class BigSortedMap {
     }
   }
   
-  /**
-   * Checks if key exists in a map
-   * @param key buffer
-   * @param offset offset in a buffer
-   * @param len key length
-   * @return true if exists, false otherwise
-   */
-  public boolean exists(byte[] key, int offset, int len) {
-    return get(key, offset, len, key, key.length -1, Long.MAX_VALUE) > 0;
-  }
   
   /**
    * Checks if key exists in a map

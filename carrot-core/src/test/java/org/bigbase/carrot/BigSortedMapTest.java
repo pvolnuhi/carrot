@@ -17,7 +17,7 @@ import org.junit.Test;
 
 
 //TODO: MEMORY LEAK
-public class BigSortedMapDirectMemoryTest {
+public class BigSortedMapTest {
 
   BigSortedMap map;
   long totalLoaded;

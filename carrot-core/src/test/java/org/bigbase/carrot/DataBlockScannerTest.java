@@ -18,8 +18,8 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DataBlockDirectMemoryScannerTest {
-  Logger LOG = LoggerFactory.getLogger(DataBlockDirectMemoryScannerTest.class);
+public class DataBlockScannerTest {
+  Logger LOG = LoggerFactory.getLogger(DataBlockScannerTest.class);
   
   protected DataBlock getDataBlock() {
     IndexBlock ib = new IndexBlock(4096);

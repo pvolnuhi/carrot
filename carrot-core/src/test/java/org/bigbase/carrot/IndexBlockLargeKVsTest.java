@@ -5,16 +5,20 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
-import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
 
 public class IndexBlockLargeKVsTest extends IndexBlockTest{
-   
+
+  @Ignore
+  @Test 
+  public void testAutomaticDataBlockMerge() {
+  
+  }
   /**
    * 
    * 1. K & V are both in data block - we do not test this
@@ -28,12 +32,10 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
     System.out.println("testOverwriteSmallerValueSize - LargeKVs");
     for (int i = 0; i < 1; i++) {
       Random r = new Random();
-      long seed = r.nextLong();
-      r.setSeed(seed);
-      System.out.println("SEED="+seed);
       IndexBlock b = getIndexBlock(4096);
-      List<byte[]> keys = fillIndexBlock(b);
-      for (byte[] key : keys) {
+      ArrayList<Key> keys = fillIndexBlock(b);
+      System.out.println("KEYS ="+ keys.size());
+      for (Key key : keys) {
         int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
@@ -46,15 +48,19 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
         }
         byte[] value = new byte[valueSize];
         r.nextBytes(value);
-        byte[] buf = new byte[valueSize];
-        boolean res = b.put(key, 0, keySize, value, 0, value.length, Long.MAX_VALUE, 0);
+        long valuePtr = UnsafeAccess.allocAndCopy(value, 0, valueSize);
+        long buf = UnsafeAccess.malloc(valueSize);
+        boolean res = b.put(key.address, keySize, valuePtr, valueSize, Long.MAX_VALUE, 0);
         assertTrue(res);
-        long size = b.get(key, 0, keySize, buf, 0, Long.MAX_VALUE);
+        long size = b.get(key.address, keySize, buf, valueSize, Long.MAX_VALUE);
         assertEquals(valueSize, (int) size);
-        assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+        assertTrue(Utils.compareTo(buf, valueSize, valuePtr,  valueSize) == 0);
+        UnsafeAccess.free(valuePtr);
+        UnsafeAccess.free(buf);
       }
       scanAndVerify(b, keys);
       b.free();
+      freeKeys(keys);
     }
 
   }
@@ -70,9 +76,10 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
     System.out.println("testOverwriteLargerValueSize- LargeKVs");
     for (int i = 0; i < 1; i++) {
       Random r = new Random();
+      
       IndexBlock b = getIndexBlock(4096);
-      List<byte[]> keys = fillIndexBlock(b);
-      for (byte[] key : keys) {
+      ArrayList<Key> keys = fillIndexBlock(b);
+      for (Key key : keys) {
         int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
@@ -88,41 +95,41 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
         } 
         byte[] value = new byte[valueSize];
         r.nextBytes(value);
-        byte[] buf = new byte[valueSize];
-        boolean res = b.put(key, 0, keySize, value, 0, value.length, Long.MAX_VALUE, 0);
+        long valuePtr = UnsafeAccess.allocAndCopy(value, 0, valueSize);
+        long buf = UnsafeAccess.malloc(valueSize);
+        boolean res = b.put(key.address, keySize, valuePtr, valueSize, Long.MAX_VALUE, 0);
         assertTrue(res);
-        long size = b.get(key, 0, keySize, buf, 0, Long.MAX_VALUE);
+        long size = b.get(key.address, keySize, buf, valueSize, Long.MAX_VALUE);
         assertEquals(valueSize, (int) size);
-        assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+        assertTrue(Utils.compareTo(buf, valueSize, valuePtr, valueSize) == 0);
+        UnsafeAccess.free(valuePtr);
+        UnsafeAccess.free(buf);
       }
       scanAndVerify(b, keys);
       b.free();
+      freeKeys(keys);
     }
   }
   
-  @Ignore
-  @Test 
-  public void testAutomaticDataBlockMerge() {
-    
-  }
-  protected ArrayList<byte[]> fillIndexBlock (IndexBlock b) throws RetryOperationException {
-    ArrayList<byte[]> keys = new ArrayList<byte[]>();
+  
+  protected ArrayList<Key> fillIndexBlock (IndexBlock b) throws RetryOperationException {
+    ArrayList<Key> keys = new ArrayList<Key>();
     Random r = new Random();
     long seed = r.nextLong();
     r.setSeed(seed);
-    System.out.println("FILL SEED="+seed);
-    int maxSize = 2048;
+    /*DEBUG*/ System.out.println("FILL SEED="  + seed);
+    int maxSize = 4096;
     boolean result = true;
-    while(true) {
-      int len = r.nextInt(maxSize) + 2;
-      byte[] key = new byte[len];
+    while(result == true) {
+      byte[] key = new byte[r.nextInt(maxSize) + 2];
       r.nextBytes(key);
-      key = Bytes.toHex(key).getBytes(); 
-      result = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
+      long ptr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key, 0, ptr, key.length);
+      result = b.put(key, 0, key.length, key, 0, key.length, -1);
       if(result) {
-        keys.add(key);
+        keys.add(new Key(ptr, key.length));
       } else {
-        break;
+        UnsafeAccess.free(ptr);
       }
     }
     System.out.println("Number of data blocks="+b.getNumberOfDataBlock() + " "  + " index block data size =" + 

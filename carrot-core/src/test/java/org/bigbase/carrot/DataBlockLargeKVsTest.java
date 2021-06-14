@@ -8,17 +8,32 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.junit.Test;
 
 public class DataBlockLargeKVsTest extends DataBlockTest{
+
   
-  static {
-    UnsafeAccess.debug = true;
+  protected ArrayList<Key> fillDataBlock (DataBlock b) throws RetryOperationException {
+    ArrayList<Key> keys = new ArrayList<Key>();
+    Random r = new Random();
+    int maxSize = 4096;
+    boolean result = true;
+    while(result == true) {
+      int len = r.nextInt(maxSize) + 1;
+      byte[] key = new byte[len];
+      r.nextBytes(key);
+      long ptr = UnsafeAccess.malloc(len);
+      UnsafeAccess.copy(key, 0, ptr, len);
+      result = b.put(key, 0, key.length, key, 0, key.length,  -1);
+      if(result) {
+        keys.add(new Key(ptr, len));
+      }
+    }
+    System.out.println("M: "+ BigSortedMap.getTotalAllocatedMemory() +" D:"+BigSortedMap.getTotalDataSize());
+    return keys;
   }
-  
   
   /**
    * 
@@ -29,37 +44,39 @@ public class DataBlockLargeKVsTest extends DataBlockTest{
    */
   @Test
   public void testOverwriteSmallerValueSize() throws RetryOperationException, IOException {
-    System.out.println("testOverwriteSmallerValueSize - LargeKVs");
+    System.out.println("testOverwriteSmallerValueSize- Large KVs");
     for (int i = 0; i < 1000; i++) {
       Random r = new Random();
       DataBlock b = getDataBlock();
-      List<byte[]> keys = fillDataBlock(b);
-      for (byte[] key : keys) {
+      List<Key> keys = fillDataBlock(b);
+      for (Key key : keys) {
         int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
         if (type == DataBlock.AllocType.EMBEDDED) {
           continue;
         } else if (type == DataBlock.AllocType.EXT_KEY_VALUE) {
-          valueSize = keySize/2 ;
+          valueSize = keySize / 2;
         } else { // DataBlock.AllocType.EXT_VALUE
           valueSize = 12;
         }
-        byte[] value = new byte[valueSize];
+        byte[] value = new byte[valueSize]; // smaller values
         r.nextBytes(value);
-        byte[] buf = new byte[valueSize];
-        boolean res = b.put(key, 0, keySize, value, 0, value.length, Long.MAX_VALUE, 0);
+        long bufPtr = UnsafeAccess.malloc(value.length);
+        long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+        boolean res = b.put(key.address, key.length, valuePtr, value.length, 0, 0);
         assertTrue(res);
-        long size = b.get(key, 0, keySize, buf, 0, Long.MAX_VALUE);
-        assertEquals(valueSize, (int) size);
-        assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+        long size = b.get(key.address, key.length, bufPtr, value.length, Long.MAX_VALUE);
+        assertEquals(value.length, (int) size);
+        assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
+        UnsafeAccess.free(valuePtr);
+        UnsafeAccess.free(bufPtr);
       }
       assertEquals(keys.size() + 1, (int) b.getNumberOfRecords());
       assertEquals(0, (int) b.getNumberOfDeletedAndUpdatedRecords());
       scanAndVerify(b, keys);
       b.free();
     }
-
   }
   /**
    * 
@@ -69,12 +86,13 @@ public class DataBlockLargeKVsTest extends DataBlockTest{
    */
   @Test
   public void testOverwriteLargerValueSize() throws RetryOperationException, IOException {
-    System.out.println("testOverwriteLargerValueSize- LargeKVs");
+    System.out.println("testOverwriteLargerValueSize- Large KVs");
+    
     for (int i = 0; i < 1000; i++) {
       Random r = new Random();
       DataBlock b = getDataBlock();
-      List<byte[]> keys = fillDataBlock(b);
-      for (byte[] key : keys) {
+      List<Key> keys = fillDataBlock(b);
+      for (Key key : keys) {
         int keySize = key.length;
         int valueSize = 0;
         DataBlock.AllocType type = DataBlock.getAllocType(keySize, keySize);
@@ -84,47 +102,23 @@ public class DataBlockLargeKVsTest extends DataBlockTest{
           } else {
             valueSize = 2067;
           }
-          
-        } else  { // VALUE is outside data block, increasing it will keep it outside
-          valueSize = keySize * 2 ;
-        } 
-        byte[] value = new byte[valueSize];
+        } else { // VALUE is outside data block, increasing it will keep it outside
+          valueSize = keySize * 2;
+        }
+        byte[] value = new byte[valueSize]; // large values
         r.nextBytes(value);
-        byte[] buf = new byte[valueSize];
-        boolean res = b.put(key, 0, keySize, value, 0, value.length, Long.MAX_VALUE, 0);
+        long bufPtr = UnsafeAccess.malloc(value.length);
+        long valuePtr = UnsafeAccess.allocAndCopy(value, 0, value.length);
+        boolean res = b.put(key.address, key.length, valuePtr, value.length, 0, 0);
         assertTrue(res);
-        long size = b.get(key, 0, keySize, buf, 0, Long.MAX_VALUE);
-        assertEquals(valueSize, (int) size);
-        assertTrue(Utils.compareTo(buf, 0, buf.length, value, 0, value.length) == 0);
+        long size = b.get(key.address, key.length, bufPtr, value.length, Long.MAX_VALUE);
+        assertEquals(value.length, (int) size);
+        assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
       }
       assertEquals(keys.size() + 1, (int) b.getNumberOfRecords());
       assertEquals(0, (int) b.getNumberOfDeletedAndUpdatedRecords());
       scanAndVerify(b, keys);
       b.free();
     }
-  }
-
-  
-  protected ArrayList<byte[]> fillDataBlock (DataBlock b) throws RetryOperationException {
-    ArrayList<byte[]> keys = new ArrayList<byte[]>();
-    Random r = new Random();
-    long seed = r.nextLong();
-    r.setSeed(seed);
-    System.out.println("SEED="+seed);
-    
-    int maxSize = 2048;
-    boolean result = true;
-    while(result == true) {
-      int len = r.nextInt(maxSize) + 2;
-      byte[] key = new byte[len];
-      r.nextBytes(key);
-      key = Bytes.toHex(key).getBytes();
-      result = b.put(key, 0, key.length, key, 0, key.length, 0, 0);
-      if(result) {
-        keys.add(key);
-      }
-    }
-    System.out.println("records="+b.getNumberOfRecords()  + "  data size=" + b.getDataInBlockSize());
-    return keys;
   }
 }
