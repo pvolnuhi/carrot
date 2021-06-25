@@ -171,8 +171,8 @@ public class SetsMultithreadedTest {
             System.exit(-1);
           }
           assertEquals(setSize, (int) card);
-          long del = Sets.DELETE(map, ptr, keySize);
-          assertTrue(del > 0);
+          boolean res = Sets.DELETE(map, ptr, keySize);
+          assertTrue(res);
           card = Sets.SCARD(map, ptr, keySize);
           if (card != 0) {
             System.err.println("FAILED delete, card ="+ card);

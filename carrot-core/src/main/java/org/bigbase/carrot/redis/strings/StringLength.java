@@ -15,7 +15,7 @@ import org.bigbase.carrot.util.Utils;
 public class StringLength extends Operation {
 
 
-  int strlen = 0;
+  int strlen = -1;
   
   public StringLength() {
     setReadOnlyOrUpdateInPlace(true);
@@ -38,7 +38,7 @@ public class StringLength extends Operation {
   @Override
   public void reset() {
     super.reset();
-    this.strlen = 0;
+    this.strlen = -1;
     setReadOnlyOrUpdateInPlace(true);
   }
   

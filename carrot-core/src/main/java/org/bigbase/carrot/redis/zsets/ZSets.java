@@ -4706,13 +4706,13 @@ public class ZSets {
       if(lock) {
         KeysLocker.writeLock(key);
       }
-      long kvs = Sets.DELETE(map, keyPtr, keySize);
+      boolean b = Sets.DELETE(map, keyPtr, keySize);
       // Can be false
-      boolean b  = Hashes.DELETE(map, keyPtr, keySize);
+      Hashes.DELETE(map, keyPtr, keySize);
       
       //int kSize = buildKey(keyPtr, keySize);
       //boolean b = map.delete(keyArena.get(), kSize);
-      return kvs > 0;
+      return b;
     } finally {
       if (lock) {
         KeysLocker.writeUnlock(key);

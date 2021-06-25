@@ -417,7 +417,7 @@ public class SparseBitmaps {
    * @param keySize key size
    * @return number of deleted K-Vs
    */
-  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize) {
     Key k = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(k);
@@ -427,11 +427,10 @@ public class SparseBitmaps {
       UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
       long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
-      
-      map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
-      
+      long deleted = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
       UnsafeAccess.free(kPtr);
       UnsafeAccess.free(endKeyPtr);
+      return deleted > 0;
     } finally {
       KeysLocker.writeUnlock(k);
     }

@@ -157,7 +157,7 @@ public class Lists {
    * @param keyPtr list key pointer
    * @param keySize list key size
    */
-  public static void DELETE(BigSortedMap map, long keyPtr, int keySize) {
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize) {
     //TODO: implement as the Operation (speed optimization and atomicity)
     Key key = getKey(keyPtr, keySize);
     try {
@@ -176,7 +176,7 @@ public class Lists {
         } while(nextPtr > 0);
       }
       // Delete key
-      map.delete(kPtr, kSize);
+      return map.delete(kPtr, kSize);
       
     } finally {
       KeysLocker.writeUnlock(key);
@@ -746,6 +746,8 @@ public class Lists {
   }
   
   /**
+   * 
+   * TODO: add count argument (6.2)
    * 
    * LPOP key
    * Available since 1.0.0.

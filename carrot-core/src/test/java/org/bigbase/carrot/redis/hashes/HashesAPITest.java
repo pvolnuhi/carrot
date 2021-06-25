@@ -623,7 +623,7 @@ public class HashesAPITest {
     int total = 0;
     List<Pair<String>> result = null;
     // Check overall functionality - full scan
-    while((result = Hashes.HSCAN(map, key, lastSeenMember, count, 200, regex)) != null) {
+    while((result = Hashes.HSCAN(map, key, lastSeenMember, count, bufferSize, regex)) != null) {
       total += result.size() - 1;
       lastSeenMember = result.get(result.size() - 1).getFirst();
     }

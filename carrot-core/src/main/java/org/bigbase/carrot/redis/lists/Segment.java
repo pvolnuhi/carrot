@@ -1054,7 +1054,7 @@ public final class Segment {
    * @param max maximum number of elements to get
    * @param buffer buffer address
    * @param bufferSize buffer size
-   * @return number of elements
+   * @return total serialized size
    */
   
   public int getRange(int from, int max, long buffer, int bufferSize) {

@@ -1,0 +1,108 @@
+package org.bigbase.carrot.redis.commands;
+
+import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.MutationOptions;
+import org.bigbase.carrot.redis.strings.Strings;
+import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
+
+/**
+ * SET key value [EX seconds|PX milliseconds|EXAT timestamp|PXAT milliseconds-timestamp|KEEPTTL] [NX|XX] [GET]
+ * @author vrodionov
+ *
+ */
+
+public class SET implements RedisCommand {
+
+  @Override
+  public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
+    try {
+      
+      MutationOptions opts = MutationOptions.NONE;
+      // means - no expire
+      long expire = 0;
+      int numArgs = UnsafeAccess.toInt(inDataPtr);
+      int argsCount;
+      if (numArgs < 3 || numArgs > 7) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
+        return;
+      }
+      inDataPtr += Utils.SIZEOF_INT;
+      // skip command name      
+      inDataPtr = skip(inDataPtr, 1);
+      
+      int keySize = UnsafeAccess.toInt(inDataPtr);
+      inDataPtr += Utils.SIZEOF_INT;
+      long keyPtr = inDataPtr;
+      inDataPtr += keySize;
+      int valSize = UnsafeAccess.toInt(inDataPtr);
+      inDataPtr += Utils.SIZEOF_INT;
+      long valPtr = inDataPtr;
+      inDataPtr += valSize;
+      
+      argsCount = 3;
+      int num = 0;
+      if (numArgs > argsCount) {
+        expire = getExpire(inDataPtr);
+        num = ttlSectionSize(inDataPtr);
+        inDataPtr = skip(inDataPtr, num);
+        argsCount += num;
+      }
+      
+      
+      if (numArgs > argsCount) {
+        opts = getMutationOptions(inDataPtr);
+        num = mutationSectionSize(inDataPtr);
+        inDataPtr = skip (inDataPtr, num); // Both NX and XX are the same size of 2
+        argsCount += num;
+      }
+      
+      boolean withGet = false;
+      if (numArgs > argsCount) {
+        // Check GET
+        int size = UnsafeAccess.toInt(inDataPtr);
+        inDataPtr += Utils.SIZEOF_INT;
+        if (Utils.compareTo(GET_FLAG, GET_LENGTH, inDataPtr, size) == 0) {
+          withGet = true;
+          argsCount += 1;
+          if (argsCount < numArgs) {
+            inDataPtr += size;
+            size = UnsafeAccess.toInt(inDataPtr);
+            throw new IllegalArgumentException(Utils.toString(inDataPtr, size));
+          }
+        } else {
+          throw new IllegalArgumentException(Utils.toString(inDataPtr, size));
+        }
+      }
+      
+      long size = 0;    
+      if (withGet) {
+        size = Strings.SETGET(map, keyPtr, keySize, valPtr, valSize, expire, opts, false, 
+          outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
+        
+        // Bulk String reply
+        UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
+        if (size < outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT) {
+          UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, (int) size);
+        } else {
+          // Buffer is small
+          UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE,
+            (int) size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);
+        }
+      } else {
+        boolean result = Strings.SET(map, keyPtr, keySize, valPtr, valSize, expire, opts, false);
+        if (!result) {
+          // null
+          NULL_STRING(outBufferPtr);
+        } else {
+          // OK - do nothing
+        }
+      }
+    } catch(NumberFormatException ee) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+    } catch (IllegalArgumentException e) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, ": " + e.getMessage());
+    } 
+  }
+
+}

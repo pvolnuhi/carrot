@@ -5,5 +5,5 @@ package org.bigbase.carrot.redis;
  * @author Vladimir Rodionov
  */
 public enum DataType {
-  STRING, LIST, SET, ZSET, HASH, SBITMAP, BTREE;
+  SYSTEM, STRING, LIST, SET, ZSET, HASH, SBITMAP, BTREE;
 }

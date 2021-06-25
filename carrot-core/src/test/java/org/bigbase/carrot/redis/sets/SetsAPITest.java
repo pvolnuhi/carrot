@@ -180,15 +180,15 @@ public class SetsAPITest {
     members = Sets.SMEMBERS(map, "key".getBytes(), 10);
     assertEquals(0, members.size());
     // small buffer - list == 1
-    members = Sets.SMEMBERS(map, "key".getBytes(), 20);
+    members = Sets.SMEMBERS(map, "key".getBytes(), 15);
     assertEquals(1, members.size());
     
     // small buffer - list == 2
-    members = Sets.SMEMBERS(map, "key".getBytes(), 30);
+    members = Sets.SMEMBERS(map, "key".getBytes(), 20);
     assertEquals(2, members.size());
     
     // small buffer - list == 3
-    members = Sets.SMEMBERS(map, "key".getBytes(), 40);
+    members = Sets.SMEMBERS(map, "key".getBytes(), 30);
     assertEquals(3, members.size());
     
     

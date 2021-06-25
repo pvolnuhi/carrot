@@ -564,26 +564,10 @@ public class Hashes {
    * @return number of elements(fields)
    */
   
-//  public static ThreadLocal<int[]> elarr = new ThreadLocal<int[]> () {
-//    @Override
-//    protected int[] initialValue() {
-//      return new int[10000];
-//    } 
-//  };
-//  
-//  public static ThreadLocal<Integer> elsize = new ThreadLocal<Integer>() {
-//    @Override
-//    protected Integer initialValue() {
-//      return 0;
-//    } 
-//  };
-  
   public static long HLEN(BigSortedMap map, long keyPtr, int keySize) {
     
     Key k = getKey(keyPtr, keySize);
     long endKeyPtr = 0;
-    int index = 0;
-
     try {
       readLock(k);
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
@@ -594,12 +578,10 @@ public class Hashes {
         return 0; // empty or does not exists
       }
       long total = 0;
-      //int[] arr = elarr.get();
       try {
         while (scanner.hasNext()) {
           long valuePtr = scanner.valueAddress();
           int num = numElementsInValue(valuePtr);
-          //arr[index++] = num;
           total += num;
           scanner.next();
         } 
@@ -609,10 +591,7 @@ public class Hashes {
         e.printStackTrace();
       }
       return total;
-    } finally {
-      
-      //elsize.set(index);
-      
+    } finally {      
       if (endKeyPtr > 0) {
         UnsafeAccess.free(endKeyPtr);
       }
@@ -1509,21 +1488,33 @@ public class Hashes {
       UnsafeAccess.putInt(buffer, 0);
       // Clear first 4 bytes of value arena
       UnsafeAccess.putInt(valueArena.get(), 0);
-      int lastSeenSize = 0;
+      // 06-24
+      //int lastSeenSize = 0;
       long lastPtr = ptr;
-
-      while (scanner.hasNext() && c <= count) {
+      boolean lastSeenSet = false;
+      while (c <= count) {
+        boolean next = scanner.hasNext();
+        // Change 06-24
+        // The call must return hard 0 when it reaches end
+        // and no fields were read
+        if (!next && c == 1) {
+          return 0;
+        } else if (!next) {
+          break;
+        }
         long fPtr = scanner.fieldAddress();
         int fSize = scanner.fieldSize();
         int fSizeSize = Utils.sizeUVInt(fSize);
-        if (fSize + fSizeSize > lastSeenSize) {
-          lastSeenSize = fSize + fSizeSize;
-        }
+        //06-24
+        //if (fSize + fSizeSize > lastSeenSize) {
+        //  lastSeenSize = fSize + fSizeSize;
+        //}
         long vPtr = scanner.fieldValueAddress();
         int vSize = scanner.fieldValueSize();
         int vSizeSize = Utils.sizeUVInt(vSize);
-        if (ptr + 2 * (fSize + fSizeSize) + vSize + vSizeSize <= buffer + bufferSize) {
+        if (/*06-24*/lastPtr + 2 * (fSize + fSizeSize) + vSize + vSizeSize <= buffer + bufferSize) {
           // Update last seen
+          lastSeenSet = true;
           checkValueArena(fSize + fSizeSize);
           long arena = valueArena.get();
           Utils.writeUVInt(arena, fSize);
@@ -1538,24 +1529,46 @@ public class Hashes {
             lastPtr += fSize + fSizeSize + vSize + vSizeSize;
           }
         } else {
+          if (!lastSeenSet) {
+            // Update last seen (set first one)
+            lastSeenSet = true;
+            checkValueArena(fSize + fSizeSize);
+            long arena = valueArena.get();
+            Utils.writeUVInt(arena, fSize);
+            UnsafeAccess.copy(fPtr, arena + fSizeSize, fSize);
+          }
           break;
         }
         ptr += fSize + fSizeSize + vSize + vSizeSize;
         scanner.next();
       }
+      
       // Write last seen member
       long arena = valueArena.get();
       int fSize = Utils.readUVInt(arena);
       int fSizeSize = Utils.sizeUVInt(fSize);
-      if (fSize > 0) {
+      // 06-24
+      if (fSize > 0 && (lastPtr + fSize + fSizeSize <= buffer + bufferSize)) {
         Utils.writeUVInt(lastPtr, fSize);
         UnsafeAccess.copy(arena + fSizeSize, lastPtr + fSizeSize, fSize);
+        lastPtr += fSize + fSizeSize;
+        UnsafeAccess.putInt(buffer, c);
+        return lastPtr - buffer;
+      } else {
+        // Not enough space even to write last seen
+        return lastPtr + fSize + fSizeSize - buffer;
       }
-      scanner.close();
-      return ptr - buffer + lastSeenSize;
+      // 06-24
+      //return ptr - buffer + fSize + fSizeSize;
     } catch (IOException e) {
       // Will never be thrown
     } finally {
+      if (scanner != null) {
+        try {
+          scanner.close();
+        } catch (IOException e) {
+        }
+      }
       KeysLocker.readUnlock(key);
     }
     return 0;
@@ -1933,7 +1946,7 @@ public class Hashes {
    * @param index array of random indexes to read
    * @param bufferPtr buffer 
    * @param bufferSize buffer size
-   * @return
+   * @return serialized size of the response
    */
   private static long readByIndex(HashScanner scanner, long[] index, long bufferPtr, int bufferSize,
       boolean withValues) {

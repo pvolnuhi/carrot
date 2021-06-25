@@ -10,8 +10,8 @@ import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetLong;
 import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetShort;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -19,7 +19,6 @@ import java.util.Random;
 
 import org.bigbase.carrot.Key;
 import org.bigbase.carrot.KeyValue;
-import org.bigbase.carrot.redis.sets.SetScanner;
 
 import sun.misc.Unsafe;
 
@@ -1419,6 +1418,42 @@ public class Utils {
     UnsafeAccess.copy(arr, size, ptr, size);
   }
   
+  /**
+   * Read pointers from a memory buffer list
+   * @param ptr buffer address
+   * @param num number of elements
+   * @return array of pointers
+   */
+  public static long[] loadPointers(long ptr, int num) {
+    long[] ptrs = new long[num];
+    long p = ptr;
+    
+    for (int i = 0; i < ptrs.length; i++) {
+      int size = UnsafeAccess.toInt(p);
+      p += Utils.SIZEOF_INT;
+      ptrs[i] =  p;
+      p += size;
+    }
+    return ptrs;
+  }
+  
+  /**
+   * Read pointer sizes from a memory buffer list
+   * @param ptr buffer address
+   * @param num number of elements
+   * @return array of pointers
+   */
+  public static int[] loadSizes(long ptr, int num) {
+    int[] sizes = new int[num];
+    long p = ptr;
+    for (int i = 0; i < sizes.length; i++) {
+      int size = UnsafeAccess.toInt(p);
+      sizes[i] = size;
+      p += Utils.SIZEOF_INT + size;
+    }
+    return sizes;
+  }
+  
   public static void main(String[] args) {
     int count =0;
     int num = 100000000;
@@ -1450,6 +1485,29 @@ public class Utils {
       off++;
     }
     return totalSize;
+  }
+
+  /**
+   * Reads list of key-values from a memory blob
+   * @param inDataPtr address of a memory
+   * @param numPairs number of KVs to read
+   * @return list of key-value pairs
+   */
+  public static List<KeyValue> loadKeyValues(long inDataPtr, int numPairs) {
+    List<KeyValue> kvs = new ArrayList<KeyValue>();
+    long ptr = inDataPtr;
+    for (int i = 0; i < numPairs; i++) {
+      int keySize = UnsafeAccess.toInt(ptr);
+      ptr += Utils.SIZEOF_INT;
+      long keyPtr = ptr;
+      ptr += keySize;
+      int valSize = UnsafeAccess.toInt(ptr);
+      ptr += Utils.SIZEOF_INT;
+      long valPtr = ptr;
+      kvs.add(new KeyValue(keyPtr, keySize, valPtr, valSize));
+      ptr += valSize;
+    }
+    return kvs;
   }
   
 }

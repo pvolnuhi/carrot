@@ -795,7 +795,7 @@ public class Sets {
     
     checkValueArena(elemPtrs.length);
     long buffer = valueArena.get();
-    for (int i=0; i < elemPtrs.length; i++) {
+    for (int i = 0; i < elemPtrs.length; i++) {
       int result = SISMEMBER(map, keyPtr, keySize, elemPtrs[i], elemSizes[i]);
       UnsafeAccess.putByte(buffer + i, (byte) result);
     }
@@ -910,7 +910,7 @@ public class Sets {
    * @param bufferPtr buffer address
    * @param bufferSize buffer size
    * @param count count
-   * @return number of elements or -1 if buffer is not large enough, 0 - empty or does not exists 
+   * @return serialized size -1 if buffer is not large enough, 0 - empty or does not exists 
    */
   public static long SPOP(BigSortedMap map, long keyPtr, int keySize, long bufferPtr, int bufferSize, 
       int count) 
@@ -948,7 +948,8 @@ public class Sets {
         return result;
       }
       scanner = getScanner(map, keyPtr, keySize, false);
-      long result = readByIndex(scanner, index, bufferPtr, bufferSize);
+      // 
+      long serLength = readByIndex(scanner, index, bufferPtr, bufferSize);
       if (scanner != null) {
         try {
           scanner.close();
@@ -958,8 +959,8 @@ public class Sets {
         }
       }
       // Now delete all
-      long deleted = bulkDelete(map, keyPtr, keySize, bufferPtr);
-      return deleted;
+      bulkDelete(map, keyPtr, keySize, bufferPtr);
+      return serLength;
     } finally {
       if (scanner != null) {
         try {
@@ -1010,9 +1011,9 @@ public class Sets {
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
-   * @return number of deleted K-Vs
+   * @return true or false
    */
-  public static long DELETE(BigSortedMap map, long keyPtr, int keySize) {
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize) {
     return DELETE(map, keyPtr, keySize, true);
   }
   
@@ -1022,9 +1023,9 @@ public class Sets {
    * @param keyPtr key address
    * @param keySize key size
    * @param lock lock if true
-   * @return number of deleted K-Vs
+   * @return true or false
    */
-  public static long DELETE(BigSortedMap map, long keyPtr, int keySize, boolean lock) {
+  public static boolean DELETE(BigSortedMap map, long keyPtr, int keySize, boolean lock) {
     Key k = getKey(keyPtr, keySize);
     long startKeyPtr = 0, endKeyPtr = 0;
     try {
@@ -1035,7 +1036,7 @@ public class Sets {
       int newKeySize = buildKey(keyPtr, keySize, Commons.ZERO, 1, startKeyPtr);
       endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, newKeySize - 1);      
       long deleted = map.deleteRange(startKeyPtr, newKeySize, endKeyPtr, newKeySize - 1);      
-      return deleted;
+      return deleted > 0;
     } finally {
       if (startKeyPtr > 0) {
         UnsafeAccess.free(startKeyPtr);
@@ -1155,12 +1156,12 @@ public class Sets {
     return list;
   }
   /**
-   * Return number of written element
+   * Reads elements by index into a buffer
    * @param scanner set scanner
    * @param index array of random indexes to read
    * @param bufferPtr buffer 
    * @param bufferSize buffer size
-   * @return full serialized size required
+   * @return full serialized size required  to hold all elements
    */
   private static long readByIndex(SetScanner scanner, long[] index, long bufferPtr, int bufferSize) {
     
@@ -1200,8 +1201,8 @@ public class Sets {
       return null;
     }
     List<byte[]> list = new ArrayList<byte[]>();
-    long count = UnsafeAccess.toLong(bufferPtr);
-    long ptr = bufferPtr + Utils.SIZEOF_LONG;
+    long count = UnsafeAccess.toInt(bufferPtr);
+    long ptr = bufferPtr + Utils.SIZEOF_INT;
     for (int i = 0; i < count; i++) {
       int size = Utils.readUVInt(ptr);
       int sizeSize = Utils.sizeUVInt(size);
@@ -1217,7 +1218,7 @@ public class Sets {
   /**
    * Returns all the members of the set value stored at key.
    * Serialized format : [SET_SIZE][MEMBER]+
-   *  [SET_SIZE] = 8 bytes
+   *  [SET_SIZE] = 4 bytes
    *  [MEMBER]:
    *    [SIZE] - varint 1..4 bytes
    *    [VALUE]
@@ -1228,15 +1229,15 @@ public class Sets {
    * @return total buffer size required to hold all members, or -1 if set does not exist 0 - empty
    */
   public static long SMEMBERS(BigSortedMap map, long keyPtr, int keySize, long bufferPtr, int bufferSize) {
-    long ptr = bufferPtr + Utils.SIZEOF_LONG;
-    long count = 0;
+    long ptr = bufferPtr + Utils.SIZEOF_INT;
+    int count = 0;
     SetScanner scanner = getScanner(map, keyPtr, keySize, false);
     if (scanner == null) {
       return -1;
     }
     try {
       // Write total number of elements
-      UnsafeAccess.putLong(bufferPtr, count);// Write 0
+      UnsafeAccess.putInt(bufferPtr, count);// Write 0
       while (scanner.hasNext()) {
         int elSize = scanner.memberSize();
         int elSizeSize = Utils.sizeUVInt(elSize);
@@ -1248,7 +1249,7 @@ public class Sets {
           UnsafeAccess.copy(elPtr, ptr + elSizeSize, elSize);
           count++;
           // Write total number of elements
-          UnsafeAccess.putLong(bufferPtr, count);
+          UnsafeAccess.putInt(bufferPtr, count);
         }
         ptr += elSize + elSizeSize;
         scanner.next();

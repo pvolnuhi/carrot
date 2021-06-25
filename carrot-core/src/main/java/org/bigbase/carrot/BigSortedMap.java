@@ -752,7 +752,7 @@ public class BigSortedMap {
    * Delete key range operation
    * @param startKeyPtr key address
    * @param startKeyLength key length
-   * @return true if success, false otherwise
+   * @return number of delted keys
    */
   public long deleteRange(long startKeyPtr, int startKeyLength, 
       long endKeyPtr, int endKeyLength) {

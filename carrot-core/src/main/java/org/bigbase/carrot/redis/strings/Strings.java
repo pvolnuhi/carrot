@@ -594,6 +594,8 @@ public class Strings {
     long ptr = buffer + Utils.SIZEOF_INT;
     
     int count = 1;
+    UnsafeAccess.putInt(buffer, 0);
+
     for(int i = 0; i < keyPtrs.length; i++, count++) {
       int available = (int)(bufferSize - (ptr - buffer) - Utils.SIZEOF_INT);
       long size = GET(map, keyPtrs[i], keySizes[i], ptr + Utils.SIZEOF_INT, available);
@@ -810,7 +812,7 @@ public class Strings {
    * @param map sorted map
    * @param keyPtr key 
    * @param keySize
-   * @return size of a value or 0 if does not exists
+   * @return size of a value or -1 if does not exists
    */
   public static int STRLEN(BigSortedMap map, long keyPtr, int keySize) {
 
@@ -1046,7 +1048,6 @@ public class Strings {
       int valueSize, long expire, MutationOptions opts, boolean keepTTL) {
 
     Key kk = getKey(keyPtr, keySize);
-
     try {
       KeysLocker.writeLock(kk);
       int kSize = buildKey(keyPtr, keySize);
@@ -1184,7 +1185,6 @@ public class Strings {
    * @return new size of key's value (-1 if operation was not performed)
    */
   public static long SETRANGE(BigSortedMap map, long keyPtr, int keySize, long offset, long valuePtr, int valueSize) {
-    
     // Sanity check
     if (offset < 0) return -1;
     Key kk = getKey(keyPtr, keySize);
@@ -1268,15 +1268,20 @@ public class Strings {
    * @param map sorted map storage
    * @param kvs list of key-values to set
    */
-  public static void MSET(BigSortedMap map, List<KeyValue> kvs) {
+  public static boolean MSET(BigSortedMap map, List<KeyValue> kvs) {
     
     try {
       KeysLocker.writeLockAllKeyValues(kvs);
       for(int i = 0; i < kvs.size(); i++) {
         KeyValue kv = kvs.get(i);
-        SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
+        boolean result = SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
           MutationOptions.NONE, false);
+        if (!result) {
+          // Out of memory possible
+          return false;
+        }
       }
+      return true;
     } finally {
       KeysLocker.writeUnlockAllKeyValues(kvs);
     }
