@@ -1425,12 +1425,13 @@ public class Hashes {
     List<Pair<String>> list = new ArrayList<Pair<String>>();
     long ptr = buffer + Utils.SIZEOF_INT;
     // the last is going to be last seen member (duplicate if regex == null)
-    for (int i = 0; i < total - 1; i++) {
+    for (int i = 0; i < (total - 1)/2; i++) {
       int fSize = Utils.readUVInt(ptr);
       int fSizeSize = Utils.sizeUVInt(fSize);
-      int vSize =  Utils.readUVInt(ptr + fSizeSize);
+      String first = Utils.toString(ptr + fSizeSize, fSize);      
+
+      int vSize =  Utils.readUVInt(ptr + fSizeSize + fSize);
       int vSizeSize = Utils.sizeUVInt(vSize);
-      String first = Utils.toString(ptr + fSizeSize + vSizeSize, fSize);      
       String second = Utils.toString(ptr + fSize + fSizeSize + vSizeSize, vSize);
       ptr += fSize + vSize + fSizeSize + vSizeSize;
       list.add( new Pair<String>(first, second));
@@ -1537,10 +1538,10 @@ public class Hashes {
           Utils.writeUVInt(arena, fSize);
           UnsafeAccess.copy(fPtr, arena + fSizeSize, fSize);
           if (regex == null || Utils.matches(fPtr, fSize, regex)) {
-            c++;
+            c += 2;
             Utils.writeUVInt(ptr, fSize);
-            Utils.writeUVInt(ptr + fSizeSize, vSize);
-            UnsafeAccess.copy(fPtr, ptr + fSizeSize + vSizeSize, fSize);
+            UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
+            Utils.writeUVInt(ptr + fSizeSize + fSize, vSize);
             UnsafeAccess.copy(vPtr, ptr + fSizeSize + vSizeSize + fSize, vSize);
             UnsafeAccess.putInt(buffer, c);
             lastPtr += fSize + fSizeSize + vSize + vSizeSize;
