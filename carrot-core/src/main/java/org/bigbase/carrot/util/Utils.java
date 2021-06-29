@@ -27,6 +27,7 @@ import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetLong;
 import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetShort;
 
 import java.io.IOException;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -982,6 +983,15 @@ public class Utils {
     UnsafeAccess.copy(ptr, buf, 0, size);
     // Yep, we create new string instance
     String s = new String(buf, 0, size);
+    if (s.charAt(1) == 'i') {
+      if (s.equals("-inf")) {
+        return -Double.MAX_VALUE;
+      } else if (s.equals("+inf")){
+        return Double.MAX_VALUE;
+      } else {
+        throw new NumberFormatException(s);
+      }
+    }
     return Double.parseDouble(s);
   }
   
@@ -1000,7 +1010,7 @@ public class Utils {
     if (len > size) {
       return len;
     }
-    for(int i =0; i < len; i++) {
+    for(int i = 0; i < len; i++) {
       UnsafeAccess.putByte(ptr + i, (byte) s.charAt(i));
     }
     return len;

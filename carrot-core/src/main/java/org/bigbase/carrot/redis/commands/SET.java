@@ -110,7 +110,7 @@ public class SET implements RedisCommand {
         boolean result = Strings.SET(map, keyPtr, keySize, valPtr, valSize, expire, opts, false);
         if (!result) {
           // null
-          NULL_STRING(outBufferPtr);
+          NULL_STRING_REPLY(outBufferPtr);
         } else {
           // OK - do nothing
         }

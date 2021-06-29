@@ -938,7 +938,7 @@ public class ZSets {
       Utils.doubleToLex(stopPtr, max);
       int stopSize = Utils.SIZEOF_DOUBLE;
       if (maxInclusive && max < Double.MAX_VALUE) {
-        stopPtr =Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
+        stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
       }
       if (!minInclusive && min > -Double.MAX_VALUE) {
         startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
@@ -4553,16 +4553,12 @@ public class ZSets {
          } catch (IOException e) {
          }
        }
-       /*DEBUG*/ System.err.println("not found, cardinality="+ cardinality);
-
        return null;
      } else {
        // Get score from Hash
        int size = Hashes.HGET(map, keyPtr, keySize, memberPtr, memberSize, valueArena.get(),
          valueArenaSize.get(), false);
        if (size < 0) {
-         /*DEBUG*/ System.err.println("not foundin HASH, cardinality="+ cardinality);
-
          return null;
        }
        return Utils.lexToDouble(valueArena.get());
@@ -4572,6 +4568,48 @@ public class ZSets {
    }
  }
  
+ /**
+  * 
+  * @param map
+  * @param keyPtr
+  * @param keySize
+  * @param memberPtrs
+  * @param memberSizes
+  * @param bufferPtr
+  * @param bufferSize
+  * @return
+  */
+ public static long ZMSCORE(BigSortedMap map, long keyPtr, int keySize, long[] memberPtrs, int[] memberSizes, 
+     long bufferPtr, int bufferSize) {
+   
+   long ptr = bufferPtr + Utils.SIZEOF_INT;
+   long max = bufferPtr + bufferSize;
+   int count = 0;
+   for (int i = 0; i < memberPtrs.length; i++) {
+     Double d = ZSCORE(map, keyPtr, keySize, memberPtrs[i], memberSizes[i]);
+     if (d != null) {
+       int len = Utils.doubleToStr(d.doubleValue(), ptr + Utils.SIZEOF_INT, (int) (max - ptr - Utils.SIZEOF_INT));
+       if (len + Utils.SIZEOF_INT <= max - ptr) {
+         UnsafeAccess.putInt(ptr, len);
+         count++;
+       }
+       ptr += Utils.SIZEOF_INT + len;
+     } else {
+       if (Utils.SIZEOF_INT <= max - ptr) {
+         // NULL
+         UnsafeAccess.putInt(ptr, -1);
+         count++;
+       }
+       ptr += Utils.SIZEOF_INT;
+     }
+   }
+   
+   // Write number of elements
+   UnsafeAccess.putInt(bufferPtr, count);
+   // Return full serialized size of a response
+   return ptr - bufferPtr;
+   
+ }
   /**
    * Available since 2.0.0. Time complexity: O(N)+O(M log(M)) with N being the sum of the sizes of
    * the input sorted sets, and M being the number of elements in the resulting sorted set. Computes

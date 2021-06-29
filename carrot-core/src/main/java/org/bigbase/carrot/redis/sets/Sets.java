@@ -1399,7 +1399,16 @@ public class Sets {
       long ptr = buffer + Utils.SIZEOF_INT;
       // Clear first 4 bytes
       UnsafeAccess.putInt(buffer, 0);
-      while (scanner.hasNext() && c <= count) {
+      while (c <= count) {
+        boolean next = scanner.hasNext();
+        // Change 06-24
+        // The call must return hard 0 when it reaches end
+        // and no fields were read
+        if (!next && c == 1) {
+          return 0;
+        } else if (!next) {
+          break;
+        }
         long mPtr = scanner.memberAddress();
         int mSize = scanner.memberSize();
         int mSizeSize = Utils.sizeUVInt(mSize);
@@ -1416,19 +1425,28 @@ public class Sets {
             ptr +=  mSize + mSizeSize;
           }
           // write last seen
+          // if buffer is smaller than 
           Utils.writeUVInt(ptr, mSize);
           UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
           UnsafeAccess.putInt(buffer, c);
         } else {
+          // When serialized size returned is > 0 and number of elements == 0
+          // buffer is too small to even accommodate a single last seen member
+          
           break;
         }
         scanner.next();
       }
-      scanner.close();
       return ptr - buffer;
     } catch (IOException e) {
       // Will never be thrown
     } finally {
+      if (scanner != null) {
+        try {
+          scanner.close();
+        } catch (IOException e) {
+        }
+      }
       KeysLocker.readUnlock(key);
     }
     return 0;

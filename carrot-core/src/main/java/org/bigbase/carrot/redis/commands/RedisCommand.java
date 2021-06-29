@@ -70,6 +70,22 @@ import org.bigbase.carrot.util.Utils;
  * ELEMENT:
  * [VINT] - size
  * [blob] - element data
+ *  
+ *  ZARRAY: TODO check
+ * [4] array serialized size
+ * [4] number of elements (each element is a pair of SCORE (8 bytes) followed by a field)
+ * ELEMENT*
+ * ELEMENT:
+ * [VINT] - size
+ * [blob] - element data
+ * 
+ * ZARRAY1: this type is used to indicate that scores must be removed from a response
+ * [4] array serialized size
+ * [4] number of elements (each element is a pair of SCORE (8 bytes) followed by a field)
+ * ELEMENT*
+ * ELEMENT:
+ * [VINT] - size
+ * [blob] - element data
  * 
  * TYPED_ARRAY: TODO check
  * [4] array serialized size
@@ -93,8 +109,9 @@ public interface RedisCommand {
     BULK_STRING, 
     ARRAY, /*fixed length field array - strings only*/
     TYPED_ARRAY,
-    VARRAY /*variable length field - strings only*/, 
-    TYPED_VARRAY,
+    VARRAY /* variable length field - strings only*/, 
+    ZARRAY, /* special handling for ZSCAN results - contains both score + member*/
+    ZARRAY1, /* cut score from result (first 8 bytes)*/
     MULTI_BULK /* SCAN return*/,
     MAP, /* not implemented yet */
     SET, /* not implemented yet */
@@ -157,12 +174,24 @@ public interface RedisCommand {
   static final long RIGHT_FLAG = UnsafeAccess.allocAndCopy("RIGHT", 0, "RIGHT".length());
   static final int RIGHT_LENGTH = "RIGHT".length();
   
-  default void NULL_STRING (long ptr) {
+  static final long WITHSCORES_FLAG = UnsafeAccess.allocAndCopy("WITHSCORES", 0, "WITHSCORES".length());
+  static final int WITHSCORES_LENGTH = "WITHSCORES".length();
+
+  static final long NEG_INFINITY_FLAG = UnsafeAccess.allocAndCopy("-inf", 0, "-inf".length());
+  static final int NEG_INFINITY_LENGTH = "-inf".length();
+  
+  static final long POS_INFINITY_FLAG = UnsafeAccess.allocAndCopy("+inf", 0, "+inf".length());
+  static final int POS_INFINITY_LENGTH = "+inf".length();
+  
+  static final long CH_FLAG = UnsafeAccess.allocAndCopy("CH", 0, "CH".length());
+  static final int CH_LENGTH = "CH".length();
+  
+  default void NULL_STRING_REPLY (long ptr) {
     UnsafeAccess.putByte(ptr,  (byte) ReplyType.BULK_STRING.ordinal());
     UnsafeAccess.putInt(ptr + Utils.SIZEOF_BYTE, -1);
   }
   
-  default void NULL_ARRAY (long ptr) {
+  default void NULL_ARRAY_REPLY (long ptr) {
     UnsafeAccess.putByte(ptr,  (byte) ReplyType.ARRAY.ordinal());
     UnsafeAccess.putInt(ptr + Utils.SIZEOF_BYTE, -1);
   }
