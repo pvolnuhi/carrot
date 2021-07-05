@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Random;
 
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 
 public class IndexBlockScannerLargeKVsTest extends IndexBlockScannerTest{

@@ -24,9 +24,9 @@ import java.util.Map;
 import java.util.Properties;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.Key;
-import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.redis.hashes.Hashes;
+import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeyValue;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 

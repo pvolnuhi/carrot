@@ -15,10 +15,7 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot;
-
-import org.bigbase.carrot.util.UnsafeAccess;
-import org.bigbase.carrot.util.Utils;
+package org.bigbase.carrot.util;
 
 /**
  * Key - Value class

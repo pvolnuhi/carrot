@@ -15,15 +15,11 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot.redis;
+package org.bigbase.carrot.util;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import org.bigbase.carrot.Key;
-import org.bigbase.carrot.KeyValue;
-import org.bigbase.carrot.util.Utils;
 
 /**
  * THis helper class performs safe group Key/KeyValue locking/unlocking

@@ -26,8 +26,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 
-import org.bigbase.carrot.KeyValue;
 import org.bigbase.carrot.examples.util.KeyValues;
+import org.bigbase.carrot.util.KeyValue;
 import org.bigbase.carrot.util.Utils;
 
 /**

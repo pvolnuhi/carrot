@@ -15,7 +15,7 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot;
+package org.bigbase.carrot.util;
 
 public class Value extends Key{
 

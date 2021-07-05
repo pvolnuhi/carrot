@@ -20,6 +20,7 @@ package org.bigbase.carrot;
 import java.util.ArrayList;
 import java.util.Random;
 
+import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 
 public class DataBlockScannerLargeKVsTest extends DataBlockScannerTest{

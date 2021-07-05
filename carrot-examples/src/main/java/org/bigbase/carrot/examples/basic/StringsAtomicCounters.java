@@ -24,11 +24,11 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.Key;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.ops.OperationFailedException;
 import org.bigbase.carrot.redis.strings.Strings;
+import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 
 /**

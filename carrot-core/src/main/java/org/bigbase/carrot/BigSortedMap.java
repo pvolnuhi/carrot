@@ -35,8 +35,9 @@ import org.bigbase.carrot.ops.IncrementInt;
 import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.ops.OperationFailedException;
-import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 

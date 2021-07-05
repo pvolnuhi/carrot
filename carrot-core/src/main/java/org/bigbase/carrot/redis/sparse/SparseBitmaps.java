@@ -23,13 +23,13 @@ import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapScanner;
-import org.bigbase.carrot.Key;
 import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.KeysLocker;
+import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.Scanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;

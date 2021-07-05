@@ -15,9 +15,7 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot;
-
-import org.bigbase.carrot.util.Utils;
+package org.bigbase.carrot.util;
 
 public class Key implements Comparable<Key>{
   public long address;

@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.carrot.Key;
 import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;

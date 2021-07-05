@@ -21,9 +21,9 @@ import java.util.Calendar;
 import java.util.Properties;
 import java.util.Random;
 
-import org.bigbase.carrot.Key;
 import org.bigbase.carrot.examples.util.KeyValues;
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 

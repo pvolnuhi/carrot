@@ -20,10 +20,10 @@ package org.bigbase.carrot.redis.lists;
 
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.Key;
 import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.KeysLocker;
+import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import static org.bigbase.carrot.redis.Commons.KEY_SIZE;

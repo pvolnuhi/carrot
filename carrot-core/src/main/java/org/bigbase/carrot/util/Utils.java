@@ -35,9 +35,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.carrot.Key;
-import org.bigbase.carrot.KeyValue;
-
 import sun.misc.Unsafe;
 
 public class Utils {

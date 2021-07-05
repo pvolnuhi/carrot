@@ -21,8 +21,8 @@ import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
 import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
 import static org.bigbase.carrot.redis.Commons.ZERO;
 import static org.bigbase.carrot.redis.Commons.numElementsInValue;
-import static org.bigbase.carrot.redis.KeysLocker.readLock;
-import static org.bigbase.carrot.redis.KeysLocker.readUnlock;
+import static org.bigbase.carrot.util.KeysLocker.readLock;
+import static org.bigbase.carrot.util.KeysLocker.readUnlock;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,11 +32,11 @@ import java.util.List;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.DataBlock;
-import org.bigbase.carrot.Key;
 import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.KeysLocker;
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
