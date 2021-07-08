@@ -21,15 +21,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import org.bigbase.carrot.compression.Codec;
-import org.bigbase.carrot.compression.CodecFactory;
-import org.bigbase.carrot.compression.CodecType;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -151,7 +148,44 @@ public class TestUtils {
       int len = Utils.longToStr(d, ptr, size);
       long dd = Utils.strToLong(ptr, len);
       assertEquals(d, dd);
-      //System.out.println(d+" " + dd);
+      total += dd;
+    }
+    long end = System.currentTimeMillis();
+    System.out.println ("Time =" + (end-start) + " total="+total);
+  }
+  
+  @Test
+  public void testLongConversionsBytes() {
+    System.out.println("testLongConversions byte arrays");
+    byte[] buf = new byte[30];
+    
+    Random r = new Random();
+    long start = System.currentTimeMillis();
+    long total = 0;
+    for(int i=0; i < 10000000; i++) {
+      long d = r.nextLong();
+      int len = Utils.longToStr(d, buf, 3);
+      long dd = Utils.strToLong(buf, 3, len);
+      assertEquals(d, dd);
+      total += dd;
+    }
+    long end = System.currentTimeMillis();
+    System.out.println ("Time =" + (end-start) + " total="+total);
+  }
+  
+  @Test
+  public void testLongConversionsBuffers() {
+    System.out.println("testLongConversions byte buffers");
+    ByteBuffer buf = ByteBuffer.allocate(30);
+    
+    Random r = new Random();
+    long start = System.currentTimeMillis();
+    long total = 0;
+    for(int i=0; i < 10000000; i++) {
+      long d = r.nextLong();
+      int len = Utils.longToStr(d, buf, 3);
+      long dd = Utils.strToLong(buf, 3, len);
+      assertEquals(d, dd);
       total += dd;
     }
     long end = System.currentTimeMillis();
