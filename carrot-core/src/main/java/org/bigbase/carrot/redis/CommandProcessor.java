@@ -1,0 +1,140 @@
+/**
+ *    Copyright (C) 2021-present Carrot, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ */
+package org.bigbase.carrot.redis;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+
+import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.commands.RedisCommand;
+import org.bigbase.carrot.redis.util.Utils;
+import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.UnsafeAccess;
+
+public class CommandProcessor {
+  
+  /*
+   * Default memory buffer size for IO operations
+   */
+  private final static int BUFFER_SIZE = 1024 * 1024;// 1 MB
+  
+  /**
+   * Keeps thread local Key instance
+   */
+  private static ThreadLocal<Key> keyTLS = new ThreadLocal<Key>() {
+    @Override
+    protected Key initialValue() {
+      return new Key(0,0);
+    }
+  };
+
+  /**
+   * Input buffer per thread TODO: floating size
+   */
+  private static ThreadLocal<Long> inBufTLS = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      long ptr = UnsafeAccess.malloc(BUFFER_SIZE);
+      return ptr;
+    }
+  };
+  
+  /*
+   * Output buffer per thread TODO: floating size
+   */
+  private static ThreadLocal<Long> outBufTLS = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      long ptr = UnsafeAccess.malloc(BUFFER_SIZE);
+      return ptr;
+    }
+  };
+  
+  /*
+   * Redis command map. 
+   */
+  private static ThreadLocal<HashMap<Key, RedisCommand>> commandMapTLS = 
+      new ThreadLocal<HashMap<Key, RedisCommand>>()
+  {
+    @Override
+    protected HashMap<Key, RedisCommand> initialValue() {
+      return new HashMap<Key, RedisCommand>();
+    }
+  };
+  
+  private static final byte[] WRONG_REQUEST_FORMAT = "-ERR Wrog request format".getBytes();
+  private static final byte[] UNSUPPORTED_COMMAND = "-ERR Unsupported command: ".getBytes();
+  
+  /**
+   * Main method
+   * @param in input buffer contains incoming Redis command
+   * @param out output buffer to return to a client (command response)
+   */
+  @SuppressWarnings("deprecation")
+  public static void process(BigSortedMap storage, ByteBuffer in, ByteBuffer out) {
+    long inbuf = inBufTLS.get();
+    // Convert Redis request to a Carrot internal format
+    boolean result = Utils.requestToCarrot(out, inbuf, BUFFER_SIZE);
+    if (!result) {
+      out.put(WRONG_REQUEST_FORMAT);
+      return;
+    }
+    HashMap<Key, RedisCommand> map = commandMapTLS.get();
+    Key key = getCommandKey(inbuf);
+    RedisCommand cmd = map.get(key);
+    if (cmd == null) {
+      String cmdName = org.bigbase.carrot.util.Utils.toString(key.address, key.length);
+      try {
+        @SuppressWarnings("unchecked")
+        Class<RedisCommand> cls = (Class<RedisCommand>) Class.forName("org.bigbase.carrot.redis.commands."+ cmdName);
+        cmd = cls.newInstance();
+        map.put(key,  cmd);
+      } catch (ClassNotFoundException e) {
+        out.put(UNSUPPORTED_COMMAND);
+        out.put(cmdName.getBytes());
+        return;
+      } catch (InstantiationException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      } catch (IllegalAccessException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+    }
+    long outbuf = outBufTLS.get();
+    // Execute Redis command
+    cmd.execute(storage, inbuf, outbuf, BUFFER_SIZE);
+    // Convert response to Redis format
+    Utils.carrotToRedisResponse(outbuf, out);
+    // Done.
+  }
+  
+  /**
+   * Extract command name from an input buffer
+   * @param inbuf input buffer
+   * @return command name as a Key
+   */
+  private static Key getCommandKey(long inbuf) {
+    Key key = keyTLS.get();
+    int cmdLen = UnsafeAccess.toInt(inbuf + 2 * org.bigbase.carrot.util.Utils.SIZEOF_INT);
+    key.address = inbuf + 2 * org.bigbase.carrot.util.Utils.SIZEOF_INT;
+    key.length = cmdLen;
+    return key;
+  }
+  
+}

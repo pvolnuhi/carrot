@@ -19,7 +19,7 @@ package org.bigbase.carrot.redis.strings;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
-import org.bigbase.carrot.redis.Commons;
+import org.bigbase.carrot.redis.util.Commons;
 import org.bigbase.carrot.util.Utils;
 import static org.bigbase.carrot.util.UnsafeAccess.firstBitSetByte;
 import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetByte;

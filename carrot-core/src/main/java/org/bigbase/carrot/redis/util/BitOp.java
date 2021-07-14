@@ -15,8 +15,12 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot.redis;
-
-public enum Aggregate {
-  SUM, MIN, MAX;
+package org.bigbase.carrot.redis.util;
+/**
+ * Bit operations enum
+ * @author Vladimir Rodionov
+ *
+ */
+public enum BitOp {
+  AND, XOR, OR, NOT;
 }

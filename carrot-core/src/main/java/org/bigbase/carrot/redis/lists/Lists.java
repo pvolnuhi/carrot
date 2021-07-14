@@ -20,13 +20,14 @@ package org.bigbase.carrot.redis.lists;
 
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.Commons;
-import org.bigbase.carrot.redis.DataType;
+import org.bigbase.carrot.redis.util.Commons;
+import org.bigbase.carrot.redis.util.DataType;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
+
+import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 
 import java.util.Arrays;
 import java.util.List;

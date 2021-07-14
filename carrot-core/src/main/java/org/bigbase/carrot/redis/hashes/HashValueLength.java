@@ -17,9 +17,9 @@
  */
 package org.bigbase.carrot.redis.hashes;
 
-import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
-import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
-import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
+import static org.bigbase.carrot.redis.util.Commons.elementAddressFromKey;
+import static org.bigbase.carrot.redis.util.Commons.elementSizeFromKey;
+import static org.bigbase.carrot.redis.util.Commons.keySizeWithPrefix;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;

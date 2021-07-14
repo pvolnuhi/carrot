@@ -27,7 +27,7 @@ import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetLong;
 import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetShort;
 
 import java.io.IOException;
-import java.text.NumberFormat;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -794,7 +794,7 @@ public class Utils {
    * Convert string representation to a long value
    * @param ptr address, where string starts
    * @param size size of a string
-   * @return
+   * @return long value
    */
   public static long strToLong(long ptr, int size) throws NumberFormatException {
 
@@ -838,6 +838,107 @@ public class Utils {
     }
     return negative ? result : -result;
   }
+  
+  /**
+   * Convert string representation to a long value
+   * @param buf byte array
+   * @param off offset 
+   * @param size size of a string
+   * @return 
+   */
+  public static long strToLong(byte[] buf, int off, int size) throws NumberFormatException {
+
+    long result = 0;
+    boolean negative = false;
+    int i = off, len = size;
+    long limit = -Long.MAX_VALUE;
+    long multmin;
+    int digit;
+
+    if (len > 0) {
+      byte firstChar = buf[i];
+      if (firstChar < '0') { // Possible leading "+" or "-"
+        if (firstChar == '-') {
+          negative = true;
+          limit = Long.MIN_VALUE;
+        } else if (firstChar != '+') throw new NumberFormatException();
+
+        if (len == 1) // Cannot have lone "+" or "-"
+          throw new NumberFormatException();
+        i++;
+      }
+      multmin = limit / 10;
+      while (i < len + off) {
+        // Accumulating negatively avoids surprises near MAX_VALUE
+        digit = buf[i++] - (byte)'0';
+        if (digit < 0) {
+          throw new NumberFormatException();
+        }
+        if (result < multmin) {
+          throw new NumberFormatException();
+        }
+        result *= 10;
+        if (result < limit + digit) {
+          throw new NumberFormatException();
+        }
+        result -= digit;
+      }
+    } else {
+      throw new NumberFormatException();
+    }
+    return negative ? result : -result;
+  }
+  
+  /**
+   * Convert string representation in a byte buffer to a long value
+   * @param buf byte array
+   * @param off offset 
+   * @param size size of a string
+   * @return long value
+   */
+  public static long strToLong(ByteBuffer buf, int off, int size) throws NumberFormatException {
+
+    long result = 0;
+    boolean negative = false;
+    int i = off, len = size;
+    long limit = -Long.MAX_VALUE;
+    long multmin;
+    int digit;
+
+    if (len > 0) {
+      byte firstChar = buf.get(i);
+      if (firstChar < '0') { // Possible leading "+" or "-"
+        if (firstChar == '-') {
+          negative = true;
+          limit = Long.MIN_VALUE;
+        } else if (firstChar != '+') throw new NumberFormatException();
+
+        if (len == 1) // Cannot have lone "+" or "-"
+          throw new NumberFormatException();
+        i++;
+      }
+      multmin = limit / 10;
+      while (i < len + off) {
+        // Accumulating negatively avoids surprises near MAX_VALUE
+        digit = buf.get(i++) - (byte)'0';
+        if (digit < 0) {
+          throw new NumberFormatException();
+        }
+        if (result < multmin) {
+          throw new NumberFormatException();
+        }
+        result *= 10;
+        if (result < limit + digit) {
+          throw new NumberFormatException();
+        }
+        result -= digit;
+      }
+    } else {
+      throw new NumberFormatException();
+    }
+    return negative ? result : -result;
+  }
+  
   /**
    * Converts long to string representation and stores it in memory
    * @param v long value
@@ -882,6 +983,101 @@ public class Utils {
     return s;
   }
   
+  /**
+   * Converts long to string representation and stores it in memory
+   * @param v long value
+   * @param ptr memory address
+   * @param size memory size
+   * @return size of a string, if it il's larger than 'size', call fails
+   */
+  public static int longToStr(long i, byte[] buf, int off) {
+    
+    int size = buf.length - off;
+    
+    if (i == Long.MIN_VALUE) {
+      byte[] bbuf = "-9223372036854775808".getBytes();
+      if (bbuf.length > size) {
+        return bbuf.length;
+      }
+      System.arraycopy(bbuf, 0, buf, off, bbuf.length);
+      return bbuf.length;
+    }
+    int s = (i < 0) ? stringSize(-i) + 1 : stringSize(i);
+    if (s > size) {
+      return s;
+    }
+    int sign = 0;
+    if (i < 0) {
+      sign = -1;
+      i = -i;
+    }
+    long value = i;
+    int index = off + s - 1;
+    if (value == 0) {
+      buf[index] = (byte)'0';
+    } else {
+      while (value > 0) {
+        long old = value;
+        value /= 10; 
+        long rem = old - 10 * value;
+        buf[index--] = (byte)(rem + '0');
+      }
+    }
+    
+    if (sign != 0) {
+      buf[off] = (byte) '-';
+    }
+    return s;
+  }
+  
+  
+  /**
+   * Converts long to string representation and stores it in memory
+   * @param v long value
+   * @param ptr memory address
+   * @param size memory size
+   * @return size of a string, if it il's larger than 'size', call fails
+   */
+  public static int longToStr(long i, ByteBuffer buf, int off) {
+    
+    int size = buf.capacity() - off;
+    
+    if (i == Long.MIN_VALUE) {
+      byte[] bbuf = "-9223372036854775808".getBytes();
+      if (bbuf.length > size) {
+        return bbuf.length;
+      }
+      buf.position(off);
+      buf.put(bbuf);
+      return bbuf.length;
+    }
+    int s = (i < 0) ? stringSize(-i) + 1 : stringSize(i);
+    if (s > size) {
+      return s;
+    }
+    int sign = 0;
+    if (i < 0) {
+      sign = -1;
+      i = -i;
+    }
+    long value = i;
+    int index = off + s - 1;
+    if (value == 0) {
+      buf.put(index, (byte)'0');
+    } else {
+      while (value > 0) {
+        long old = value;
+        value /= 10; 
+        long rem = old - 10 * value;
+        buf.put(index--, (byte)(rem + '0'));
+      }
+    }
+    if (sign != 0) {
+      buf.put(off, (byte) '-');
+    }
+    buf.position(off + s);
+    return s;
+  }
   
   
   /**
@@ -944,7 +1140,7 @@ public class Utils {
   // Requires positive x
   static int stringSize(long x) {
       long p = 10;
-      for (int i=1; i<19; i++) {
+      for (int i = 1; i < 19; i++) {
           if (x < p)
               return i;
           p = 10*p;
@@ -964,6 +1160,19 @@ public class Utils {
       return new byte[64];
     }
   };
+  
+  
+  /**
+   * Writes string to a byte buffer
+   * @param s string
+   * @param buf byte buffer
+   */
+  public static final void strToByteBuffer(String s, ByteBuffer buf) {
+    int size = s.length();
+    for(int i = 0; i < size; i++) {
+      buf.put((byte) s.charAt(i));
+    }
+  }
   
   /**
    * Converts string representation to double

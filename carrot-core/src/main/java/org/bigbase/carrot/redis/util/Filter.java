@@ -15,12 +15,14 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot.redis;
+package org.bigbase.carrot.redis.util;
 
-/**
- * Data types of Key-Values
- * @author Vladimir Rodionov
- */
-public enum DataType {
-  SYSTEM, STRING, LIST, SET, ZSET, HASH, SBITMAP, BTREE;
+public interface Filter {
+  /**
+   * Simple scanner filter
+   * @param ptr address of a record to 
+   * @return true if pass, false - otherwise
+   */
+  public boolean accept(long ptr);
+  
 }

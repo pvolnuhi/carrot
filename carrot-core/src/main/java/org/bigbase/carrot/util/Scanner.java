@@ -20,7 +20,7 @@ package org.bigbase.carrot.util;
 import java.io.Closeable;
 import java.io.IOException;
 
-import org.bigbase.carrot.redis.Filter;
+import org.bigbase.carrot.redis.util.Filter;
 
 public abstract class Scanner implements Closeable{
 

@@ -17,7 +17,7 @@
  */
 package org.bigbase.carrot.redis.sparse;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 
 import java.io.IOException;
 
@@ -26,8 +26,8 @@ import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
-import org.bigbase.carrot.redis.Commons;
-import org.bigbase.carrot.redis.DataType;
+import org.bigbase.carrot.redis.util.Commons;
+import org.bigbase.carrot.redis.util.DataType;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.Scanner;

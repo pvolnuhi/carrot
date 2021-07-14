@@ -17,12 +17,12 @@
  */
 package org.bigbase.carrot.redis.db;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.DataType;
+import org.bigbase.carrot.redis.util.DataType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 

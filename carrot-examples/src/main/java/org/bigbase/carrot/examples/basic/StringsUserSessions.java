@@ -27,8 +27,8 @@ import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.examples.util.UserSession;
 import org.bigbase.carrot.ops.OperationFailedException;
-import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.strings.Strings;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
 
 /**

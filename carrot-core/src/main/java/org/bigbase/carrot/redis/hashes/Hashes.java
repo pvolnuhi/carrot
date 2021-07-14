@@ -17,11 +17,11 @@
  */
 package org.bigbase.carrot.redis.hashes;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
-import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
-import static org.bigbase.carrot.redis.Commons.ZERO;
-import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
-import static org.bigbase.carrot.redis.Commons.numElementsInValue;
+import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.NUM_ELEM_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.ZERO;
+import static org.bigbase.carrot.redis.util.Commons.keySizeWithPrefix;
+import static org.bigbase.carrot.redis.util.Commons.numElementsInValue;
 import static org.bigbase.carrot.util.KeysLocker.readLock;
 import static org.bigbase.carrot.util.KeysLocker.readUnlock;
 import static org.bigbase.carrot.util.KeysLocker.writeLock;
@@ -35,9 +35,9 @@ import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.OperationFailedException;
-import org.bigbase.carrot.redis.Commons;
-import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.MutationOptions;
+import org.bigbase.carrot.redis.util.Commons;
+import org.bigbase.carrot.redis.util.DataType;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeyValue;
 import org.bigbase.carrot.util.KeysLocker;

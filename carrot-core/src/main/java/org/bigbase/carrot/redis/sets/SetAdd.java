@@ -17,22 +17,21 @@
  */
 package org.bigbase.carrot.redis.sets;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
-import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
-import static org.bigbase.carrot.redis.Commons.ZERO;
-
-import static org.bigbase.carrot.redis.Commons.addNumElements;
-import static org.bigbase.carrot.redis.Commons.canSplit;
-import static org.bigbase.carrot.redis.Commons.elementAddressFromKey;
-import static org.bigbase.carrot.redis.Commons.elementSizeFromKey;
-import static org.bigbase.carrot.redis.Commons.keySize;
-import static org.bigbase.carrot.redis.Commons.keySizeWithPrefix;
-import static org.bigbase.carrot.redis.Commons.numElementsInValue;
-import static org.bigbase.carrot.redis.Commons.setNumElements;
+import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.NUM_ELEM_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.ZERO;
+import static org.bigbase.carrot.redis.util.Commons.addNumElements;
+import static org.bigbase.carrot.redis.util.Commons.canSplit;
+import static org.bigbase.carrot.redis.util.Commons.elementAddressFromKey;
+import static org.bigbase.carrot.redis.util.Commons.elementSizeFromKey;
+import static org.bigbase.carrot.redis.util.Commons.keySize;
+import static org.bigbase.carrot.redis.util.Commons.keySizeWithPrefix;
+import static org.bigbase.carrot.redis.util.Commons.numElementsInValue;
+import static org.bigbase.carrot.redis.util.Commons.setNumElements;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
-import org.bigbase.carrot.redis.DataType;
+import org.bigbase.carrot.redis.util.DataType;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 

@@ -17,7 +17,7 @@
  */
 package org.bigbase.carrot.redis.strings;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 import static org.bigbase.carrot.util.KeysLocker.writeLock;
 import static org.bigbase.carrot.util.KeysLocker.writeUnlock;
 
@@ -25,9 +25,9 @@ import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.ops.OperationFailedException;
-import org.bigbase.carrot.redis.BitOp;
-import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.MutationOptions;
+import org.bigbase.carrot.redis.util.BitOp;
+import org.bigbase.carrot.redis.util.DataType;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeyValue;
 import org.bigbase.carrot.util.KeysLocker;

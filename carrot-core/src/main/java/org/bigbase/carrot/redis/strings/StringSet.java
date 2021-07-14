@@ -19,7 +19,7 @@ package org.bigbase.carrot.redis.strings;
 
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
-import org.bigbase.carrot.redis.MutationOptions;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.Utils;
 
 /**

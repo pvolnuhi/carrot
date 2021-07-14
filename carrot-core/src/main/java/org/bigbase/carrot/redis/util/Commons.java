@@ -15,7 +15,7 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot.redis;
+package org.bigbase.carrot.redis.util;
 
 import java.io.IOException;
 

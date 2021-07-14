@@ -74,6 +74,36 @@ public class TestUtils {
     return buf;
   }
   
+  
+  @Ignore
+  @Test 
+  public void testAll() {
+    for (int i = 0; i < 100; i++) {
+      testDirectBufferAddress();
+    }
+  }
+    
+  @Test
+  public void testDirectBufferAddress() {
+    ByteBuffer buf = ByteBuffer.allocateDirect(16);
+    long addr = UnsafeAccess.address(buf);
+    System.out.println("addr=" + addr);
+    addr = UnsafeAccess.address(buf);
+    System.out.println("addr=" + addr);
+    int N = 1000000;
+    long[] ptrs = new long[N];
+    
+    long total = 0;
+    for (int i = 0; i < N; i++) {
+      buf = ByteBuffer.allocateDirect(16);
+      long start = System.nanoTime();
+      ptrs[i] = UnsafeAccess.address(buf);
+      long end = System.nanoTime();
+      total += (end - start);
+    }
+    System.out.println("Time for "+ N +" address() ="+ total);
+  }
+  
   @Test
   public void testGreaterThan() {
     byte[] in = new byte[] {0,0,0};

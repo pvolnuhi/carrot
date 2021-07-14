@@ -25,8 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.strings.Strings;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
 
 import redis.clients.jedis.Jedis;

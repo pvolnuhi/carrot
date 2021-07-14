@@ -24,8 +24,8 @@ import java.util.Random;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
-import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.redis.sparse.SparseBitmaps;
+import org.bigbase.carrot.redis.util.Commons;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 

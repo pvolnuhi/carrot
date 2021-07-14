@@ -15,12 +15,14 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot.redis;
+package org.bigbase.carrot.redis.util;
+
 /**
- * Bit operations enum
+ * 
+ * Type of increment
  * @author Vladimir Rodionov
  *
  */
-public enum BitOp {
-  AND, XOR, OR, NOT;
+public enum IncrementType {
+  INTEGER, LONG, FLOAT, DOUBLE;
 }

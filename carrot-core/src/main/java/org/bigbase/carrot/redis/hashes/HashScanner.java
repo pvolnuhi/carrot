@@ -17,12 +17,12 @@
  */
 package org.bigbase.carrot.redis.hashes;
 
-import static org.bigbase.carrot.redis.Commons.NUM_ELEM_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.NUM_ELEM_SIZE;
 
 import java.io.IOException;
 
 import org.bigbase.carrot.BigSortedMapScanner;
-import org.bigbase.carrot.redis.Commons;
+import org.bigbase.carrot.redis.util.Commons;
 import org.bigbase.carrot.util.Scanner;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;

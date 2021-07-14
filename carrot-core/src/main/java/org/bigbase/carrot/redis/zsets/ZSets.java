@@ -17,7 +17,7 @@
  */
 package org.bigbase.carrot.redis.zsets;
 
-import static org.bigbase.carrot.redis.Commons.KEY_SIZE;
+import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,9 +25,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.Aggregate;
-import org.bigbase.carrot.redis.DataType;
-import org.bigbase.carrot.redis.MutationOptions;
 import org.bigbase.carrot.redis.RedisConf;
 import org.bigbase.carrot.redis.hashes.HashScanner;
 import org.bigbase.carrot.redis.hashes.HashSet;
@@ -35,6 +32,9 @@ import org.bigbase.carrot.redis.hashes.Hashes;
 import org.bigbase.carrot.redis.sets.SetAdd;
 import org.bigbase.carrot.redis.sets.SetScanner;
 import org.bigbase.carrot.redis.sets.Sets;
+import org.bigbase.carrot.redis.util.Aggregate;
+import org.bigbase.carrot.redis.util.DataType;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.Pair;
@@ -400,9 +400,14 @@ public class ZSets {
       // We need just 8 bytes
       int vsize = Hashes.HGET(map, keyPtr, keySize, ptr, size, valueBuffer, bufferSize);
       if (vsize == Utils.SIZEOF_LONG) {
-          return UnsafeAccess.toLong(valueBuffer); 
+        long card = UnsafeAccess.toLong(valueBuffer); 
+        if (card > 10000) {
+         /*DEBUG*/ System.err.println("ZCARD: ERROR??? CARD = " + card);
+        }
+        return card; 
       } else if (vsize > 0){
         //TODO - collision detected
+        //PANIC
         System.err.println("ZCARD collision detected");
       }
       // else 
@@ -529,6 +534,10 @@ public class ZSets {
       if (inserted > 0 && (count + inserted >= maxCompactSize)) {
         //BSM lock
         ZSETCARD(map, keyPtr, keySize, count + inserted);
+//        int newCard = (int)ZCARD(map, keyPtr, keySize);
+//        if (newCard != (count + inserted)) {
+//          /*DEBUG*/ System.err.println(newCard + " - " + (count + inserted));
+//        }
       }
       return inserted + updated;
     } finally {

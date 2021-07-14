@@ -18,7 +18,7 @@
 package org.bigbase.carrot.redis.commands;
 
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.MutationOptions;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
