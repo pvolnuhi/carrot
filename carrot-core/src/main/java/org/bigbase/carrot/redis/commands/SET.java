@@ -60,12 +60,11 @@ public class SET implements RedisCommand {
       argsCount = 3;
       int num = 0;
       if (numArgs > argsCount) {
-        expire = getExpire(inDataPtr);
-        num = ttlSectionSize(inDataPtr);
+        expire = getExpire(inDataPtr, numArgs - argsCount);
+        num = ttlSectionSize(inDataPtr, false, numArgs - argsCount);
         inDataPtr = skip(inDataPtr, num);
         argsCount += num;
       }
-      
       
       if (numArgs > argsCount) {
         opts = getMutationOptions(inDataPtr);
@@ -85,6 +84,7 @@ public class SET implements RedisCommand {
           if (argsCount < numArgs) {
             inDataPtr += size;
             size = UnsafeAccess.toInt(inDataPtr);
+            inDataPtr += Utils.SIZEOF_INT;
             throw new IllegalArgumentException(Utils.toString(inDataPtr, size));
           }
         } else {
@@ -116,7 +116,12 @@ public class SET implements RedisCommand {
         }
       }
     } catch(NumberFormatException ee) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      String msg = ee.getMessage();
+      if (msg == null) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      } else {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + msg);
+      }
     } catch (IllegalArgumentException e) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, ": " + e.getMessage());
     } 

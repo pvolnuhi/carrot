@@ -424,4 +424,23 @@ public class TestUtils {
     
     UnsafeAccess.free(ptr);
   }
+  
+  @Test
+  public void testStringByteBufferConversion() {
+    ByteBuffer heap = ByteBuffer.allocate(64);
+    ByteBuffer nativ = ByteBuffer.allocateDirect(64);
+    
+    String s = "ABRACADABRAABRACADABRA";
+    
+    Utils.strToByteBuffer(s, heap);
+    heap.flip();
+    String result = Utils.byteBufferToString(heap);
+    assertEquals(s, result);
+    
+    Utils.strToByteBuffer(s, nativ);
+    nativ.flip();
+    result = Utils.byteBufferToString(nativ);
+    assertEquals(s, result);
+    
+  }
 }

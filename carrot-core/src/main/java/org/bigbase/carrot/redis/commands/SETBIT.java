@@ -43,23 +43,29 @@ public class SETBIT implements RedisCommand {
       inDataPtr += keySize;
 
       int offSize = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += offSize;
+      inDataPtr += Utils.SIZEOF_INT;
       long offset = Utils.strToLong(inDataPtr, offSize);
       inDataPtr += offSize;
       int bitSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       int bit = (int) Utils.strToLong(inDataPtr, bitSize);
       if (bit != 0 && bit != 1) {
-        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS);
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_BIT_VALUE, ": "+ bit);
         return;
       }
       int oldBit = Strings.SETBIT(map, keyPtr, keySize, offset, bit);
-
+      
       // INTEGER reply
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-      UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, oldBit);
+      INT_REPLY(outBufferPtr, oldBit);
+      //UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
+      //UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, oldBit);
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      String msg = e.getMessage();
+      if (msg == null) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      } else {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": "+ msg);
+      }
     }
   }
 

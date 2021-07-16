@@ -36,7 +36,6 @@ public class APPEND implements RedisCommand {
     int clen = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT + clen;
     
-    // FIXME: convert ALL Redis API from long[] / int[] to memory buffer interface
     int keySize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
 
@@ -48,9 +47,9 @@ public class APPEND implements RedisCommand {
     
     int num = Strings.APPEND(map, keyPtr, keySize, valPtr, valSize);
     
-    // INTEGER reply - we do not check buffer size here - should n=be larger than 5
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
+    // INTEGER reply - we do not check buffer size here - should be larger than 5
+    INT_REPLY(outBufferPtr, num);
+    
   }
 
 }

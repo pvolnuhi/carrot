@@ -89,7 +89,7 @@ public class CommandProcessor {
   public static void process(BigSortedMap storage, ByteBuffer in, ByteBuffer out) {
     long inbuf = inBufTLS.get();
     // Convert Redis request to a Carrot internal format
-    boolean result = Utils.requestToCarrot(out, inbuf, BUFFER_SIZE);
+    boolean result = Utils.requestToCarrot(in, inbuf, BUFFER_SIZE);
     if (!result) {
       out.put(WRONG_REQUEST_FORMAT);
       return;
@@ -104,21 +104,17 @@ public class CommandProcessor {
         Class<RedisCommand> cls = (Class<RedisCommand>) Class.forName("org.bigbase.carrot.redis.commands."+ cmdName);
         cmd = cls.newInstance();
         map.put(key,  cmd);
-      } catch (ClassNotFoundException e) {
+      } catch (Throwable e) {
         out.put(UNSUPPORTED_COMMAND);
         out.put(cmdName.getBytes());
+        out.put((byte)'\r');
+        out.put((byte)'\n');
         return;
-      } catch (InstantiationException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      } catch (IllegalAccessException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      }
+      } 
     }
     long outbuf = outBufTLS.get();
     // Execute Redis command
-    cmd.execute(storage, inbuf, outbuf, BUFFER_SIZE);
+    cmd.executeCommand(storage, inbuf, outbuf, BUFFER_SIZE);
     // Convert response to Redis format
     Utils.carrotToRedisResponse(outbuf, out);
     // Done.
@@ -131,7 +127,7 @@ public class CommandProcessor {
    */
   private static Key getCommandKey(long inbuf) {
     Key key = keyTLS.get();
-    int cmdLen = UnsafeAccess.toInt(inbuf + 2 * org.bigbase.carrot.util.Utils.SIZEOF_INT);
+    int cmdLen = UnsafeAccess.toInt(inbuf + org.bigbase.carrot.util.Utils.SIZEOF_INT);
     key.address = inbuf + 2 * org.bigbase.carrot.util.Utils.SIZEOF_INT;
     key.length = cmdLen;
     return key;

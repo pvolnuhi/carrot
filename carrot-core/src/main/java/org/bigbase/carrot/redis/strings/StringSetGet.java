@@ -44,8 +44,7 @@ public class StringSetGet extends Operation {
   @Override
   public boolean execute() {
     boolean keyExists = foundRecordAddress > 0; 
-    if (keyExists && opts == MutationOptions.NX ||
-        !keyExists && opts == MutationOptions.XX) {
+    if (!keyExists && opts == MutationOptions.XX) {
       return false;
     }
     if (keyExists) {

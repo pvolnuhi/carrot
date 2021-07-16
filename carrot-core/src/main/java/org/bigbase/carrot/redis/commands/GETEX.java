@@ -44,8 +44,10 @@ public class GETEX implements RedisCommand {
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
       long size = 0;
-      if (numArgs > 2) {
-        long expire = getExpire(inDataPtr, true);
+      int argsCount = 2;
+      if (numArgs > argsCount) {
+        long expire = getExpire(inDataPtr, true, true, numArgs - argsCount);
+        int num = ttlSectionSize(keyPtr, true, numArgs - argsCount);
         size =
           Strings.GETEX(map, keyPtr, keySize, expire, outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT,
             outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);

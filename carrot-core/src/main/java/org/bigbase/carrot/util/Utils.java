@@ -811,30 +811,32 @@ public class Utils {
         if (firstChar == '-') {
           negative = true;
           limit = Long.MIN_VALUE;
-        } else if (firstChar != '+') throw new NumberFormatException();
-
-        if (len == 1) // Cannot have lone "+" or "-"
-          throw new NumberFormatException();
+        } else if (firstChar != '+') {
+          numberFormatException(ptr, size);
+        }
+        if (len == 1) {// Cannot have lone "+" or "-"
+          numberFormatException(ptr, size);
+        }
         i++;
       }
       multmin = limit / 10;
       while (i < len) {
         // Accumulating negatively avoids surprises near MAX_VALUE
         digit = UnsafeAccess.toByte(ptr + i++) - (byte)'0';
-        if (digit < 0) {
-          throw new NumberFormatException();
+        if (digit < 0 || digit > 9) {
+          numberFormatException(ptr, size);
         }
         if (result < multmin) {
-          throw new NumberFormatException();
+          numberFormatException(ptr, size);
         }
         result *= 10;
         if (result < limit + digit) {
-          throw new NumberFormatException();
+          numberFormatException(ptr, size);
         }
         result -= digit;
       }
     } else {
-      throw new NumberFormatException();
+      numberFormatException(ptr, size);
     }
     return negative ? result : -result;
   }
@@ -861,32 +863,47 @@ public class Utils {
         if (firstChar == '-') {
           negative = true;
           limit = Long.MIN_VALUE;
-        } else if (firstChar != '+') throw new NumberFormatException();
+        } else if (firstChar != '+') numberFormatException(buf, off, size);
 
         if (len == 1) // Cannot have lone "+" or "-"
-          throw new NumberFormatException();
+          numberFormatException(buf, off, size);
         i++;
       }
       multmin = limit / 10;
       while (i < len + off) {
         // Accumulating negatively avoids surprises near MAX_VALUE
         digit = buf[i++] - (byte)'0';
-        if (digit < 0) {
-          throw new NumberFormatException();
+        if (digit < 0 || digit > 9) {
+          numberFormatException(buf, off, size);
         }
         if (result < multmin) {
-          throw new NumberFormatException();
+          numberFormatException(buf, off, size);
         }
         result *= 10;
         if (result < limit + digit) {
-          throw new NumberFormatException();
+          numberFormatException(buf, off, size);
         }
         result -= digit;
       }
     } else {
-      throw new NumberFormatException();
+      numberFormatException(buf, off, size);
     }
     return negative ? result : -result;
+  }
+  
+  private static void numberFormatException(long ptr, int size) {
+    throw new NumberFormatException(toString(ptr, size));
+  }
+  
+  private static void numberFormatException(byte[] buf, int off, int size) {
+    throw new NumberFormatException(new String(buf, off, size));
+  }
+  
+  private static void numberFormatException(ByteBuffer buf, int off, int size) {
+    buf.position(off);
+    byte[] bytes = new byte[size];
+    buf.get(bytes);
+    throw new NumberFormatException(new String(bytes));
   }
   
   /**
@@ -911,30 +928,33 @@ public class Utils {
         if (firstChar == '-') {
           negative = true;
           limit = Long.MIN_VALUE;
-        } else if (firstChar != '+') throw new NumberFormatException();
+        } else if (firstChar != '+') {
+          numberFormatException(buf, off, size);
+        }
 
-        if (len == 1) // Cannot have lone "+" or "-"
-          throw new NumberFormatException();
+        if (len == 1) { // Cannot have lone "+" or "-"
+          numberFormatException(buf, off, size);
+        }
         i++;
       }
       multmin = limit / 10;
       while (i < len + off) {
         // Accumulating negatively avoids surprises near MAX_VALUE
         digit = buf.get(i++) - (byte)'0';
-        if (digit < 0) {
-          throw new NumberFormatException();
+        if (digit < 0 || digit > 9) {
+          numberFormatException(buf, off, size);
         }
         if (result < multmin) {
-          throw new NumberFormatException();
+          numberFormatException(buf, off, size);
         }
         result *= 10;
         if (result < limit + digit) {
-          throw new NumberFormatException();
+          numberFormatException(buf, off, size);
         }
         result -= digit;
       }
     } else {
-      throw new NumberFormatException();
+      numberFormatException(buf, off, size);
     }
     return negative ? result : -result;
   }
@@ -1175,6 +1195,23 @@ public class Utils {
   }
   
   /**
+   * Used for testing only
+   * @param buf byte buffer
+   * @return
+   */
+  public static String byteBufferToString(ByteBuffer buf) {
+    buf.flip();
+    int pos = buf.position();
+    int limit = buf.limit();
+    if (buf.isDirect()) {
+      long ptr = UnsafeAccess.address(buf);
+      return toString(ptr + pos, limit - pos);
+    } else {
+      byte[] bytes = buf.array();
+      return new String(bytes, pos, limit - pos);
+    }
+  }
+  /**
    * Converts string representation to double
    * @param ptr address of a string 
    * @param size size of a string
@@ -1189,7 +1226,7 @@ public class Utils {
     UnsafeAccess.copy(ptr, buf, 0, size);
     // Yep, we create new string instance
     String s = new String(buf, 0, size);
-    if (s.charAt(1) == 'i') {
+    if (size > 1 && s.charAt(1) == 'i') {
       if (s.equals("-inf")) {
         return -Double.MAX_VALUE;
       } else if (s.equals("+inf")){

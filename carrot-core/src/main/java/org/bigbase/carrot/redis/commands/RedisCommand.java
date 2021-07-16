@@ -147,14 +147,14 @@ public interface RedisCommand {
   static final long WITHVALUES_FLAG = UnsafeAccess.allocAndCopy("WITHVALUES", 0, "WITHVALUES".length());
   static final int WITHVALUES_LENGTH = "WITHVALUES".length();
 
-  static final long OK_REPLY = UnsafeAccess.allocAndCopy("+OK\\r\\n", 0, "+OK\\r\\n".length());
-  static final int OK_REPLY_LENGTH = "+OK\\r\\n".length();
+  static final long OK_REPLY = UnsafeAccess.allocAndCopy("+OK\r\n", 0, "+OK\r\n".length());
+  static final int OK_REPLY_LENGTH = "+OK\r\n".length();
   
-  static final long NULL_STRING_REPLY = UnsafeAccess.allocAndCopy("$-1\\r\\n", 0, "$-1\\r\\n".length());
-  static final int NULL_STRING_REPLY_LENGTH = "$-1\\r\\n".length();
+  static final long NULL_STRING_REPLY = UnsafeAccess.allocAndCopy("$-1\r\n", 0, "$-1\r\n".length());
+  static final int NULL_STRING_REPLY_LENGTH = "$-1\r\n".length();
   
-  static final long NULL_ARRAY_REPLY = UnsafeAccess.allocAndCopy("*-1\\r\\n", 0, "*-1\\r\\n".length());
-  static final int NULL_ARRAY_REPLY_LENGTH = "*-1\\r\\n".length();
+  static final long NULL_ARRAY_REPLY = UnsafeAccess.allocAndCopy("*-1\r\n", 0, "*-1\r\n".length());
+  static final int NULL_ARRAY_REPLY_LENGTH = "*-1\r\n".length();
   
   static final long MATCH_FLAG = UnsafeAccess.allocAndCopy("MATCH", 0, "MATCH".length());
   static final int MATCH_LENGTH = "MATCH".length();
@@ -213,61 +213,95 @@ public interface RedisCommand {
     UnsafeAccess.putLong(ptr, value);     
   }
   
-  public default void executeCommand(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
+  /**
+   * Execute the Redis command
+   * @param map sorted map storaghe
+   * @param inBufferPtr input buffer (Redis request)
+   * @param outBufferPtr output buffer (Redis command output)
+   * @param outBufferSize output buffer size
+   */
+  public default void executeCommand(BigSortedMap map, long inBufferPtr, long outBufferPtr, int outBufferSize) {
     // By default reply is OK
-    UnsafeAccess.putByte(inDataPtr,  (byte) ReplyType.OK.ordinal());
-    execute(map, inDataPtr, outBufferPtr, outBufferSize);
+    UnsafeAccess.putByte(outBufferPtr,  (byte) ReplyType.OK.ordinal());
+    execute(map, inBufferPtr, outBufferPtr, outBufferSize);
   }
   
-  public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize);
+  /**
+   * Each command MUST implement this method
+   * @param map sorted map storage
+   * @param inBufferPtr input buffer (Redis request)
+   * @param outBufferPtr output buffer (Redis command output)
+   * @param outBufferSize output buffer size
+   */
+  public void execute(BigSortedMap map, long inBufferPtr, long outBufferPtr, int outBufferSize);
 
-  default long getExpire(long ptr, boolean withException)
+  /**
+   * Reads new expiration time from a request buffer
+   * @param ptr  request buffer pointer 
+   * @param withException if true - throw exception
+   * @param persists if true - check PERSISTS flag, otherwise - KEEPTTL 
+   * @param argsRemaining number of arguments remaining
+   * @return expiration time (0- no expire, -1 - KEEPTTL)
+   * @throws IllegalArgumentException
+   * @throws NumberFormatException
+   */
+  default long getExpire(long ptr, boolean withException, boolean persists, int argsRemaining)
       throws IllegalArgumentException, NumberFormatException {
+    // argsRemaining is at least 1
     int size = UnsafeAccess.toInt(ptr);
     ptr += Utils.SIZEOF_INT;
-    if (size == PERSISTS_LENGTH
-        && Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0) {
-      return 0;// reset expiration
-    } else if (size == EX_LENGTH && Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
-      // Read seconds
-      ptr += size;
-      int vSize = UnsafeAccess.toInt(ptr);
-      ptr += Utils.SIZEOF_INT;
-      long secs = Utils.strToLong(ptr, vSize);
-      return System.currentTimeMillis() + secs * 1000;
-    } else if (size == PX_LENGTH && Utils.compareTo(PX_FLAG, PX_LENGTH, ptr, size) == 0) {
-      // Read milliseconds
-      ptr += size;
-      int vSize = UnsafeAccess.toInt(ptr);
-      ptr += Utils.SIZEOF_INT;
-      long ms = Utils.strToLong(ptr, vSize);
-      return System.currentTimeMillis() + ms;
-    } else if (size == EXAT_LENGTH && Utils.compareTo(EXAT_FLAG, EXAT_LENGTH, ptr, size) == 0) {
+    if (argsRemaining >= 2) {
+      if (persists && size == PERSISTS_LENGTH
+          && Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0) {
+        return 0;// reset expiration
+      } else if (size == EX_LENGTH && Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
+        // Read seconds
+        ptr += size;
+        int vSize = UnsafeAccess.toInt(ptr);
+        ptr += Utils.SIZEOF_INT;
+        long secs = Utils.strToLong(ptr, vSize);
+        return System.currentTimeMillis() + secs * 1000;
+      } else if (size == PX_LENGTH && Utils.compareTo(PX_FLAG, PX_LENGTH, ptr, size) == 0) {
+        // Read milliseconds
+        ptr += size;
+        int vSize = UnsafeAccess.toInt(ptr);
+        ptr += Utils.SIZEOF_INT;
+        long ms = Utils.strToLong(ptr, vSize);
+        return System.currentTimeMillis() + ms;
+      } else if (size == EXAT_LENGTH && Utils.compareTo(EXAT_FLAG, EXAT_LENGTH, ptr, size) == 0) {
         // Read seconds
         ptr += size;
         int vSize = UnsafeAccess.toInt(ptr);
         ptr += Utils.SIZEOF_INT;
         long secs = Utils.strToLong(ptr, vSize);
         return secs * 1000;
-    } else if (size == PXAT_LENGTH && Utils.compareTo(PXAT_FLAG, PXAT_LENGTH, ptr, size) == 0) {
-          // Read seconds
-          ptr += size;
-          int vSize = UnsafeAccess.toInt(ptr);
-          ptr += Utils.SIZEOF_INT;
-          long ms = Utils.strToLong(ptr, vSize);
-          return ms;
-    } else if (size == KEEPTTL_LENGTH && Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
-      // expire = -1 - means, do not overwrite existing expire - keepTTL
-      return -1;
-    }
+      } else if (size == PXAT_LENGTH && Utils.compareTo(PXAT_FLAG, PXAT_LENGTH, ptr, size) == 0) {
+        // Read seconds
+        ptr += size;
+        int vSize = UnsafeAccess.toInt(ptr);
+        ptr += Utils.SIZEOF_INT;
+        long ms = Utils.strToLong(ptr, vSize);
+        return ms;
+      }
+    } else
+      if (!persists && size == KEEPTTL_LENGTH && Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
+        // expire = -1 - means, do not overwrite existing expire - keepTTL
+        return -1;
+      }
     if (withException) {
       throw new IllegalArgumentException(Utils.toString(ptr, size));
     }
     return 0;
   }
 
-  default long getExpire(long ptr) {
-    return getExpire(ptr, false);
+  /**
+   * Default method
+   * @param ptr 
+   * @param argsRemaining
+   * @return
+   */
+  default long getExpire(long ptr, int argsRemaining) {
+    return getExpire(ptr, false, false, argsRemaining);
   }
   
   default long skip(long ptr, int num) {
@@ -278,21 +312,25 @@ public interface RedisCommand {
     return ptr;
   }
   
-  default int ttlSectionSize(long ptr) {
+  default int ttlSectionSize(long ptr, boolean persists, int argsRemaining) {
     int size = UnsafeAccess.toInt(ptr);
+    int retValue = 0;
     ptr += Utils.SIZEOF_INT;
-    if (Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
-      return 1;
-    } else if (Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
-      return 2;
+    if (!persists && Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
+       retValue = 1;
+    } else if(persists && Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0) {
+      retValue = 1;
+   } else if (Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
+      retValue = 2;
     } else if (Utils.compareTo(PX_FLAG, PX_LENGTH, ptr, size) == 0) {
-      return 2;
+      retValue = 2;
     } else if (Utils.compareTo(EXAT_FLAG, EXAT_LENGTH, ptr, size) == 0) {
-      return 2;
+      retValue = 2;
     } else if (Utils.compareTo(PXAT_FLAG, PXAT_LENGTH, ptr, size) == 0) {
-      return 2;
+      retValue = 2;
     } 
-    return 0;
+    
+    return retValue <= argsRemaining? retValue: 0;
   }
   
   default int mutationSectionSize(long ptr) {
@@ -312,7 +350,7 @@ public interface RedisCommand {
     if (size == NX_LENGTH && Utils.compareTo(NX_FLAG, NX_LENGTH, ptr, size) == 0) {
       return MutationOptions.NX;
     } else if (size == XX_LENGTH && Utils.compareTo(XX_FLAG, XX_LENGTH, ptr, size) == 0) {
-      return MutationOptions.NX;
+      return MutationOptions.XX;
     }
     
     return MutationOptions.NONE;

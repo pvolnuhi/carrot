@@ -90,7 +90,7 @@ public class StringBitPos extends Operation {
       start = 0;
     }
     if (end == Commons.NULL_LONG) {
-      end = valueSize -1;
+      end = valueSize - 1;
     }
     
     if (startEndSet) {
@@ -131,6 +131,9 @@ public class StringBitPos extends Operation {
     }
     this.position = bit == 1? Utils.bitposSet(valuePtr + start, (int)(end - start) + 1): 
       Utils.bitposUnset(valuePtr + start, (int)(end - start) +1);
+    if (this.position >= 0) {
+      this.position += start * Utils.BITS_PER_BYTE;
+    }
     if (this.position == -1 && bit == 0 && !startEndSet) {
       this.position = valueSize * Utils.BITS_PER_BYTE;
     }

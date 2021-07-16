@@ -1013,9 +1013,8 @@ public class Strings {
    * @param expire expiration time (0 - does not expire)
    * @param opts mutation options (NONE, NX, XX) 
    * @param keepTTL keep current TTL
-   * @return length of an old value or:
-   *  -2 (SET did not succeed)
-   *  -1 (SET succeed but key did not exist)
+   * @return length of an old value
+   *  
    */
   public static long SETGET(BigSortedMap map, long keyPtr, int keySize, long valuePtr,
       int valueSize, long expire, MutationOptions opts, boolean keepTTL, long bufPtr, int bufSize) {
@@ -1035,9 +1034,6 @@ public class Strings {
       set.setExpire(expire);
       set.setBuffer(bufPtr, bufSize);
       boolean result = map.execute(set);
-      if (!result) {
-        return -2; // Yeah I know - sucks
-      }
       return set.getOldValueSize();
     } finally {
       KeysLocker.writeUnlock(kk);

@@ -49,8 +49,8 @@ public class Utils {
   static final byte BULK_TYPE = (byte) '$';
   static final byte ERR_TYPE = (byte) '-';
   
-  static final byte[] OK_RESP = "+OK\\r\\n".getBytes();
-  static final byte[] CRLF = "\\r\\n".getBytes();
+  static final byte[] OK_RESP = "+OK\r\n".getBytes();
+  static final byte[] CRLF = "\r\n".getBytes();
   
   /**
    * Converts Redis request (raw) to an internal Carrot 
@@ -101,19 +101,20 @@ public class Utils {
       if (strlen <= 0) {
         return false;
       }
-      pos += lsize;
       if (buf.get(pos) != BULK_TYPE) {
         return false;
       }
+      pos += lsize;
+
       // We expect request consists of array of bulk strings
-      buf.position(pos + 1);
+      buf.position(pos);
       // Write length of a string
       UnsafeAccess.putInt(ptr, strlen);
       ptr += SIZEOF_INT;
       // write string
       UnsafeAccess.copy(buf, ptr, strlen);
       ptr += strlen;
-      pos += strlen + 3; // 1 byte for type, 2 - \r\n
+      pos += strlen + 2; // 2 - \r\n
       buf.position(pos);
     }
     return true;
@@ -157,6 +158,9 @@ public class Utils {
     while(buf.hasRemaining()) {
       skipWhiteSpaces(buf);
       len = countNonWhitespaces(buf);
+      if (len == 0) {
+        break;
+      }
       // Write down string length
       UnsafeAccess.putInt(ptr + off,  len);
       off += SIZEOF_INT;
@@ -164,10 +168,34 @@ public class Utils {
       UnsafeAccess.copy(buf, ptr + off, len);
       // Advance memory buffer offset
       off += len;
+      // Advance buffer
+      buf.position(buf.position() + len);
+      // Increment count
+      count++;
     }
     
     UnsafeAccess.putInt(ptr, count);
     return true;
+  }
+  
+  /**
+   * Converts inline request to a Redis RESP2 array
+   * @param request inline request
+   * @return Redis RESP2 array as a String
+   */
+  public static String inlineToRedisRequest(String request) {
+    String[] splits = request.split(" ");
+    StringBuffer sb = new StringBuffer("*"); // ARRAY
+    sb.append(Long.toString(splits.length));
+    sb.append("\r\n");
+    for (String s: splits) {
+      sb.append("$"); // bulk string
+      sb.append(Long.toString(s.length()));
+      sb.append("\r\n");
+      sb.append(s);
+      sb.append("\r\n");
+    }
+    return sb.toString();
   }
   
   /**
@@ -177,7 +205,8 @@ public class Utils {
   private static void skipWhiteSpaces(ByteBuffer buf) {
     int skipped = 0;
     int pos = buf.position();
-    while (buf.get() == (byte)' ') skipped++;
+    int remaining = buf.remaining();
+    while (skipped < remaining && buf.get() == (byte)' ') skipped++;
     buf.position(pos + skipped);
   }
   
@@ -189,7 +218,8 @@ public class Utils {
   private static int countNonWhitespaces(ByteBuffer buf) {
     int skipped = 0;
     int pos = buf.position();
-    while (buf.get() != (byte)' ') skipped++;
+    int remaining = buf.remaining();
+    while (skipped < remaining && buf.get() != (byte)' ') skipped++;
     buf.position(pos);
     return skipped;
   }
@@ -331,9 +361,11 @@ public class Utils {
       buf.put(BULK_TYPE);
       longToStr(size, buf, buf.position());
       buf.put(CRLF);
-      UnsafeAccess.copy(ptr, buf, size);
-      buf.put(CRLF);
-      ptr += size;
+      if(size > 0) {
+        UnsafeAccess.copy(ptr, buf, size);
+        buf.put(CRLF);
+        ptr += size;
+      }
     }    
   }
   /**
@@ -355,6 +387,7 @@ public class Utils {
 
   /**
    * Converts TYPED_ARRAY Carrot type to a Redis response
+   * TODO: currently we support only INT types
    * @param ptr memory address of a serialized Carrot response 
    * @param buf Redis response buffer
    */
@@ -393,15 +426,17 @@ public class Utils {
     longToStr(len, buf, SIZEOF_BYTE);
     buf.put(CRLF);
     
-    for (int i=0; i < len; i++) {
+    for (int i = 0; i < len; i++) {
       int size = UnsafeAccess.toInt(ptr);
       ptr += SIZEOF_INT;
       buf.put(BULK_TYPE);
       longToStr(size, buf, buf.position());
       buf.put(CRLF);
-      UnsafeAccess.copy(ptr, buf, size);
-      buf.put(CRLF);
-      ptr += size;
+      if(size > 0) {
+        UnsafeAccess.copy(ptr, buf, size);
+        buf.put(CRLF);
+        ptr += size;
+      }
     }
   }
 
@@ -416,8 +451,12 @@ public class Utils {
     ptr += SIZEOF_BYTE;
     int len = UnsafeAccess.toInt(ptr);
     ptr += SIZEOF_INT;
-    UnsafeAccess.copy(ptr, buf, len);
+    longToStr(len, buf, buf.position());
     buf.put(CRLF);
+    if (len > 0) {
+      UnsafeAccess.copy(ptr, buf, len);
+      buf.put(CRLF);
+    }
 
   }
 
@@ -429,8 +468,9 @@ public class Utils {
   private static void intResponse(long ptr, ByteBuffer buf) {
     buf.rewind();
     buf.put(INT_TYPE);
-    long value = UnsafeAccess.toLong(ptr + SIZEOF_BYTE);
-    longToStr(value, buf, SIZEOF_BYTE);
+    ptr += SIZEOF_BYTE;
+    long value = UnsafeAccess.toLong(ptr);
+    longToStr(value, buf, buf.position());
     buf.put(CRLF);
   }
 

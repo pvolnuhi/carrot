@@ -43,7 +43,7 @@ public class SETEX implements RedisCommand {
       inDataPtr += keySize;
 
       int expSize = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += expSize;
+      inDataPtr += Utils.SIZEOF_INT;
       long expire = Utils.strToLong(inDataPtr, expSize);
       expire = System.currentTimeMillis() + expire * 1000;
       inDataPtr += expSize;
@@ -57,7 +57,13 @@ public class SETEX implements RedisCommand {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_OPERATION_FAILED);
       }
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      String msg = e.getMessage();
+      if (msg == null) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      } else {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + msg);
+
+      }
     }
   }
 
