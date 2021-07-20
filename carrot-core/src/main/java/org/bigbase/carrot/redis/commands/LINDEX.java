@@ -18,6 +18,7 @@
 package org.bigbase.carrot.redis.commands;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.commands.RedisCommand.ReplyType;
 import org.bigbase.carrot.redis.lists.Lists;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -48,10 +49,17 @@ public class LINDEX implements RedisCommand {
       int off = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;
       int size = Lists.LINDEX(map, keyPtr, keySize, index, outBufferPtr + off, outBufferSize - off);
       
+      // Bulk String reply
       UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
-      UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size);
+      if (size < outBufferSize - off) {
+        UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, (int) size);
+      } else {
+        // Buffer is small
+        UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE,
+          (int) size + off);
+      }
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }
   }
 }

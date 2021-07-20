@@ -33,13 +33,13 @@ public class MGET implements RedisCommand {
       return;
     }
     inDataPtr += Utils.SIZEOF_INT;
-    
+    // Skip command name
+    inDataPtr = skip(inDataPtr, 1);
     long[] keyPtrs = Utils.loadPointers(inDataPtr, numArgs - 1);
     int[] keySizes = Utils.loadSizes(inDataPtr, numArgs - 1);
     
     int size = (int) Strings.MGET(map, keyPtrs, keySizes, outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT,
           outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
-
     // Array reply
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.ARRAY.ordinal());
     // Array serialized size

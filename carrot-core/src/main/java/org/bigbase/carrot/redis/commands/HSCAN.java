@@ -117,7 +117,7 @@ public class HSCAN implements RedisCommand {
           inDataPtr += Utils.SIZEOF_INT;
           count = (int) Utils.strToLong(inDataPtr, size);
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
           return;
         }
         inDataPtr += size;
@@ -131,7 +131,7 @@ public class HSCAN implements RedisCommand {
           regex = Utils.toString(inDataPtr, size);
           inDataPtr += size;
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
           return;
         }
         size = UnsafeAccess.toInt(inDataPtr);
@@ -143,7 +143,7 @@ public class HSCAN implements RedisCommand {
           count = (int) Utils.strToLong(inDataPtr, size);
           inDataPtr += size;
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
           return;
         }
       }

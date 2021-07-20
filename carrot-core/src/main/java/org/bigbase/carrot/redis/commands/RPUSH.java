@@ -42,8 +42,9 @@ public class RPUSH implements RedisCommand {
     long[] ptrs = Utils.loadPointers(inDataPtr, numArgs - 2);
     int[] sizes = Utils.loadSizes(inDataPtr, numArgs - 2);
     int num = (int) Lists.RPUSH(map, keyPtr, keySize, ptrs, sizes);
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
+    // INT reply
+    INT_REPLY(outBufferPtr, num);
+
   }
 
 }

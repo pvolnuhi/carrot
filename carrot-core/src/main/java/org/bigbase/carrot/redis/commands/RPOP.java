@@ -34,7 +34,7 @@ public class RPOP implements RedisCommand {
       boolean countSet = false;
 
       int numArgs = UnsafeAccess.toInt(inDataPtr);
-      if (numArgs != 2 && numArgs != 3) {
+      if (numArgs != 2 /*&& numArgs != 3*/) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
       }
@@ -46,13 +46,13 @@ public class RPOP implements RedisCommand {
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
-      if (numArgs == 3) {
-        int countSize = UnsafeAccess.toInt(inDataPtr);
-        inDataPtr += Utils.SIZEOF_INT;
-        long countPtr = inDataPtr;
-        count = (int) Utils.strToLong(countPtr, countSize);
-        countSet = true;
-      }
+//      if (numArgs == 3) {
+//        int countSize = UnsafeAccess.toInt(inDataPtr);
+//        inDataPtr += Utils.SIZEOF_INT;
+//        long countPtr = inDataPtr;
+//        count = (int) Utils.strToLong(countPtr, countSize);
+//        countSet = true;
+//      }
 
       int off = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;;
      

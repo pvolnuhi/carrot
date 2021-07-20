@@ -49,25 +49,22 @@ public class LINSERT implements RedisCommand {
     } else if (Utils.compareTo(AFTER_FLAG, AFTER_LENGTH, flagPtr, flagSize) == 0) { 
       after = true;
     } else {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(flagPtr, flagSize));
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, 
+        ": "+ Utils.toString(flagPtr, flagSize));
       return;
     }
+    inDataPtr += flagSize;
     // read pivot
     int pivotSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long pivotPtr = inDataPtr;
     inDataPtr += pivotSize;
-    
     // read element
     int elemSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long elemPtr = inDataPtr;
     inDataPtr += elemSize;
-    
-    long size = Lists.LINSERT(map, keyPtr, keySize, after, pivotPtr, pivotSize, elemPtr, elemSize);
-    
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, size);
+    long size = Lists.LINSERT(map, keyPtr, keySize, after, pivotPtr, pivotSize, elemPtr, elemSize);    
+    INT_REPLY(outBufferPtr, size);
   }
-
 }

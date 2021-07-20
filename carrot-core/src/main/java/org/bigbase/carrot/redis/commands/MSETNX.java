@@ -30,21 +30,19 @@ public class MSETNX implements RedisCommand {
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     int numArgs = UnsafeAccess.toInt(inDataPtr);
-
     if (numArgs < 3 || (numArgs - 1) % 2 != 0) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
       return;
     }
     inDataPtr += Utils.SIZEOF_INT;
-    
+    // Skip command name
+    inDataPtr = skip(inDataPtr, 1);
     List<KeyValue> kvs = Utils.loadKeyValues(inDataPtr, (numArgs - 1) / 2);
-    
     boolean result = Strings.MSETNX(map, kvs);
-
-    // Always succeed if not OOM error
+    int retValue = 1;
     if (!result) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_OPERATION_FAILED);
+      retValue = 0; // operation failed, at kleast one key existed
     }
+    INT_REPLY(outBufferPtr, retValue);
   }
-
 }

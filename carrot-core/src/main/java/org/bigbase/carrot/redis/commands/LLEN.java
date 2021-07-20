@@ -41,9 +41,7 @@ public class LLEN implements RedisCommand {
     inDataPtr += keySize;
    
     long size = Lists.LLEN(map, keyPtr, keySize);
-    
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, size);
+    //INT_REPLY
+    INT_REPLY(outBufferPtr, size);
   }
-
 }

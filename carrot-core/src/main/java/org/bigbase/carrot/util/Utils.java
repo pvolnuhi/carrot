@@ -1235,7 +1235,11 @@ public class Utils {
         throw new NumberFormatException(s);
       }
     }
-    return Double.parseDouble(s);
+    try {
+      return Double.parseDouble(s);
+    } catch (NumberFormatException e) {
+      throw new NumberFormatException(s);
+    }
   }
   
   /**
@@ -1270,6 +1274,7 @@ public class Utils {
        long v = Math.abs(rnd.nextLong()) % max;
        ret[i] = v;
      }
+     System.out.println();
      Arrays.sort(ret);
      return ret;
   }

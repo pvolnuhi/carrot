@@ -33,6 +33,7 @@ import org.junit.Test;
 
 public abstract class CommandBase {
 
+  protected final static String SKIP_VERIFY = "@"; // Skip verify if expected reply equals
   protected BigSortedMap map;
   protected ByteBuffer in, inDirect;
   protected ByteBuffer out, outDirect;
@@ -63,12 +64,21 @@ public abstract class CommandBase {
       in.clear();
       out.clear();
       String inline = validRequests[i];
-      /*DEBUG*/ System.out.println(inline);
       String request = Utils.inlineToRedisRequest(inline);
+      System.out.println("REQUEST:");
+      System.out.println(inline);
+      //System.out.println(request);
       strToByteBuffer(request, in);
       CommandProcessor.process(map, in, out);
       String result = byteBufferToString(out);
-      assertEquals(validResponses[i], result);
+      System.out.println("\nRESULT:");
+      System.out.println(result);
+
+      if (validResponses[i].equals(SKIP_VERIFY)) {
+        //TODO: we need some verification
+      } else {
+        assertEquals(validResponses[i], result);
+      }
     }
   }
   
@@ -84,7 +94,11 @@ public abstract class CommandBase {
       strToByteBuffer(request, in);
       CommandProcessor.process(map, in, out);
       String result = byteBufferToString(out);
-      assertEquals(validResponses[i], result);
+      if (validResponses[i].equals(SKIP_VERIFY)) {
+        System.out.println(result);
+      } else {
+        assertEquals(validResponses[i], result);
+      }    
     }
   }
   
@@ -100,7 +114,11 @@ public abstract class CommandBase {
       strToByteBuffer(request, inDirect);
       CommandProcessor.process(map, inDirect, outDirect);
       String result = byteBufferToString(outDirect);
-      assertEquals(validResponses[i], result);
+      if (validResponses[i].equals(SKIP_VERIFY)) {
+        System.out.println(result);
+      } else {
+        assertEquals(validResponses[i], result);
+      }
     }
   }
   
@@ -116,11 +134,15 @@ public abstract class CommandBase {
       strToByteBuffer(request, inDirect);
       CommandProcessor.process(map, inDirect, outDirect);
       String result = byteBufferToString(outDirect);
-      assertEquals(validResponses[i], result);
+      if (validResponses[i].equals(SKIP_VERIFY)) {
+        System.out.println(result);
+      } else {
+        assertEquals(validResponses[i], result);
+      }
     }
   }
-  
   // INVALID REQUESTS
+  
   @Test
   public void testInValidRequests() {
     String[] invalidRequests = getInvalidRequests();
@@ -130,10 +152,15 @@ public abstract class CommandBase {
       out.clear();
       String inline = invalidRequests[i];
       String request = Utils.inlineToRedisRequest(inline);
+      System.out.println(inline);
       strToByteBuffer(request, in);
       CommandProcessor.process(map, in, out);
       String result = byteBufferToString(out);
-      assertEquals(invalidResponses[i], result);
+      if (invalidResponses[i].equals(SKIP_VERIFY)) {
+        System.out.println(result);
+      } else {
+        assertEquals(invalidResponses[i], result);
+      }    
     }
   }
   
@@ -149,7 +176,11 @@ public abstract class CommandBase {
       strToByteBuffer(request, in);
       CommandProcessor.process(map, in, out);
       String result = byteBufferToString(out);
-      assertEquals(invalidResponses[i], result);
+      if (invalidResponses[i].equals(SKIP_VERIFY)) {
+        System.out.println(result);
+      } else {
+        assertEquals(invalidResponses[i], result);
+      }
     }
   }
   
@@ -165,7 +196,11 @@ public abstract class CommandBase {
       strToByteBuffer(request, inDirect);
       CommandProcessor.process(map, inDirect, outDirect);
       String result = byteBufferToString(outDirect);
-      assertEquals(invalidResponses[i], result);
+      if (invalidResponses[i].equals(SKIP_VERIFY)) {
+        System.out.println(result);
+      } else {
+        assertEquals(invalidResponses[i], result);
+      }    
     }
   }
   
@@ -181,7 +216,11 @@ public abstract class CommandBase {
       strToByteBuffer(request, inDirect);
       CommandProcessor.process(map, inDirect, outDirect);
       String result = byteBufferToString(outDirect);
-      assertEquals(invalidResponses[i], result);
+      if (invalidResponses[i].equals(SKIP_VERIFY)) {
+        System.out.println(result);
+      } else {
+        assertEquals(invalidResponses[i], result);
+      }    
     }
   }
   

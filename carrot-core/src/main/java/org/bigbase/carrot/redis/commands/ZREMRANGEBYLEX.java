@@ -97,7 +97,7 @@ public class ZREMRANGEBYLEX implements RedisCommand {
     } catch (NumberFormatException e) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
     } catch (IllegalArgumentException ee) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, ee.getMessage());
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ee.getMessage());
     }
   }
 

@@ -45,5 +45,4 @@ public class RPUSHX implements RedisCommand {
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
     UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
   }
-
 }

@@ -283,7 +283,10 @@ public class Hashes {
    * a hash is created. If field already exists in the hash, it is overwritten.
    * As of Redis 4.0.0, HSET is variadic and allows for multiple field/value pairs.
    * Return value
-   * Integer reply: The number of fields that were added.   
+   * Integer reply: The number of fields that were added.  
+   * 
+   * TODO: FIXME  - do we count overwritten fields?
+   *  
    * @param map sorted map
    * @param keyPtr key address
    * @param keySize key size
@@ -298,7 +301,7 @@ public class Hashes {
     int count = 0;
     try {
       writeLock(k);
-      for(int i=0; i < fieldPtrs.length; i++) {
+      for(int i = 0; i < fieldPtrs.length; i++) {
         long fieldPtr = fieldPtrs[i];
         int fieldSize = fieldSizes[i];
         long valuePtr = valuePtrs[i];
@@ -1247,9 +1250,13 @@ public class Hashes {
       long value = 0;
       int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, incrArena.get(), INCR_ARENA_SIZE);
       if (size > INCR_ARENA_SIZE) {
-        throw new NumberFormatException();
+        throw new OperationFailedException();
       } else if (size > 0) {
-        value = Utils.strToLong(incrArena.get(), size);
+        try {
+          value = Utils.strToLong(incrArena.get(), size);
+        } catch(NumberFormatException e) {
+          throw new OperationFailedException();
+        }
       }
       value += incr;
       size = Utils.longToStr(value, incrArena.get(), INCR_ARENA_SIZE);
@@ -1324,9 +1331,13 @@ public class Hashes {
       double value = 0;
       int size = HGET(map, keyPtr, keySize, fieldPtr, fieldSize, incrArena.get(), INCR_ARENA_SIZE);
       if (size > INCR_ARENA_SIZE) {
-        throw new NumberFormatException();
+        throw new OperationFailedException();
       } else if (size > 0) {
-        value = Utils.strToDouble(incrArena.get(), size);
+        try {
+          value = Utils.strToDouble(incrArena.get(), size);
+        } catch (NumberFormatException e) {
+          throw new OperationFailedException();
+        }
       }
       value += incr;
       size = Utils.doubleToStr(value, incrArena.get(), INCR_ARENA_SIZE);
@@ -1610,13 +1621,14 @@ public class Hashes {
       return list;
     }
     int total = UnsafeAccess.toInt(buffer);
+    total = total / 2;
     long ptr = buffer + Utils.SIZEOF_INT;
     for (int i = 0; i < total; i++) {
       int fSize = Utils.readUVInt(ptr);
       int fSizeSize = Utils.sizeUVInt(fSize);
-      int vSize = Utils.readUVInt(ptr + fSizeSize);
+      String first = Utils.toString(ptr + fSizeSize, fSize);
+      int vSize = Utils.readUVInt(ptr + fSizeSize + fSize);
       int vSizeSize = Utils.sizeUVInt(vSize);
-      String first = Utils.toString(ptr + fSizeSize + vSizeSize, fSize);
       String second = Utils.toString(ptr + fSize + fSizeSize + vSizeSize, vSize);
       list.add(new Pair<String>(first, second));
       ptr += + fSize + fSizeSize + vSize + vSizeSize;
@@ -1649,6 +1661,7 @@ public class Hashes {
       KeysLocker.readLock(key);
       scanner = getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
+        UnsafeAccess.putInt(buffer,  0);
         return 0;
       }
       long ptr = buffer + Utils.SIZEOF_INT;
@@ -1661,10 +1674,10 @@ public class Hashes {
         int vSize = scanner.fieldValueSize();
         int vSizeSize = Utils.sizeUVInt(vSize);
         if ( ptr + fSize + fSizeSize + vSize + vSizeSize <= buffer + bufferSize) {
-          c++;
+          c += 2;
           Utils.writeUVInt(ptr, fSize);
-          Utils.writeUVInt(ptr + fSizeSize, vSize);
-          UnsafeAccess.copy(fPtr, ptr + fSizeSize + vSizeSize, fSize);
+          UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
+          Utils.writeUVInt(ptr + fSizeSize + fSize, vSize);
           UnsafeAccess.copy(vPtr, ptr + fSizeSize + vSizeSize + fSize, vSize);
           UnsafeAccess.putInt(buffer,  c);
         }
@@ -1711,9 +1724,9 @@ public class Hashes {
       KeysLocker.readLock(key);
       scanner = Hashes.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
+        UnsafeAccess.putInt(buffer, 0);
         return 0;
       }
- 
       long ptr = buffer + Utils.SIZEOF_INT;
       int c = 0;
       while(scanner.hasNext()) {
@@ -1825,6 +1838,7 @@ public class Hashes {
       KeysLocker.readLock(key);
       scanner = Hashes.getScanner(map, keyPtr, keySize, false);
       if (scanner == null) {
+        UnsafeAccess.putInt(buffer, 0);
         return 0;
       }
  
@@ -1856,6 +1870,7 @@ public class Hashes {
   }
   
   /**
+   * TODO: unit tests in API
    * For testing only
    * @param map sorted map storage
    * @param key hash key
@@ -1872,20 +1887,24 @@ public class Hashes {
     int keySize = key.length();
     long bufferPtr = UnsafeAccess.malloc(bufSize);
     
+    @SuppressWarnings("unused")
     long result = HRANDFIELD(map, keyPtr, keySize, count, withValues, bufferPtr, bufSize);
     int total = UnsafeAccess.toInt(bufferPtr);
+    if (withValues) {
+      total = total / 2;
+    }
     long ptr = bufferPtr + Utils.SIZEOF_INT;
     for (int i = 0; i < total; i++) {
       int fSize = Utils.readUVInt(ptr);
       int fSizeSize = Utils.sizeUVInt(fSize);
-      int vSize = (withValues)? Utils.readUVInt(ptr + fSizeSize): 0;
+      String s1 = Utils.toString(ptr + fSizeSize, fSize);
+
+      int vSize = (withValues)? Utils.readUVInt(ptr + fSizeSize + fSize): 0;
       int vSizeSize = (withValues)? Utils.sizeUVInt(vSize): 0;
-      long fPtr = ptr + fSizeSize + vSizeSize;
-      String s1 = Utils.toString(fPtr, fSize);
-      if (withValues) {
+      if (!withValues) {
         list.add(new Pair<String>(s1,s1));
       } else {
-        long vPtr = fPtr + fSize;
+        long vPtr = ptr + fSize + fSizeSize + vSizeSize;
         String s2 = Utils.toString(vPtr, vSize);
         list.add( new Pair<String>(s1,s2));
       }
@@ -1927,6 +1946,8 @@ public class Hashes {
       KeysLocker.readLock(k);
       long total =  HLEN(map, keyPtr, keySize);
       if (total == 0) {
+        // ARR length = 0
+        UnsafeAccess.putInt(bufferPtr, 0);
         return 0; // Empty hash or does not exists
       }
       long[] index = null;
@@ -1986,18 +2007,19 @@ public class Hashes {
           Utils.writeUVInt(ptr, fSize);
           // Write field
           UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
+          UnsafeAccess.putInt(bufferPtr, i + 1);
         } else {
           long vPtr = scanner.fieldValueAddress();
           // Write field size
           Utils.writeUVInt(ptr, fSize);
+       // Write field
+          UnsafeAccess.copy(fPtr, ptr + fSizeSize, fSize);
           // Write value size
-          Utils.writeUVInt(ptr + fSizeSize, vSize);
-          // Write field
-          UnsafeAccess.copy(fPtr, ptr + fSizeSize + vSizeSize, fSize);
+          Utils.writeUVInt(ptr + fSizeSize + fSize, vSize);
           // Write value
           UnsafeAccess.copy(vPtr, ptr + fSizeSize + vSizeSize + fSize, vSize);
+          UnsafeAccess.putInt(bufferPtr, 2 * (i + 1));
         }
-        UnsafeAccess.putInt(bufferPtr, i + 1);
       }
       ptr += adv;
     }

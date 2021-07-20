@@ -77,7 +77,7 @@ public class CommandProcessor {
     }
   };
   
-  private static final byte[] WRONG_REQUEST_FORMAT = "-ERR Wrog request format".getBytes();
+  private static final byte[] WRONG_REQUEST_FORMAT = "-ERR Wrong request format".getBytes();
   private static final byte[] UNSUPPORTED_COMMAND = "-ERR Unsupported command: ".getBytes();
   
   /**

@@ -148,7 +148,7 @@ public class Lists {
   public static int buildKey( long keyPtr, int keySize) {
     checkKeyArena(keySize  + Utils.SIZEOF_BYTE + KEY_SIZE);
     long arena = keyArena.get();
-    int kSize = + keySize + Utils.SIZEOF_BYTE;
+    int kSize = keySize + Utils.SIZEOF_BYTE + KEY_SIZE;
     UnsafeAccess.putByte(arena, (byte) DataType.LIST.ordinal());
     UnsafeAccess.putInt(arena + Utils.SIZEOF_BYTE , keySize);
     UnsafeAccess.copy(keyPtr, arena + Utils.SIZEOF_BYTE + KEY_SIZE, keySize);

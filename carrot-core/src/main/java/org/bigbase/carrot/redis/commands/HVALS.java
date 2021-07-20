@@ -39,13 +39,10 @@ public class HVALS implements RedisCommand{
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;
     inDataPtr += keySize;
-
     int size = (int) Hashes.HVALS(map, keyPtr, keySize, outBufferPtr + 
       Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
-    
     // VARRAY type
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.VARRAY.ordinal());
     UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);    
   }
-
 }

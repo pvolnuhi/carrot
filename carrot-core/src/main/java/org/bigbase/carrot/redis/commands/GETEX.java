@@ -24,8 +24,6 @@ import org.bigbase.carrot.util.Utils;
 
 public class GETEX implements RedisCommand {
   
- 
-  
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     try {
@@ -47,7 +45,13 @@ public class GETEX implements RedisCommand {
       int argsCount = 2;
       if (numArgs > argsCount) {
         long expire = getExpire(inDataPtr, true, true, numArgs - argsCount);
-        int num = ttlSectionSize(keyPtr, true, numArgs - argsCount);
+        int num = ttlSectionSize(inDataPtr, true, numArgs - argsCount);
+        argsCount += num;
+        if (argsCount != numArgs) {
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": " + 
+              Utils.toString(inDataPtr + Utils.SIZEOF_INT, UnsafeAccess.toInt(inDataPtr)));
+          return;
+        }
         size =
           Strings.GETEX(map, keyPtr, keySize, expire, outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT,
             outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
@@ -67,11 +71,9 @@ public class GETEX implements RedisCommand {
           (int) size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);
       }
     } catch(NumberFormatException ee) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + ee.getMessage());
     } catch (IllegalArgumentException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, ": " + e.getMessage());
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": " + e.getMessage());
     } 
   }
-
- 
 }

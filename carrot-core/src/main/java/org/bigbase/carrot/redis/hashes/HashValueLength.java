@@ -27,7 +27,7 @@ import org.bigbase.carrot.util.Utils;
 
 public class HashValueLength extends Operation{
 
-  private int foundValueSize = -1;
+  private int foundValueSize = 0;
   
   public HashValueLength() {
     setFloorKey(true);
@@ -38,7 +38,7 @@ public class HashValueLength extends Operation{
   public void reset() {
     super.reset();
     setFloorKey(true);
-    foundValueSize = -1;
+    foundValueSize = 0;
     setReadOnlyOrUpdateInPlace(true);
   }
     
@@ -70,7 +70,6 @@ public class HashValueLength extends Operation{
     updatesCount = 0;
     long address = Hashes.exactSearch(foundRecordAddress, fieldPtr, fieldSize);
     if (address < 0) {
-      this.foundValueSize = -1;
       return false;
     }
     // size of a field-value pair

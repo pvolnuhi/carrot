@@ -56,7 +56,6 @@ public class StringGetRange extends Operation {
    
     long valuePtr = DataBlock.valueAddress(foundRecordAddress);
     int valueSize = DataBlock.valueLength(foundRecordAddress);
-    this.rangeSize = 0; 
     
     if (from == Commons.NULL_LONG) {
       from = 0;

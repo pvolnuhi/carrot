@@ -35,15 +35,15 @@ public class PSETEX implements RedisCommand {
       }
       inDataPtr += Utils.SIZEOF_INT;
       // skip command name
-      int clen = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT + clen;
+      inDataPtr = skip(inDataPtr, 1);
+      
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
 
       int expSize = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += expSize;
+      inDataPtr += Utils.SIZEOF_INT;
       long expire = Utils.strToLong(inDataPtr, expSize);
       
       expire = System.currentTimeMillis() + expire;
@@ -59,7 +59,7 @@ public class PSETEX implements RedisCommand {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_OPERATION_FAILED);
       }
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": "+ e.getMessage());
     }
   }
 

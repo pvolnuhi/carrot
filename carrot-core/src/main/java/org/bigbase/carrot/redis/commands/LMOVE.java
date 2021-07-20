@@ -47,7 +47,6 @@ public class LMOVE implements RedisCommand {
     long dstKeyPtr = inDataPtr;
     inDataPtr += srcKeySize;
     
-    
     // src LEFT | RIGHT
     Side srcSide = Side.LEFT;
     // dst LEFT | RIGHT
@@ -63,7 +62,8 @@ public class LMOVE implements RedisCommand {
     } else if (Utils.compareTo(RIGHT_FLAG, RIGHT_LENGTH, flagPtr, flagSize) == 0) { 
       srcSide = Side.RIGHT;
     } else {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(flagPtr, flagSize));
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT,
+        ": " + Utils.toString(flagPtr, flagSize));
       return;
     }
     
@@ -77,7 +77,8 @@ public class LMOVE implements RedisCommand {
     } else if (Utils.compareTo(RIGHT_FLAG, RIGHT_LENGTH, flagPtr, flagSize) == 0) { 
       dstSide = Side.RIGHT;
     } else {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(flagPtr, flagSize));
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, 
+        ": "+ Utils.toString(flagPtr, flagSize));
       return;
     }
     

@@ -50,5 +50,4 @@ public class HSETNX implements RedisCommand {
     int result = Hashes.HSETNX(map, keyPtr, keySize, fieldPtr, fieldSize, valPtr, valSize);
     INT_REPLY(outBufferPtr, result);
   }
-
 }

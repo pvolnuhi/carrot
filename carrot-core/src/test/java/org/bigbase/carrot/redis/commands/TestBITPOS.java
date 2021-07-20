@@ -65,8 +65,8 @@ public class TestBITPOS extends CommandBase {
       "BITPOS key",                      /* wrong number of arguments*/
       "BITPOS key 1 2 3 4",              /* wrong number of arguments*/
       "BITPOS key 2",                    /* wrong bit value */
-      "BITCOUNT key 1 w 2",              /* wrong number format */
-      "BITCOUNT key 0 1 z",              /* wrong number format */
+      "BITPOS key 1 w 2",              /* wrong number format */
+      "BITPOS key 0 1 z",              /* wrong number format */
   };
   
   protected String[] invalidResponses = new String[] {

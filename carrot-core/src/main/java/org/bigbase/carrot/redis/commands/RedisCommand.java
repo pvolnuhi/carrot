@@ -118,8 +118,8 @@ public interface RedisCommand {
     ERROR
   }
 
-  static final long PERSISTS_FLAG = UnsafeAccess.allocAndCopy("PERSISTS", 0, "PERSISTS".length());
-  static final int PERSISTS_LENGTH = "PERSISTS".length();
+  static final long PERSISTS_FLAG = UnsafeAccess.allocAndCopy("PERSIST", 0, "PERSIST".length());
+  static final int PERSISTS_LENGTH = "PERSIST".length();
   static final long EXAT_FLAG = UnsafeAccess.allocAndCopy("EXAT", 0, "EXAT".length());
   static final int EXAT_LENGTH = "EXAT".length();
 
@@ -251,10 +251,7 @@ public interface RedisCommand {
     int size = UnsafeAccess.toInt(ptr);
     ptr += Utils.SIZEOF_INT;
     if (argsRemaining >= 2) {
-      if (persists && size == PERSISTS_LENGTH
-          && Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0) {
-        return 0;// reset expiration
-      } else if (size == EX_LENGTH && Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
+      if (size == EX_LENGTH && Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
         // Read seconds
         ptr += size;
         int vSize = UnsafeAccess.toInt(ptr);
@@ -284,7 +281,10 @@ public interface RedisCommand {
         return ms;
       }
     } else
-      if (!persists && size == KEEPTTL_LENGTH && Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
+      if (persists && size == PERSISTS_LENGTH
+        && Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0) {
+        return 0;// reset expiration
+      } else if (!persists && size == KEEPTTL_LENGTH && Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
         // expire = -1 - means, do not overwrite existing expire - keepTTL
         return -1;
       }

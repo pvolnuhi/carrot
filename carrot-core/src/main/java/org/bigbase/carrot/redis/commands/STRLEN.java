@@ -39,13 +39,9 @@ public class STRLEN implements RedisCommand {
     int keySize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;
-
-    
     int value = Strings.STRLEN(map, keyPtr, keySize);
-
     // INTEGER reply - we do not check buffer size here - should be larger than 9
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, value);
+    INT_REPLY(outBufferPtr, value);
   }
 
 }

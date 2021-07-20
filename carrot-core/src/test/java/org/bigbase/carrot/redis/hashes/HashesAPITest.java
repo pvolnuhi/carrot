@@ -398,7 +398,7 @@ public class HashesAPITest {
       String v = list.get(index);
       v += "111111111111111";
       int size = Hashes.HSTRLEN(map, key, v);
-      assertEquals(-1, size);
+      assertEquals(0, size);
     }
   }
   

@@ -43,10 +43,9 @@ public class HEXISTS implements RedisCommand{
     int fieldSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long fieldPtr = inDataPtr;
-    inDataPtr += keySize;
+    inDataPtr += fieldSize;
     int num = Hashes.HEXISTS(map, keyPtr, keySize, fieldPtr, fieldSize);
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);  
+    //INT
+    INT_REPLY(outBufferPtr, num);
   }
-
 }

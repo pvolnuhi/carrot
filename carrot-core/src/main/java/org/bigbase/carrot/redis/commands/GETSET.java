@@ -54,7 +54,5 @@ public class GETSET implements RedisCommand {
       size += Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;
     }
     UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, (int) size);
-
   }
-
 }

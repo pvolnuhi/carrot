@@ -422,7 +422,7 @@ public class Strings {
         try {
           value = Utils.strToLong(incrArena.get(), (int) size);
         } catch(NumberFormatException e) {
-          throw new OperationFailedException(e);
+          throw new OperationFailedException("Value at key is not a number");
         }
       }
       value += incr;
@@ -529,12 +529,12 @@ public class Strings {
         try {
           value = Utils.strToDouble(incrArena.get(), size);
         } catch (NumberFormatException e) {
-          throw new OperationFailedException(e);
+          throw new OperationFailedException("Value at key is not a number");
         }
       }
       value += incr;
       size = Utils.doubleToStr(value, incrArena.get(), INCR_ARENA_SIZE);
-      // Execute single HSET
+      // Execute single PUT
       int kSize = buildKey(keyPtr, keySize);
       
       map.put(keyArena.get(), kSize, incrArena.get(), size, 0);
@@ -858,7 +858,7 @@ public class Strings {
    * @param keySize
    * @param start
    * @param end
-   * @return size of a range, or -1, if key does not exists,
+   * @return size of a range, or -1, if key does not exists or limits out of a value range
    *  if size > buferSize, the call must be repeated with appropriately sized buffer
    */
   public static int GETRANGE(BigSortedMap map, long keyPtr, int keySize , long start, long end, 

@@ -42,7 +42,6 @@ public class GETDEL implements RedisCommand {
     long size =
         Strings.GETDEL(map, keyPtr, keySize, outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT,
           outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
-
     // Bulk String reply
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
     if (size < outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT) {
@@ -51,8 +50,6 @@ public class GETDEL implements RedisCommand {
       // Buffer is small
       UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE,
         (int) size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);
-
     }
   }
-
 }

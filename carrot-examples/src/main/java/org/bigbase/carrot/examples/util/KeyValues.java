@@ -167,7 +167,7 @@ public abstract class KeyValues {
       }
 
       int num = UnsafeAccess.toInt(buffer);
-      if (num != props.size()) {
+      if (num != 2 * props.size()) {
         System.err.println("Verification failed, num=" + num+" expected="+ 
             props.size());
         return false;

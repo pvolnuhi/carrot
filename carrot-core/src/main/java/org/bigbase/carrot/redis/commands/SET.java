@@ -123,7 +123,7 @@ public class SET implements RedisCommand {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + msg);
       }
     } catch (IllegalArgumentException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, ": " + e.getMessage());
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": " + e.getMessage());
     } 
   }
 

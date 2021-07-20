@@ -50,7 +50,7 @@ public class SSETBIT implements RedisCommand {
       inDataPtr += Utils.SIZEOF_INT;
       int bit = (int) Utils.strToLong(inDataPtr, bitSize);
       if (bit != 0 && bit != 1) {
-        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS);
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT);
         return;
       }
       int oldBit = SparseBitmaps.SSETBIT(map, keyPtr, keySize, offset, bit);

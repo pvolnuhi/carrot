@@ -41,7 +41,6 @@ public class HLEN implements RedisCommand {
     long keyPtr = inDataPtr;
     long value = Hashes.HLEN(map, keyPtr, keySize);
     // INTEGER reply - we do not check buffer size here - should be larger than 9
-    // Send reply
     INT_REPLY(outBufferPtr, value);
   }
 }

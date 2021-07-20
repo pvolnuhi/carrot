@@ -53,13 +53,12 @@ public class HINCRBYFLOAT implements RedisCommand {
       double newValue = Hashes.HINCRBYFLOAT(map, keyPtr, keySize, fieldPtr, fieldSize, incrValue);
       DOUBLE_REPLY(outBufferPtr, outBufferSize, newValue);
     } catch (OperationFailedException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_KEY_NOT_NUMBER);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,
+        ": " + new String(Errors.ERR_KEY_NOT_NUMBER));
     } catch (NumberFormatException ee) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,
-        "Increment not a valid number");
-
+        ": " + ee.getMessage());
     }
-
   }
 
 }

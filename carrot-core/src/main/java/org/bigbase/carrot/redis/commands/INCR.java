@@ -29,7 +29,6 @@ public class INCR implements RedisCommand {
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     try {
       int numArgs = UnsafeAccess.toInt(inDataPtr);
-      
       if (numArgs != 2) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
@@ -38,20 +37,15 @@ public class INCR implements RedisCommand {
       // skip command name
       int clen = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT + clen;
-      // FIXME: convert ALL Redis API from long[] / int[] to memory buffer interface
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
       long value = Strings.INCR(map, keyPtr, keySize);
-
-      // INTEGER reply - we do not check buffer size here - should n=be larger than 5
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-      UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, value);
+      // INTEGER reply - we do not check buffer size here - should be larger than 9
+      INT_REPLY(outBufferPtr, value);
     } catch (NumberFormatException | OperationFailedException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": "+ e.getMessage());
     } 
-    
   }
-
 }

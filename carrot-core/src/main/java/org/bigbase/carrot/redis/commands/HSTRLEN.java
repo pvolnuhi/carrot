@@ -43,12 +43,9 @@ public class HSTRLEN implements RedisCommand {
     int fieldSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long fieldPtr = inDataPtr;
-    inDataPtr += keySize;
+    inDataPtr += fieldSize;
     int size = Hashes.HSTRLEN(map, keyPtr, keySize, fieldPtr, fieldSize);
-    
     // Send reply
     INT_REPLY(outBufferPtr, size);
-    
   }
-
 }

@@ -80,6 +80,9 @@ public class StringBitPos extends Operation {
     this.updatesCount = 0;
     if (foundRecordAddress < 0) {
       // Yes we return true
+      if (bit == 0 && !startEndSet) {
+        position = 0;
+      }
       return true;
     }
    

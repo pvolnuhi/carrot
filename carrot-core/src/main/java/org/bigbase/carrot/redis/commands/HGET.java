@@ -43,12 +43,13 @@ public class HGET implements RedisCommand {
     int fieldSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long fieldPtr = inDataPtr;
-    inDataPtr += keySize;
+    inDataPtr += fieldSize;
     int size = Hashes.HGET(map, keyPtr, keySize, fieldPtr, fieldSize, outBufferPtr + 
       Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
     
+    // Bulk string reply
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
-    UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);  
+    UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size);  
     
   }
 }

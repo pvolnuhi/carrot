@@ -401,14 +401,13 @@ public class ZSets {
       int vsize = Hashes.HGET(map, keyPtr, keySize, ptr, size, valueBuffer, bufferSize);
       if (vsize == Utils.SIZEOF_LONG) {
         long card = UnsafeAccess.toLong(valueBuffer); 
-        if (card > 10000) {
-         /*DEBUG*/ System.err.println("ZCARD: ERROR??? CARD = " + card);
-        }
         return card; 
       } else if (vsize > 0){
         //TODO - collision detected
         //PANIC
         System.err.println("ZCARD collision detected");
+        Thread.dumpStack();
+        System.exit(-1);
       }
       // else 
       return Sets.SCARD(map, keyPtr, keySize);

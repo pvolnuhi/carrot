@@ -33,7 +33,8 @@ public class HMGET implements RedisCommand {
       return;
     }
     inDataPtr += Utils.SIZEOF_INT;
-    
+    // Skip command name
+    inDataPtr = skip(inDataPtr, 1);
     int keySize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;

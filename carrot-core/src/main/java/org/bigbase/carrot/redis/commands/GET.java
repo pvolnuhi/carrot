@@ -36,15 +36,12 @@ public class GET implements RedisCommand {
     // skip command name
     int clen = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT + clen;
-    // FIXME: convert ALL Redis API from long[] / int[] to memory buffer interface
     int keySize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;
     long size =
         Strings.GET(map, keyPtr, keySize, outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT,
           outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
-
-    
     // Bulk String reply
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
     if (size < outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT) {
@@ -56,5 +53,4 @@ public class GET implements RedisCommand {
 
     }
   }
-
 }

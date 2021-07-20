@@ -21,7 +21,7 @@ public class TestSETEX extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "SETEX key 100000 value",               /* OK */
-      "SETEX key 1000000 value"               /* OK */
+      "SETEX key 1000000 value"              /* OK */
   };
   
   protected String[] validResponses = new String[] {

@@ -115,7 +115,7 @@ public class ZSCAN implements RedisCommand {
           inDataPtr += Utils.SIZEOF_INT;
           count = (int) Utils.strToLong(inDataPtr, size);
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
           return;
         }
         inDataPtr += size;
@@ -129,7 +129,7 @@ public class ZSCAN implements RedisCommand {
           regex = Utils.toString(inDataPtr, size);
           inDataPtr += size;
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
           return;
         }
         size = UnsafeAccess.toInt(inDataPtr);
@@ -141,7 +141,7 @@ public class ZSCAN implements RedisCommand {
           count = (int) Utils.strToLong(inDataPtr, size);
           inDataPtr += size;
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_ILLEGAL_ARGS, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
           return;
         }
       }
@@ -157,8 +157,8 @@ public class ZSCAN implements RedisCommand {
       cursor = DBSystem.nextId();
       UnsafeAccess.putLong(outBufferPtr + off, cursor);
       off += Utils.SIZEOF_LONG;
-      // Second is VARRAY type 
-      UnsafeAccess.putByte(outBufferPtr + off, (byte) ReplyType.VARRAY.ordinal());
+      // Second is ZARRAY type 
+      UnsafeAccess.putByte(outBufferPtr + off, (byte) ReplyType.ZARRAY.ordinal());
       off += Utils.SIZEOF_BYTE;
       
       // Actual call

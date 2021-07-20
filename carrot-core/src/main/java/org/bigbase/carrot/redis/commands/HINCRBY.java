@@ -44,18 +44,20 @@ public class HINCRBY implements RedisCommand {
     int fieldSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long fieldPtr = inDataPtr;
-    inDataPtr += keySize;
+    inDataPtr += fieldSize;
     int incrSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
-    long incrValue = Utils.strToLong(inDataPtr, incrSize);
     
     try {
+      long incrValue = Utils.strToLong(inDataPtr, incrSize);
       long newValue = Hashes.HINCRBY(map, keyPtr, keySize, fieldPtr, fieldSize, incrValue);
       UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
       UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, newValue);
     } catch (OperationFailedException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_KEY_NOT_NUMBER);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, 
+        ": " + new String(Errors.ERR_KEY_NOT_NUMBER));
+    } catch (NumberFormatException e) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": "+ e.getMessage());      
     }
   }
-
 }

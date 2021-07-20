@@ -52,7 +52,7 @@ public class INCRBY implements RedisCommand {
       // Send reply
       INT_REPLY(outBufferPtr, value);
     } catch (NumberFormatException | OperationFailedException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     } 
     
   }

@@ -53,5 +53,4 @@ public class RPOPLPUSH implements RedisCommand {
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
     UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size);
   }
-
 }

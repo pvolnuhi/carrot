@@ -69,4 +69,9 @@ public class KeyValue implements Comparable<KeyValue>{
     UnsafeAccess.free(keyPtr);
     UnsafeAccess.free(valuePtr);
   }
+  @Override
+  public String toString() {
+    return Utils.toString(keyPtr, keySize) + " "+ Utils.toString(valuePtr, valueSize);
+  }  
+  
 }

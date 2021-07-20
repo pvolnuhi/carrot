@@ -58,7 +58,7 @@ public class INCRBYFLOAT implements RedisCommand {
       // We do not check len
       UnsafeAccess.putInt(outBufferPtr, len);
     } catch (NumberFormatException | OperationFailedException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }     
   }
 

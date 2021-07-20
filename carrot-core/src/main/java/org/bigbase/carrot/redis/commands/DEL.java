@@ -23,8 +23,8 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 /**
+ * 
  * Redis DEL command
- * @author vrodionov
  *
  */
 public class DEL implements RedisCommand {
@@ -44,8 +44,7 @@ public class DEL implements RedisCommand {
     int num = Keys.DEL(map, ptrs, sizes);
     
     // INTEGER reply - we do not check buffer size here - should be larger than 9
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr, num);
+    INT_REPLY(outBufferPtr, num);
   }
 
 }

@@ -42,7 +42,6 @@ public class HKEYS implements RedisCommand {
 
     int size = (int) Hashes.HKEYS(map, keyPtr, keySize, outBufferPtr + 
       Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
-    
     // VARRAY type
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.VARRAY.ordinal());
     UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);

@@ -30,12 +30,13 @@ public class HSET implements RedisCommand{
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     int numArgs = UnsafeAccess.toInt(inDataPtr);
-
-    if (numArgs < 3 || (numArgs - 2) % 2 != 0) {
+    if (numArgs < 4 || (numArgs - 2) % 2 != 0) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
       return;
     }
     inDataPtr += Utils.SIZEOF_INT;
+    // Skip command name
+    inDataPtr = skip(inDataPtr, 1);
     int keySize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;
