@@ -41,8 +41,7 @@ public class SCARD implements RedisCommand {
     inDataPtr += keySize;
     
     long num = Sets.SCARD(map, keyPtr, keySize);
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
+    //INT reply
+    INT_REPLY(outBufferPtr, num);
   }
-
 }

@@ -32,7 +32,7 @@ public class LREM implements RedisCommand {
     try {
       int count = 0;
       int numArgs = UnsafeAccess.toInt(inDataPtr);
-      if (numArgs != 3) {
+      if (numArgs != 4) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
       }
@@ -49,18 +49,17 @@ public class LREM implements RedisCommand {
       inDataPtr += Utils.SIZEOF_INT;
       long countPtr = inDataPtr;
       count = (int) Utils.strToLong(countPtr, countSize);
+      inDataPtr += countSize;
       // read element
       int elemSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long elemPtr = inDataPtr;
       inDataPtr += elemSize;
       int num = (int) Lists.LREM(map, keyPtr, keySize, count, elemPtr, elemSize);
-
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-      UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
+      //INT reply
+      INT_REPLY(outBufferPtr, num);
     } catch (NumberFormatException e) {
-      Errors.write(outBufferSize, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }
   }
-
 }

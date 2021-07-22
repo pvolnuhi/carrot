@@ -797,6 +797,7 @@ public class Sets {
   }
   
   /**
+   * TODO: optimize for speed
    * Returns whether each member is a member of the set stored at key.
    * For every member, 1 is returned if the value is a member of the set, 
    * or 0 if the element is not a member of the set or if key does not exist.
@@ -1250,6 +1251,8 @@ public class Sets {
     int count = 0;
     SetScanner scanner = getScanner(map, keyPtr, keySize, false);
     if (scanner == null) {
+      // default is empty
+      UnsafeAccess.putInt(bufferPtr, 0);
       return -1;
     }
     try {

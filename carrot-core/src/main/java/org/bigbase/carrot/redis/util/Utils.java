@@ -34,6 +34,7 @@ import static org.bigbase.carrot.util.Utils.strToLong;
 import static org.bigbase.carrot.util.Utils.SIZEOF_INT;
 import static org.bigbase.carrot.util.Utils.SIZEOF_BYTE;
 import static org.bigbase.carrot.util.Utils.SIZEOF_DOUBLE;
+import static org.bigbase.carrot.util.Utils.SIZEOF_LONG;
 
 
 
@@ -246,8 +247,8 @@ public class Utils {
       case ARRAY:
         arrayResponse(ptr, buf);
         break;
-      case TYPED_ARRAY:
-        typedArrayResponse(ptr, buf);
+      case INT_ARRAY:
+        intArrayResponse(ptr, buf);
         break;
       case VARRAY:
         varrayResponse(ptr, buf);
@@ -391,7 +392,7 @@ public class Utils {
    * @param ptr memory address of a serialized Carrot response 
    * @param buf Redis response buffer
    */
-  private static void typedArrayResponse(long ptr, ByteBuffer buf) {
+  private static void intArrayResponse(long ptr, ByteBuffer buf) {
     buf.rewind();
     buf.put(ARR_TYPE);
     ptr += SIZEOF_BYTE;
@@ -402,10 +403,11 @@ public class Utils {
     longToStr(len, buf, SIZEOF_BYTE);
     buf.put(CRLF);
     for (int i=0; i < len; i++) {
-      int size = UnsafeAccess.toInt(ptr);
-      ptr += SIZEOF_INT;
+      // Works only with ints
+      long val = UnsafeAccess.toLong(ptr);
+      ptr += SIZEOF_LONG;
       buf.put(INT_TYPE);
-      longToStr(size, buf, buf.position());
+      longToStr(val, buf, buf.position());
       buf.put(CRLF);
     }    
   }

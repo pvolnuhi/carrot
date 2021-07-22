@@ -39,11 +39,14 @@ public class SADD implements RedisCommand {
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;
     inDataPtr += keySize;
+    
     long[] ptrs = Utils.loadPointers(inDataPtr, numArgs - 2);
     int[] sizes = Utils.loadSizes(inDataPtr, numArgs - 2);
     int num = Sets.SADD(map, keyPtr, keySize, ptrs, sizes);
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
+    
+    //INT REPLY
+    INT_REPLY(outBufferPtr, num);
+    
   }
 
 }

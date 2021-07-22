@@ -43,8 +43,7 @@ public class SISMEMBER implements RedisCommand {
     inDataPtr += Utils.SIZEOF_INT;
     long memPtr = inDataPtr;
     int res = Sets.SISMEMBER(map, keyPtr, keySize, memPtr, memSize);
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, res);
+    //INT reply
+    INT_REPLY(outBufferPtr, res);
   }
-
 }

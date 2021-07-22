@@ -1157,6 +1157,10 @@ public class Lists {
       long valueBuf = valueArena.get();
       int valueBufSize = valueArenaSize.get();
       int size = (int) map.get(kPtr, kSize, valueBuf,valueBufSize, 0);
+      
+      // Initialize as an empty list
+      UnsafeAccess.putInt(buffer, 0);
+      
       if (size < 0) {
         return -1;// Does not exists
       }
@@ -1212,6 +1216,7 @@ public class Lists {
         bufferSize -= sz;
         off = 0;
       } while(counter <= (end - start) && s.next(s) != null);
+      
       UnsafeAccess.putInt(buffer, (int) counter);
       return totalSize;
     } finally {
@@ -1322,14 +1327,15 @@ public class Lists {
     if (s.isFirst() && s.isEmpty()) {
         long nextPtr = s.getNextAddress();
         s.free();
+        // Update first segment (can be 0)
+        UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, nextPtr);
         if (nextPtr > 0) {
-          // Update first segment
-          UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, nextPtr);
           s =  s.setDataPointer(nextPtr);
         } else {
           // Empty list
           s = null;
         }
+        return s;
     } else if (s.isLast() && s.isEmpty()) {
       long prevPtr = s.getPreviousAddress();
       // prevPtr can not be null - otherwise s is a first segment
@@ -1345,8 +1351,10 @@ public class Lists {
       Segment.setPreviousSegmentAddress(next, prev);
       s.free();
       s = s.setDataPointer(next);
+      return s;
+    } else {
+      return s.next(s);
     }
-    return s.next(s);
     
   }
 
@@ -1358,18 +1366,17 @@ public class Lists {
   private static Segment updateSegmentInChainReverse(Segment s, long buffer) {
     if (s.isFirst() && s.isEmpty()) {
         long nextPtr = s.getNextAddress();
-        if (nextPtr > 0) {
-          // Update first segment
-          UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, nextPtr);
-        }
+        // Update first segment (can be 0)
+        UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, nextPtr);
         s.free();
-        s = null;
+        return null;
     } else if (s.isLast() && s.isEmpty()) {
       long prevPtr = s.getPreviousAddress();
       // prevPtr can not be null - otherwise s is a first segment
       UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, prevPtr);
       s.free();
       s = s.setDataPointer(prevPtr);
+      return s;
     } else if (s.isEmpty()) {
       // Empty segment, not first, not last
       // Both are not nulls
@@ -1379,8 +1386,10 @@ public class Lists {
       Segment.setPreviousSegmentAddress(next, prev);
       s.free();
       s = s.setDataPointer(prev);
+      return s;
+    } else {
+      return s.previous(s);
     }
-    return s.previous(s);
   }
   
   /**

@@ -47,5 +47,4 @@ public class SMEMBERS implements RedisCommand {
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.VARRAY.ordinal());
     UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);
   }
-
 }

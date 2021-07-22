@@ -108,7 +108,7 @@ public interface RedisCommand {
     DOUBLE, 
     BULK_STRING, 
     ARRAY, /*fixed length field array - strings only*/
-    TYPED_ARRAY,
+    INT_ARRAY,
     VARRAY /* variable length field - strings only*/, 
     ZARRAY, /* special handling for ZSCAN results - contains both score + member*/
     ZARRAY1, /* cut score from result (first 8 bytes)*/

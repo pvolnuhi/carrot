@@ -29,7 +29,7 @@ public class LSET implements RedisCommand {
     try {
       int index = 0;
       int numArgs = UnsafeAccess.toInt(inDataPtr);
-      if (numArgs != 3) {
+      if (numArgs != 4) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
       }
@@ -45,19 +45,22 @@ public class LSET implements RedisCommand {
       int indexSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long indexPtr = inDataPtr;
+      inDataPtr += indexSize;
       index = (int) Utils.strToLong(indexPtr, indexSize);
+      
       // read element
       int elemSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long elemPtr = inDataPtr;
       inDataPtr += elemSize;
+      
       int num = (int) Lists.LSET(map, keyPtr, keySize, index, elemPtr, elemSize);
+      
       if (num < 0) {
-        Errors.write(outBufferSize, Errors.TYPE_GENERIC, Errors.ERR_OUT_OF_RANGE_OR);
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_OUT_OF_RANGE_OR);
       }
     } catch (NumberFormatException e) {
-      Errors.write(outBufferSize, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": "+ e.getMessage());
     }
   }
-
 }

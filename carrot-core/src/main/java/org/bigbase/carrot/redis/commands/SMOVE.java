@@ -50,8 +50,7 @@ public class SMOVE implements RedisCommand {
     long memberPtr = inDataPtr;
     inDataPtr += memberSize;
     int result = Sets.SMOVE(map, srcKeyPtr, srcKeySize, dstKeyPtr, dstKeySize, memberPtr, memberSize);
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, result);
+    // INT reply
+    INT_REPLY(outBufferPtr, result);
   }
-
 }

@@ -32,9 +32,9 @@ public class SMISMEMBER implements RedisCommand {
       return;
     }
     int requiredSize = Utils.SIZEOF_BYTE /*TYPE*/ + Utils.SIZEOF_INT /*serialized size*/ +
-        Utils.SIZEOF_INT /*number of elements*/ + (numArgs - 2) * (Utils.SIZEOF_BYTE + Utils.SIZEOF_LONG);
+        Utils.SIZEOF_INT /*number of elements*/ + (numArgs - 2) * (Utils.SIZEOF_LONG);
     if (requiredSize > outBufferSize) {
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.TYPED_ARRAY.ordinal());
+      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INT_ARRAY.ordinal());
       UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, requiredSize);
       return;
     }
@@ -51,16 +51,15 @@ public class SMISMEMBER implements RedisCommand {
     
     long buffer = Sets.SMISMEMBER(map, keyPtr, keySize, ptrs, sizes);
     
-    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.TYPED_ARRAY.ordinal());
+    UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INT_ARRAY.ordinal());
     UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, requiredSize);
     UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, numArgs - 2);
     outBufferPtr += Utils.SIZEOF_BYTE + 2 * Utils.SIZEOF_INT;
-    
+    //TODO: buffer overflow
     for (int i = 0 ; i < numArgs - 2; i++) {
-      INT_REPLY(outBufferPtr, UnsafeAccess.toByte(buffer + i));
-      outBufferPtr += Utils.SIZEOF_BYTE + Utils.SIZEOF_LONG;
+      byte v = UnsafeAccess.toByte(buffer + i);
+      UnsafeAccess.putLong(outBufferPtr, v);
+      outBufferPtr += Utils.SIZEOF_LONG;
     }
-    
   }
-
 }
