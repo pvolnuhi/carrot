@@ -47,7 +47,10 @@ public class ZPOPMIN implements RedisCommand {
         inDataPtr += Utils.SIZEOF_INT;
         long countPtr = inDataPtr;
         count = (int) Utils.strToLong(countPtr, countSize);
-
+        if (count <= 0) {
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_POSITIVE_NUMBER_EXPECTED, ": " + count);
+          return;
+        }
       }
       int off = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;
       int size =
@@ -57,7 +60,7 @@ public class ZPOPMIN implements RedisCommand {
 
     } catch (NumberFormatException e) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,
-        "count is not a valid number");
+        ": " + e.getMessage());
     }
   }
 

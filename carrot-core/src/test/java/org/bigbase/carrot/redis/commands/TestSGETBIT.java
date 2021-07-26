@@ -17,39 +17,44 @@
  */
 package org.bigbase.carrot.redis.commands;
 
-public class TestSETBIT extends CommandBase {
+public class TestSGETBIT extends CommandBase {
   
   protected String[] validRequests = new String[] {
-      "SETBIT key 100 1",               /* 0 */
-      "SETBIT key 100 0",               /* 1 */
-      "STRLEN key"                     /* 13 */    
+      "SSETBIT key 100 1",               /* 0 */
+      "SSETBIT key 101 1",               /* 0 */
+      "SGETBIT key 100",
+      "SGETBIT key 101",
+      "SGETBIT key 102",
+      "SGETBIT key1 100"
   };
   
   protected String[] validResponses = new String[] {
       ":0\r\n",
+      ":0\r\n",
       ":1\r\n",
-      ":13\r\n"
+      ":1\r\n",
+      ":0\r\n",
+      ":0\r\n"
   };
   
   
   protected String[] invalidRequests = new String[] {
-      "setbit x y",                      /* unsupported command */
-      "SETBIT",                          /* wrong number of arguments*/
-      "SETBIT key",                      /* wrong number of arguments*/
-      "SETBIT key value",                /* wrong number of arguments*/
-      "SETBIT key XXX 1",                /* wrong number format*/
-      "SETBIT key 100 a",
-      "SETBIT key 100 2"
+      "sgetbit x y",                      /* unsupported command */
+      "SGETBIT",                          /* wrong number of arguments*/
+      "SGETBIT key",                      /* wrong number of arguments*/
+      "SGETBIT key value x",              /* wrong number of arguments*/
+      "SGETBIT key XXX",                  /* wrong number format*/
+      "SGETBIT key -10"                   /* positive number expected */
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: setbit\r\n",
+    "-ERR Unsupported command: sgetbit\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number format: XXX\r\n",
-    "-ERR: Wrong number format: a\r\n",
-    "-ERR: Wrong bit value (must be 0 or 1): 2\r\n",
+    "-ERR: Positive number expected: -10\r\n"
+
   };
   
   /**

@@ -39,6 +39,7 @@ public class ZSCORE implements RedisCommand {
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;
     inDataPtr += keySize;
+    
     int memberSize =  UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long memberPtr = inDataPtr;
@@ -50,5 +51,4 @@ public class ZSCORE implements RedisCommand {
       NULL_STRING_REPLY(outBufferPtr);
     }
   }
-
 }

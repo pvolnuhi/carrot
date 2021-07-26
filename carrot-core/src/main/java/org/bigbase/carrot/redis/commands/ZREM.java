@@ -25,6 +25,7 @@ import org.bigbase.carrot.util.Utils;
 public class ZREM implements RedisCommand {
   /**
    * ZREM key member [member ...]
+   * Returns number of elements removed
    */
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {

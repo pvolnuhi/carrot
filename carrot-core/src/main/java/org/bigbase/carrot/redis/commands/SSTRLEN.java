@@ -27,23 +27,18 @@ public class SSTRLEN implements RedisCommand {
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     int numArgs = UnsafeAccess.toInt(inDataPtr);
-    
     if (numArgs != 2) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
       return;
     }
     inDataPtr += Utils.SIZEOF_INT;
     // skip command name
-    int clen = UnsafeAccess.toInt(inDataPtr);
-    inDataPtr += Utils.SIZEOF_INT + clen;
+    inDataPtr = skip(inDataPtr, 1);
     int keySize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;
-
     long len = SparseBitmaps.SSTRLEN(map, keyPtr, keySize);
     // INTEGER reply - we do not check buffer size here - should be larger than 9
-    INT_REPLY(outBufferPtr, len);
-    
+    INT_REPLY(outBufferPtr, len); 
   }
-
 }

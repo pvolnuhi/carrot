@@ -34,8 +34,8 @@ public class ZCARD implements RedisCommand {
     }
     inDataPtr += Utils.SIZEOF_INT;
     // skip command name
-    int clen = UnsafeAccess.toInt(inDataPtr);
-    inDataPtr += Utils.SIZEOF_INT + clen;
+    inDataPtr = skip(inDataPtr, 1);
+    
     int keySize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long keyPtr = inDataPtr;

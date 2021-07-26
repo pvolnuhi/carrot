@@ -28,9 +28,10 @@ public class SBITCOUNT implements RedisCommand {
 
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
+
     try {
       int numArgs = UnsafeAccess.toInt(inDataPtr);
-      if (numArgs < 2 || numArgs > 4) {
+      if (numArgs != 2  &&  numArgs != 4) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
       }
@@ -38,7 +39,6 @@ public class SBITCOUNT implements RedisCommand {
       // skip command name
       int clen = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT + clen;
-      // FIXME: convert ALL Redis API from long[] / int[] to memory buffer interface
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
@@ -51,25 +51,20 @@ public class SBITCOUNT implements RedisCommand {
         int valSize = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
         long valPtr = inDataPtr;
-        String s = Utils.toString(valPtr, valSize);
-        start = Long.parseLong(s);
-        if (numArgs > 3) {
-          inDataPtr += s.length();
-          valSize = UnsafeAccess.toInt(inDataPtr);
-          inDataPtr += Utils.SIZEOF_INT;
-          valPtr = inDataPtr;
-          s = Utils.toString(valPtr, valSize);
-          end = Long.parseLong(s);
-        }
+        start =  Utils.strToLong(valPtr, valSize); 
+        inDataPtr += valSize;
+        valSize = UnsafeAccess.toInt(inDataPtr);
+        inDataPtr += Utils.SIZEOF_INT;
+        valPtr = inDataPtr;
+        end = Utils.strToLong(valPtr, valSize); 
       }
+      
       long num = SparseBitmaps.SBITCOUNT(map, keyPtr, keySize, start, end);
 
-      // INTEGER reply - we do not check buffer size here - should n=be larger than 5
+      // INTEGER reply - we do not check buffer size here - should be larger than 5
       INT_REPLY(outBufferPtr, num);
-      
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,": " + e.getMessage());        
     }
   }
-
 }

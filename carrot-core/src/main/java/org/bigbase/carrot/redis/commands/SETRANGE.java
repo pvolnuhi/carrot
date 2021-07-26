@@ -35,28 +35,29 @@ public class SETRANGE implements RedisCommand {
       }
       inDataPtr += Utils.SIZEOF_INT;
       // skip command name
-      int clen = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT + clen;
+      inDataPtr = skip(inDataPtr, 1);
+      
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
 
       int offSize = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += offSize;
+      inDataPtr += Utils.SIZEOF_INT;
       long offset = Utils.strToLong(inDataPtr, offSize);
+      if (offset < 0) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_POSITIVE_NUMBER_EXPECTED, ": " + offset);
+        return;
+      }
       inDataPtr += offSize;
       int valSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long valuePtr = inDataPtr;
-
       long len = Strings.SETRANGE(map, keyPtr, keySize, offset, valuePtr, valSize);
-
       // INTEGER reply
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-      UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, len);
+      INT_REPLY(outBufferPtr, len);
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }
   }
 

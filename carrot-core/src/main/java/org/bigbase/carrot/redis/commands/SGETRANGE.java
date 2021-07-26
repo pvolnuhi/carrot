@@ -24,12 +24,14 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 public class SGETRANGE implements RedisCommand {
-
+  /**
+   * TODO: do we need it in a sparse bitmaps?
+   */
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     try {
       int numArgs = UnsafeAccess.toInt(inDataPtr);
-      if (numArgs < 2 || numArgs > 4) {
+      if (numArgs != 4) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
       }
@@ -37,10 +39,12 @@ public class SGETRANGE implements RedisCommand {
       // skip command name
       int clen = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT + clen;
+      
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
+      
       // FIXME - double conversion
       long start = Commons.NULL_LONG;
       long end = Commons.NULL_LONG;
@@ -50,26 +54,23 @@ public class SGETRANGE implements RedisCommand {
         inDataPtr += Utils.SIZEOF_INT;
         long valPtr = inDataPtr;
         start = Utils.strToLong(valPtr, valSize);
-        if (numArgs > 3) {
-          inDataPtr += valSize;
-          valSize = UnsafeAccess.toInt(inDataPtr);
-          inDataPtr += Utils.SIZEOF_INT;
-          valPtr = inDataPtr;
-          end = Utils.strToLong(valPtr, valSize);
-        }
+        inDataPtr += valSize;
+        valSize = UnsafeAccess.toInt(inDataPtr);
+        inDataPtr += Utils.SIZEOF_INT;
+        valPtr = inDataPtr;
+        end = Utils.strToLong(valPtr, valSize);
       }
       long size = SparseBitmaps.SGETRANGE(map, keyPtr, keySize, start, end, outBufferPtr + 
         Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
 
       // Bulk string reply 
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
       if (size >  outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT) {
         size += Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;
       }
+      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
       UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, (int) size);
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }    
   }
-
 }

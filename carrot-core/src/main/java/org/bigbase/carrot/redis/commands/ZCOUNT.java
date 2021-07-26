@@ -34,12 +34,13 @@ public class ZCOUNT implements RedisCommand {
       }
       inDataPtr += Utils.SIZEOF_INT;
       // skip command name
-      int clen = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT + clen;
+      inDataPtr = skip(inDataPtr, 1);
+      
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
+      
       // FIXME - double conversion
       double start = 0, end = 0;
       boolean startInclusive = true, endInclusive = true;
@@ -71,11 +72,12 @@ public class ZCOUNT implements RedisCommand {
 
       long num = ZSets.ZCOUNT(map, keyPtr, keySize, start, startInclusive, end, endInclusive);
 
-      // INTEGER reply - we do not check buffer size here - should n=be larger than 5
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-      UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
+      // INTEGER reply - we do not check buffer size here - should n=be larger than 9
+      INT_REPLY(outBufferPtr, num);
+      
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, 
+        ": " + e.getMessage());
     }
   }
 

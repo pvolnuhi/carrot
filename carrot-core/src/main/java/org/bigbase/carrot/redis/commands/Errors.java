@@ -35,6 +35,9 @@ public class Errors {
   static final byte[] ERR_INVALID_CURSOR = "Invalid cursor".getBytes();
   static final byte[] ERR_OUT_OF_RANGE = "Index is out of range".getBytes();
   static final byte[] ERR_OUT_OF_RANGE_OR = "Index is out of range or key does not exist".getBytes();
+  static final byte[] ERR_POSITIVE_NUMBER_EXPECTED = "Positive number expected".getBytes();
+  static final String ERR_MIN_SPECIFIED = "Either '(' or '[' or '-' can be specified for a min argument";
+  static final String ERR_MAX_SPECIFIED = "Either '(' or '[' or '+' can be specified for a max argument";
   
   public static void write(long buffer, byte[] type, byte[] message) {
     int off = 0;

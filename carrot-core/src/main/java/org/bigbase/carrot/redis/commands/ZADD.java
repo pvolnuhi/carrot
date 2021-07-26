@@ -37,7 +37,7 @@ public class ZADD implements RedisCommand {
       MutationOptions opt = MutationOptions.NONE;
       int count = 2;
       int numArgs = UnsafeAccess.toInt(inDataPtr);
-      if (numArgs <= 2) {
+      if (numArgs < 4) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
       }
@@ -91,11 +91,11 @@ public class ZADD implements RedisCommand {
         return;
       }
 
-      long[] ptrs = new long[(numArgs - count) % 2];
-      int[] ptrSizes = new int[(numArgs - count) % 2];
-      double[] scores = new double[(numArgs - count) % 2];
+      long[] ptrs = new long[(numArgs - count) / 2];
+      int[] ptrSizes = new int[(numArgs - count) / 2];
+      double[] scores = new double[(numArgs - count) / 2];
 
-      int max = (numArgs - count) % 2;
+      int max = (numArgs - count) / 2;
       for (int i = 0; i < max; i++) {
         // Read score
         valSize = UnsafeAccess.toInt(inDataPtr);
@@ -113,8 +113,8 @@ public class ZADD implements RedisCommand {
       INT_REPLY(outBufferPtr, num);
       
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, 
+        Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }
   }
-
 }

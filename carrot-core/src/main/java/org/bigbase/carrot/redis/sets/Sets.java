@@ -933,14 +933,17 @@ public class Sets {
   public static long SPOP(BigSortedMap map, long keyPtr, int keySize, long bufferPtr, int bufferSize, 
       int count) 
   {
-    if (count == 0) {
+    // Initialize as an empty array
+    UnsafeAccess.putInt(bufferPtr, 0);
+    
+    if (count <= 0) {
       return 0;
     }
     Key k = getKey(keyPtr, keySize);
-    boolean distinct = count > 0;
-    if (!distinct) {
-      count = -count;
-    }
+//    boolean distinct = count > 0;
+//    if (!distinct) {
+//      count = -count;
+//    }
     SetScanner scanner = null;
     try {
       KeysLocker.writeLock(k);
@@ -950,13 +953,13 @@ public class Sets {
       }
       
       long[] index = null;
-      if (distinct) {
-        if (count < total) {
-          index = Utils.randomDistinctArray(total, count);
-        } 
-      } else {
-        index = Utils.randomArray(total, count);
-      }
+//      if (distinct) {
+      if (count < total) {
+        index = Utils.randomDistinctArray(total, count);
+      } 
+//      } else {
+//        index = Utils.randomArray(total, count);
+//      }
       if (index == null) {
         // Return all elements
         long result = SMEMBERS(map, keyPtr, keySize, bufferPtr, bufferSize);
@@ -1112,6 +1115,9 @@ public class Sets {
       count = -count;
     }
     SetScanner scanner = null;
+    // Initialize as an empty array
+    UnsafeAccess.putInt(bufferPtr, 0);
+    
     try {
       KeysLocker.readLock(k);
       long total =  SCARD(map, keyPtr, keySize);

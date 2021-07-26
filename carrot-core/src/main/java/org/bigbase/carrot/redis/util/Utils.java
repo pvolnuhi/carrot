@@ -285,9 +285,9 @@ public class Utils {
     buf.put(CRLF);
     
     for (int i = 0; i < len; i++) {
-      int size = UnsafeAccess.toInt(ptr);
+      int size = readUVInt(ptr);
+      ptr += sizeUVInt(size) + SIZEOF_DOUBLE;
       size -= SIZEOF_DOUBLE;
-      ptr += SIZEOF_INT + SIZEOF_DOUBLE;
       // Write field
       buf.put(BULK_TYPE);
       longToStr(size, buf, buf.position());
@@ -315,27 +315,28 @@ public class Utils {
     buf.put(CRLF);
     
     for (int i = 0; i < len; i++) {
-      int size = UnsafeAccess.toInt(ptr);
-      ptr += SIZEOF_INT;
-      buf.put(BULK_TYPE);
-      // Read score (double - 8 bytes)
-      double score = lexToDouble(ptr);
-      ptr += SIZEOF_DOUBLE; 
-      //TODO: optimize conversion w/o object creation
-      // Write score
-      String s = Double.toString(score);
-      int slen = s.length();
-      longToStr(slen, buf, buf.position());
-      buf.put(CRLF);
-      strToByteBuffer(s, buf);
-      buf.put(CRLF);
+      // Read total size (score + field)
+      int size = readUVInt(ptr);
+      ptr += sizeUVInt(size);
+      
       // Write field
       buf.put(BULK_TYPE);
       longToStr(size - SIZEOF_DOUBLE, buf, buf.position());
       buf.put(CRLF);
-      UnsafeAccess.copy(ptr, buf, size - SIZEOF_DOUBLE);
+      UnsafeAccess.copy(ptr + SIZEOF_DOUBLE, buf, size - SIZEOF_DOUBLE);
       buf.put(CRLF);
-      ptr += size - SIZEOF_DOUBLE;
+      // Write score (double - 8 bytes)
+      double score = lexToDouble(ptr);
+      //TODO: optimize conversion w/o object creation
+      // Get score
+      String s = Double.toString(score);
+      int slen = s.length();
+      buf.put(BULK_TYPE);     
+      longToStr(slen, buf, buf.position());
+      buf.put(CRLF);
+      strToByteBuffer(s, buf);
+      buf.put(CRLF);
+      ptr += size;
     }    
   }
   

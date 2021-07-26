@@ -44,7 +44,7 @@ public class ZINCRBY implements RedisCommand {
       int incrSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       double incrValue = Utils.strToDouble(inDataPtr, incrSize);
-
+      inDataPtr += incrSize;
       // read field
       int fieldSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
@@ -54,7 +54,8 @@ public class ZINCRBY implements RedisCommand {
       double newValue = ZSets.ZINCRBY(map, keyPtr, keySize, incrValue, fieldPtr, fieldSize);
       DOUBLE_REPLY(outBufferPtr, outBufferSize, newValue);
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, "Increment not a valid number");
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,
+        ": " + e.getMessage());
     }
   }
 

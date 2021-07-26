@@ -17,39 +17,39 @@
  */
 package org.bigbase.carrot.redis.commands;
 
-public class TestSETBIT extends CommandBase {
+public class TestZMSCORE extends CommandBase {
   
   protected String[] validRequests = new String[] {
-      "SETBIT key 100 1",               /* 0 */
-      "SETBIT key 100 0",               /* 1 */
-      "STRLEN key"                     /* 13 */    
+      "ZADD key 1234 v1 1.9E-6 v2 0.123 v3 12.15 v4",                         /* 4 */
+      "ZADD key 1234 v1 1.9E-6 v2 0.123 v5 12.15 v6",                         /* 2 */
+      "ZMSCORE key v1 v2",
+      "ZMSCORE key v3 v4",
+      "ZMSCORE key v5 v6",
+      "ZMSCORE key1 v1 v2",
+      "ZMSCORE key v1 v7 v2"
   };
   
   protected String[] validResponses = new String[] {
-      ":0\r\n",
-      ":1\r\n",
-      ":13\r\n"
+      ":4\r\n",
+      ":2\r\n",
+      "*2\r\n$6\r\n1234.0\r\n$6\r\n1.9E-6\r\n",
+      "*2\r\n$5\r\n0.123\r\n$5\r\n12.15\r\n",
+      "*2\r\n$5\r\n0.123\r\n$5\r\n12.15\r\n",
+      "*2\r\n$-1\r\n$-1\r\n",
+      "*3\r\n$6\r\n1234.0\r\n$-1\r\n$6\r\n1.9E-6\r\n"
   };
   
   
   protected String[] invalidRequests = new String[] {
-      "setbit x y",                      /* unsupported command */
-      "SETBIT",                          /* wrong number of arguments*/
-      "SETBIT key",                      /* wrong number of arguments*/
-      "SETBIT key value",                /* wrong number of arguments*/
-      "SETBIT key XXX 1",                /* wrong number format*/
-      "SETBIT key 100 a",
-      "SETBIT key 100 2"
+      "zmscore x y",                          /* unsupported command */
+      "ZMSCORE",                              /* wrong number of arguments*/
+      "ZSCORE key"                            /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: setbit\r\n",
+    "-ERR Unsupported command: zmscore\r\n",
     "-ERR: Wrong number of arguments\r\n",
-    "-ERR: Wrong number of arguments\r\n",
-    "-ERR: Wrong number of arguments\r\n",
-    "-ERR: Wrong number format: XXX\r\n",
-    "-ERR: Wrong number format: a\r\n",
-    "-ERR: Wrong bit value (must be 0 or 1): 2\r\n",
+    "-ERR: Wrong number of arguments\r\n"
   };
   
   /**

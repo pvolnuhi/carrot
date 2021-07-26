@@ -509,6 +509,23 @@ public class Utils {
     return -1;
   }
   
+  
+  /**
+   * TODO: Test correct version
+   * Calculates end key for prefix scanner
+   * @param start start key address
+   * @param startSize start key size
+   * @return end key address if success
+   */
+  public static long prefixKeyEndCorrect(long start, int startSize) {
+    long end = UnsafeAccess.malloc(startSize + 1);
+    UnsafeAccess.copy(start, end, startSize);
+    UnsafeAccess.putByte(end + startSize, (byte) 0);
+    //TODO: do we need version which releases start?
+    //UnsafeAccess.free(start);
+    return end;
+  }
+  
   /**
    * TODO: handle all 0xff key
    * Calculates end key for prefix scanner

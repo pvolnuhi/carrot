@@ -738,24 +738,25 @@ public class SparseBitmaps {
       
       //FIXME
       endKeyPtr = Utils.prefixKeyEndNoAlloc(endKeyPtr, endKeySize);
-      
-      scanner = map.getScanner(keyArena.get(), kSize, endKeyPtr, endKeySize);
-      if (scanner == null) {
-        // Special handling for unset bit
-        // scanner == null, but it does not mean that set is NULL
-        if (bit == 0 && EXISTS(map, keyPtr, keySize)) {
-          return start * Utils.BITS_PER_BYTE;
-        }
-        return endSet && bit == 0? 0: -1;
-      }
-      // TODO Check if bit == 0 and first chunk start not with 0 offset
+
       boolean exists = false;
-      
+
       try {
-        while(scanner.hasNext()) {
+        scanner = map.getScanner(keyArena.get(), kSize, endKeyPtr, endKeySize);
+        if (scanner == null || !scanner.hasNext()) {
+          // Special handling for unset bit
+          // scanner == null, but it does not mean that set is NULL
+          if (bit == 0 && EXISTS(map, keyPtr, keySize)) {
+            return start * Utils.BITS_PER_BYTE;
+          }
+          return !endSet && bit == 0 ? 0 : -1;
+        }
+        // TODO Check if bit == 0 and first chunk start not with 0 offset
+
+        while (scanner.hasNext()) {
           long keyAddress = scanner.keyAddress();
           int keyLength = scanner.keySize();
-          long offset = SparseBitmaps.getChunkOffsetFromKey(keyAddress, keyLength) ;
+          long offset = SparseBitmaps.getChunkOffsetFromKey(keyAddress, keyLength);
           if (offset > 0 && bit == 0 && !exists && !startSet) {
             return 0;
           }
@@ -767,19 +768,21 @@ public class SparseBitmaps {
           long valueAddress = scanner.valueAddress();
           int valueSize = scanner.valueSize();
           int bitsCount = SparseBitmaps.getBitCount(valueAddress);
-          if ((bit == 1 && bitsCount == 0) /*SHOULD NOT BE POSSIBLE*/ || 
-              (bit == 0 && bitsCount == SparseBitmaps.BITS_PER_CHUNK)) {
+          if ((bit == 1 && bitsCount == 0) /* SHOULD NOT BE POSSIBLE */ || (bit == 0
+              && bitsCount == SparseBitmaps.BITS_PER_CHUNK)) {
             scanner.next();
             continue;
           }
 
-          valueAddress = isCompressed(valueAddress)? 
-              SparseBitmaps.decompress(valueAddress, valueSize - HEADER_SIZE): valueAddress;
+          valueAddress = isCompressed(valueAddress)
+              ? SparseBitmaps.decompress(valueAddress, valueSize - HEADER_SIZE)
+              : valueAddress;
 
-          long pos = getPosition(valueAddress, bit, offset /*bits*/, start /*bytes*/, end /*bytes*/);
+          long pos =
+              getPosition(valueAddress, bit, offset /* bits */, start /* bytes */, end /* bytes */);
           if (pos >= 0) {
             return pos;
-          } 
+          }
           scanner.next();
         }
       } catch (IOException e) {

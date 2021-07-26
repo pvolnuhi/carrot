@@ -43,7 +43,8 @@ public class ZREVRANK implements RedisCommand {
     int fieldSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long fieldPtr = inDataPtr;
-    inDataPtr += keySize;
+    inDataPtr += fieldSize;
+    
     long rank = ZSets.ZREVRANK(map, keyPtr, keySize, fieldPtr, fieldSize);
     if (rank >= 0) {
       UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());

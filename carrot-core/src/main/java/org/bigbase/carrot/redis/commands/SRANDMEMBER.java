@@ -49,18 +49,26 @@ public class SRANDMEMBER implements RedisCommand {
         inDataPtr += Utils.SIZEOF_INT;
         long countPtr = inDataPtr;
         count = (int) Utils.strToLong(countPtr, countSize);
+        if (count == 0) {
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_POSITIVE_NUMBER_EXPECTED, ": "+ count);
+          return;
+        }
         countSet = true;
       }
 
       int off = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;;
      
-      // FIXME: We always return ARRAY - this is not original spec
       int size = (int) Sets.SRANDMEMBER(map, keyPtr, keySize, outBufferPtr + off, outBufferSize - off, count);
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.VARRAY.ordinal());
-      UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size);
+      if (!countSet) {
+        // Return as a Bulk String
+        varrayToBulkString(outBufferPtr);
+      } else {
+        // Return as VARRAY
+        UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.VARRAY.ordinal());
+        UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size);
+      }
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }
   }
-
 }

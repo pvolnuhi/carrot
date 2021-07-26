@@ -34,8 +34,8 @@ public class ZLEXCOUNT implements RedisCommand {
       }
       inDataPtr += Utils.SIZEOF_INT;
       // skip command name
-      int clen = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT + clen;
+      inDataPtr = skip(inDataPtr, 1);
+      
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
@@ -54,15 +54,15 @@ public class ZLEXCOUNT implements RedisCommand {
       } else if (UnsafeAccess.toByte(startPtr) == (byte) '['){
         // start is inclusive
         startInclusive = true;
-      } else if (UnsafeAccess.toByte(startPtr) == (byte) '-') {
+      } else if (UnsafeAccess.toByte(startPtr) == (byte) '-' && startSize == 1) {
         startPtr = 0;
         startSize = 0;
       } else {
-        throw new IllegalArgumentException("Either '(' or '[' or '-' must be specified for a min argument");
+        throw new IllegalArgumentException(Errors.ERR_MIN_SPECIFIED);
       }
+      inDataPtr += Utils.SIZEOF_BYTE;
       startPtr = startPtr == 0? 0: startPtr + Utils.SIZEOF_BYTE;
       startSize = startSize == 0? 0: startSize - Utils.SIZEOF_BYTE;
-      inDataPtr += Utils.SIZEOF_BYTE;
       inDataPtr += startSize;
       
       endSize = UnsafeAccess.toInt(inDataPtr);
@@ -75,25 +75,21 @@ public class ZLEXCOUNT implements RedisCommand {
       } else if (UnsafeAccess.toByte(endPtr) == (byte) '['){
         // start is inclusive
         endInclusive = true;
-      } else if (UnsafeAccess.toByte(endPtr) == (byte) '+') {
+      } else if (UnsafeAccess.toByte(endPtr) == (byte) '+' && endSize == 1) {
         endPtr = 0;
         endSize = 0;
       } else {
-        throw new IllegalArgumentException("Either '(' or '[' or '+' must be specified for a max argument");
+        throw new IllegalArgumentException(Errors.ERR_MAX_SPECIFIED);
       }
       endPtr = endPtr == 0? 0: endPtr + Utils.SIZEOF_BYTE;
       endSize = endSize == 0? 0: endSize - Utils.SIZEOF_BYTE;
       
       long num = ZSets.ZLEXCOUNT(map, keyPtr, keySize, startPtr, startSize, startInclusive, endPtr, endSize, endInclusive);
-
       // INTEGER reply - we do not check buffer size here - should be larger than 9
-      UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
-      UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, num);
-    } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
-    } catch (IllegalArgumentException ee) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ee.getMessage());
+      INT_REPLY(outBufferPtr, num);
+      
+    }  catch (IllegalArgumentException ee) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": "+ ee.getMessage());
     }
   }
-
 }

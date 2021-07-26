@@ -17,39 +17,41 @@
  */
 package org.bigbase.carrot.redis.commands;
 
-public class TestSETBIT extends CommandBase {
+public class TestSSETBIT extends CommandBase {
   
   protected String[] validRequests = new String[] {
-      "SETBIT key 100 1",               /* 0 */
-      "SETBIT key 100 0",               /* 1 */
-      "STRLEN key"                     /* 13 */    
+      "SSETBIT key 100 1",               /* 0 */
+      "SSETBIT key 100 0"               /* 1 */
   };
   
   protected String[] validResponses = new String[] {
       ":0\r\n",
-      ":1\r\n",
-      ":13\r\n"
+      ":1\r\n"
   };
   
   
   protected String[] invalidRequests = new String[] {
-      "setbit x y",                      /* unsupported command */
-      "SETBIT",                          /* wrong number of arguments*/
-      "SETBIT key",                      /* wrong number of arguments*/
-      "SETBIT key value",                /* wrong number of arguments*/
-      "SETBIT key XXX 1",                /* wrong number format*/
-      "SETBIT key 100 a",
-      "SETBIT key 100 2"
+      "ssetbit x y",                      /* unsupported command */
+      "SSETBIT",                          /* wrong number of arguments*/
+      "SSETBIT key",                      /* wrong number of arguments*/
+      "SSETBIT key value",                /* wrong number of arguments*/
+      "SSETBIT key XXX 1",                /* wrong number format*/
+      "SSETBIT key 100 a",
+      "SSETBIT key 100 2",
+      "SSETBIT key -100 2"
+      
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: setbit\r\n",
+    "-ERR Unsupported command: ssetbit\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number format: XXX\r\n",
     "-ERR: Wrong number format: a\r\n",
     "-ERR: Wrong bit value (must be 0 or 1): 2\r\n",
+    "-ERR: Positive number expected: -100\r\n"
+
   };
   
   /**

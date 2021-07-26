@@ -29,7 +29,6 @@ public class SPOP implements RedisCommand {
     try {
       int count = 1;
       boolean countSet = false;
-
       int numArgs = UnsafeAccess.toInt(inDataPtr);
       if (numArgs != 2 && numArgs != 3) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
@@ -48,12 +47,13 @@ public class SPOP implements RedisCommand {
         inDataPtr += Utils.SIZEOF_INT;
         long countPtr = inDataPtr;
         count = (int) Utils.strToLong(countPtr, countSize);
+        if (count <=0) {
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_POSITIVE_NUMBER_EXPECTED, ": "+ count);
+          return;
+        }
         countSet = true;
       }
-
-      int off = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;;
-     
-      // FIXME: We always return ARRAY - this is not original spec
+      int off = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;;     
       int size = (int) Sets.SPOP(map, keyPtr, keySize, outBufferPtr + off, outBufferSize - off, count);
       if (!countSet) {
         // Return as a Bulk String
@@ -64,8 +64,7 @@ public class SPOP implements RedisCommand {
         UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size);
       }
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }
   }
-
 }

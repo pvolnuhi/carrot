@@ -35,22 +35,26 @@ public class SSETBIT implements RedisCommand {
       }
       inDataPtr += Utils.SIZEOF_INT;
       // skip command name
-      int clen = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT + clen;
+      inDataPtr = skip(inDataPtr, 1);
+      
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
 
       int offSize = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += offSize;
+      inDataPtr += Utils.SIZEOF_INT;
       long offset = Utils.strToLong(inDataPtr, offSize);
       inDataPtr += offSize;
+      if (offset < 0) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_POSITIVE_NUMBER_EXPECTED, ": "+ offset);
+        return;
+      }
       int bitSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       int bit = (int) Utils.strToLong(inDataPtr, bitSize);
       if (bit != 0 && bit != 1) {
-        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT);
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_BIT_VALUE, ": " + bit);
         return;
       }
       int oldBit = SparseBitmaps.SSETBIT(map, keyPtr, keySize, offset, bit);
@@ -59,7 +63,7 @@ public class SSETBIT implements RedisCommand {
       INT_REPLY(outBufferPtr, oldBit);
       
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     }
   }
 

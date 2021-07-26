@@ -41,9 +41,9 @@ public class ZMSCORE implements RedisCommand {
     inDataPtr += keySize;
     long[] ptrs = Utils.loadPointers(inDataPtr, numArgs - 2);
     int[] sizes = Utils.loadSizes(inDataPtr, numArgs - 2);
-    long size = ZSets.ZMSCORE(map, keyPtr, keySize, ptrs, sizes, outBufferPtr, outBufferSize);
+    int off = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;
+    long size = ZSets.ZMSCORE(map, keyPtr, keySize, ptrs, sizes, outBufferPtr + off, outBufferSize - off);
     UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.ARRAY.ordinal());
-    UnsafeAccess.putLong(outBufferPtr + Utils.SIZEOF_BYTE, size);
+    UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, (int) size);
   }
-
 }

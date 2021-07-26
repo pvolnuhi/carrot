@@ -777,22 +777,22 @@ public class SetsAPITest {
     System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
     
     // Check negatives
-    start = System.currentTimeMillis();
-    for(int i = 0; i < numIter; i++) {
-      List<String> result = Sets.SPOP(map, key, -10, 4096);
-      assertEquals(10, result.size());
-      assertTrue(list.containsAll(result));
-      // verify that they were deleted
-      for (String s: result) {
-        int res = Sets.SISMEMBER(map, key, s);
-        assertEquals(0, res);
-      }
-      if (i % 100 == 0) {
-        System.out.println("Skipped " + i);
-      }
-    }
-    end = System.currentTimeMillis();
-    System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
+//    start = System.currentTimeMillis();
+//    for(int i = 0; i < numIter; i++) {
+//      List<String> result = Sets.SPOP(map, key, -10, 4096);
+//      assertEquals(10, result.size());
+//      assertTrue(list.containsAll(result));
+//      // verify that they were deleted
+//      for (String s: result) {
+//        int res = Sets.SISMEMBER(map, key, s);
+//        assertEquals(0, res);
+//      }
+//      if (i % 100 == 0) {
+//        System.out.println("Skipped " + i);
+//      }
+//    }
+//    end = System.currentTimeMillis();
+//    System.out.println(numIter + " random members for "+ N +" cardinality set time="+ (end - start)+"ms");
   }
     
   private int scan(BigSortedMap map, String key, String lastSeenMember, 

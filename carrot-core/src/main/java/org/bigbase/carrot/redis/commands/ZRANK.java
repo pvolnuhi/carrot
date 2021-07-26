@@ -43,7 +43,8 @@ public class ZRANK implements RedisCommand {
     int fieldSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long fieldPtr = inDataPtr;
-    inDataPtr += keySize;
+    inDataPtr += fieldSize;
+    
     long rank = ZSets.ZRANK(map, keyPtr, keySize, fieldPtr, fieldSize);
     if (rank >= 0) {
       UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.INTEGER.ordinal());
@@ -53,7 +54,5 @@ public class ZRANK implements RedisCommand {
       UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
       UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, -1);  
     }
-
   }
-
 }
