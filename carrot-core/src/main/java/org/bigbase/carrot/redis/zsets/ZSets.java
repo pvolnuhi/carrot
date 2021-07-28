@@ -1668,7 +1668,11 @@ public class ZSets {
     SetScanner scanner = null;
     long ptr = 0;
     try {
-      KeysLocker.readLock(key);      
+      KeysLocker.readLock(key);     
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
+      
+      // skip to start
       long cardinality = ZCARD(map, keyPtr, keySize, false);
       if (cardinality == 0) {
         return 0;
@@ -1691,9 +1695,7 @@ public class ZSets {
       }
       long counter = start;
       ptr = buffer + Utils.SIZEOF_INT;
-      // Make sure first 4 bytes does not contain garbage
-      UnsafeAccess.putInt(buffer, 0);
-      // skip to start
+ 
       scanner.skipTo(start);
       while(scanner.hasNext()) {
         if (counter > end) break;
@@ -2363,15 +2365,22 @@ public class ZSets {
   public static long ZRANGEBYSCORE(BigSortedMap map, long keyPtr, int keySize, double minScore,
       boolean minInclusive, double maxScore, boolean maxInclusive, boolean withScores, long buffer,
       int bufferSize) {
+    
     Key k = getKey(keyPtr, keySize);
+    // Make sure first 4 bytes does not contain garbage
+    UnsafeAccess.putInt(buffer, 0);
+    
     if (minScore > maxScore) {
       return 0;
     }
     int count = 0;
     long startPtr = 0, stopPtr = 0;
     SetScanner scanner = null;
+
     try {
       KeysLocker.readLock(k);
+      
+      //TODO: double memory allocation - FIX it!!!!!!!!
       
       startPtr = UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
       Utils.doubleToLex(startPtr, minScore);
@@ -2380,21 +2389,35 @@ public class ZSets {
       stopPtr = UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
       Utils.doubleToLex(stopPtr, maxScore);
       int stopSize = Utils.SIZEOF_DOUBLE;
-      //FIXME: prefixKeyEndNoAlloc
+      
       if (maxInclusive && maxScore < Double.MAX_VALUE) {
         stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
+        
+        //TODO: Investigate why below code does not work for ZSets
+        
+//        long _stopPtr = Utils.prefixKeyEndCorrect(stopPtr, stopSize);
+//        UnsafeAccess.free(stopPtr);
+//        stopPtr = _stopPtr;
+//        stopSize += 1;
       }
+      
       if (!minInclusive && minScore > -Double.MAX_VALUE) {
         startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+
+        //TODO: Investigate why below code does not work for ZSets
+ 
+//        long _startPtr = Utils.prefixKeyEndCorrect(startPtr, startSize);
+//        UnsafeAccess.free(startPtr);
+//        startPtr = _startPtr;
+//        startSize += 1;
       }
+      
       scanner =
           Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, stopPtr, stopSize, false);
       if (scanner == null) {
         return 0;
       }
       long ptr = buffer + Utils.SIZEOF_INT;
-      // Make sure first 4 bytes does not contain garbage
-      UnsafeAccess.putInt(buffer, 0);
 
       while (scanner.hasNext()) {
         int mSize = scanner.memberSize();
@@ -2797,12 +2820,19 @@ public class ZSets {
   public static long ZREMRANGEBYLEX(BigSortedMap map, long keyPtr, int keySize, long startPtr,
       int startSize, boolean startInclusive, long endPtr, int endSize, boolean endInclusive) {
     
+    boolean freeStart = false;
+    boolean freeEnd = false;
     if (endInclusive && endPtr > 0) {
-      endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
+      endPtr = Utils.prefixKeyEndCorrect(endPtr, endSize);
+      endSize += 1;
+      freeEnd = true;
     }
     if (!startInclusive && startPtr > 0) {
-      startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+      startPtr = Utils.prefixKeyEndCorrect(startPtr, startSize);
+      startSize += 1;
+      freeStart = true;
     }
+    
     HashScanner hashScanner = null;
     SetScanner setScanner = null;
     long cardPtr = getCardinalityMember(keyPtr, keySize);
@@ -2818,6 +2848,7 @@ public class ZSets {
     // Make sure first 4 bytes of a bulk delete buffer 
     // does not contain garbage
     UnsafeAccess.putInt(buffer, 0);
+    
     Key key = getKey(keyPtr, keySize);
     long sPtr = 0;
     int sSize = 0;
@@ -3007,6 +3038,12 @@ public class ZSets {
       }
       if (cardPtr > 0) {
         UnsafeAccess.free(cardPtr);
+      }
+      if (freeStart) {
+        UnsafeAccess.free(startPtr);
+      }
+      if (freeEnd) {
+        UnsafeAccess.free(endPtr);
       }
       KeysLocker.writeUnlock(key);
     }
@@ -3445,7 +3482,10 @@ public class ZSets {
     SetScanner scanner = null;
     long ptr = 0;
     try {
-      KeysLocker.readLock(key);      
+      KeysLocker.readLock(key);     
+      // Make sure first 4 bytes does not contain garbage
+      UnsafeAccess.putInt(buffer, 0);
+      
       long cardinality = ZCARD(map, keyPtr, keySize);
       if (cardinality == 0) {
         return 0;
@@ -3469,8 +3509,7 @@ public class ZSets {
       }
       long counter = cardinality - 1;
       ptr = buffer + Utils.SIZEOF_INT;
-      // Make sure first 4 bytes does not contain garbage
-      UnsafeAccess.putInt(buffer, 0);
+
       do {
         if (counter < start) break;
         if (counter >= start && counter <= end) {
@@ -3718,11 +3757,17 @@ public class ZSets {
  public static long ZREVRANGEBYLEX(BigSortedMap map, long keyPtr, int keySize, long startPtr, int startSize, 
      boolean startInclusive, long endPtr, int endSize, boolean endInclusive,  long buffer, int bufferSize)
  {
+   boolean freeStart = false;
+   boolean freeEnd = false;
    if (endInclusive && endPtr > 0) {
-     endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
+     endPtr = Utils.prefixKeyEndCorrect(endPtr, endSize);
+     endSize += 1;
+     freeEnd = true;
    }
    if (!startInclusive && startPtr > 0) {
-     startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+     startPtr = Utils.prefixKeyEndCorrect(startPtr, startSize);
+     startSize += 1;
+     freeStart = true;
    }
    Key key = getKey(keyPtr, keySize);
    HashScanner hashScanner = null;
@@ -3798,6 +3843,12 @@ public class ZSets {
      }
      if (cardPtr > 0) {
        UnsafeAccess.free(cardPtr);
+     }
+     if (freeStart) {
+       UnsafeAccess.free(startPtr);
+     }
+     if (freeEnd) {
+       UnsafeAccess.free(endPtr);
      }
      KeysLocker.readUnlock(key);
    }
@@ -4040,6 +4091,9 @@ public class ZSets {
       boolean minInclusive, double maxScore, boolean maxInclusive, boolean withScores, long buffer,
       int bufferSize) {
 
+    // Make sure first 4 bytes does not contain garbage
+    UnsafeAccess.putInt(buffer, 0);
+    
     if (minScore > maxScore) {
       return 0;
     }
@@ -4067,8 +4121,7 @@ public class ZSets {
       if (scanner == null) {
         return 0;
       }
-      // Make sure first 4 bytes does not contain garbage
-      UnsafeAccess.putInt(buffer, 0);
+  
       int count = 0;
       do {
         int mSize = scanner.memberSize();

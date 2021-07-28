@@ -18,8 +18,10 @@
 package org.bigbase.carrot.redis.commands;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.commands.RedisCommand.ReplyType;
 import org.bigbase.carrot.redis.db.DBSystem;
 import org.bigbase.carrot.redis.hashes.Hashes;
+import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -59,6 +61,9 @@ public class HSCAN implements RedisCommand {
    */
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
+    
+    boolean cursorOK = false;
+
     try {
       long lastSeenPtr = 0;
       int lastSeenSize = 0;
@@ -72,13 +77,14 @@ public class HSCAN implements RedisCommand {
       }
       inDataPtr += Utils.SIZEOF_INT;
       // skip command name
-      int clen = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT + clen;
+      inDataPtr = skip(inDataPtr, 1);
+      
       // Read key
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       long keyPtr = inDataPtr;
       inDataPtr += keySize;
+      
       // Read cursor
       int curSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
@@ -86,13 +92,15 @@ public class HSCAN implements RedisCommand {
       inDataPtr += curSize;
       
       long cursor = Utils.strToLong(cursorPtr, curSize);
+      cursorOK = true;
       
       if (cursor != 0) {
         // continuation of a scan operation
         int size = DBSystem.getCursor(map, cursor, keyArena.get(), keyArenaSize.get());
         if (size < 0) {
           // Invalid cursor
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_INVALID_CURSOR, Utils.toString(cursorPtr, curSize));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_INVALID_CURSOR, ": "+Utils.toString(cursorPtr, curSize));
+          return;
         } else if (size > keyArenaSize.get()) {
           checkKeyArena(size);
           size = DBSystem.getCursor(map, cursor, keyArena.get(), keyArenaSize.get());
@@ -100,12 +108,14 @@ public class HSCAN implements RedisCommand {
         lastSeenPtr = keyArena.get();
         lastSeenSize = size;
         // Delete current cursor
-        DBSystem.deleteCursor(map, cursor);
+        boolean result = DBSystem.deleteCursor(map, cursor);
+        assert result;
       }
       if (numArgs == 5) {
         // Either MATCH or COUNT
         int size = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
+        
         if (Utils.compareTo(MATCH_FLAG, MATCH_LENGTH, inDataPtr, size) == 0) {
           inDataPtr += size;
           size = UnsafeAccess.toInt(inDataPtr);
@@ -117,10 +127,9 @@ public class HSCAN implements RedisCommand {
           inDataPtr += Utils.SIZEOF_INT;
           count = (int) Utils.strToLong(inDataPtr, size);
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": " + Utils.toString(inDataPtr, size));
           return;
         }
-        inDataPtr += size;
       } else if (numArgs == 7) {
         int size = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
@@ -131,7 +140,7 @@ public class HSCAN implements RedisCommand {
           regex = Utils.toString(inDataPtr, size);
           inDataPtr += size;
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": " + Utils.toString(inDataPtr, size));
           return;
         }
         size = UnsafeAccess.toInt(inDataPtr);
@@ -143,7 +152,7 @@ public class HSCAN implements RedisCommand {
           count = (int) Utils.strToLong(inDataPtr, size);
           inDataPtr += size;
         } else {
-          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, Utils.toString(inDataPtr, size));
+          Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT,": " + Utils.toString(inDataPtr, size));
           return;
         }
       }
@@ -168,7 +177,9 @@ public class HSCAN implements RedisCommand {
         outBufferPtr + off + Utils.SIZEOF_INT /*first 4 bytes keeps serialized size*/, 
         outBufferSize - off - Utils.SIZEOF_INT, regex);
       
+      //TODO: how to handle non-existing keys?
       if (serLen == 0) {
+        // We are done
         cursor = 0;
         UnsafeAccess.putLong(outBufferPtr + 2 * Utils.SIZEOF_BYTE, cursor);
       } else {
@@ -189,12 +200,20 @@ public class HSCAN implements RedisCommand {
           int sizeSize = Utils.sizeUVInt(size);
           ptr += sizeSize;
           // Save new cursor with last seen field
+          // Cursor has expiration time
           DBSystem.saveCursor(map, cursor, ptr, size);
+          // Decrement by 1 number of elements
+          UnsafeAccess.putInt(outBufferPtr + off, numElements - 1);
         }
       }
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      if (cursorOK) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, 
+          ": " + e.getMessage());
+      } else {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_INVALID_CURSOR, 
+          ": " + e.getMessage());
+      }
     }
   }
-
 }

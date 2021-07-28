@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.CommandProcessor;
+import org.bigbase.carrot.redis.db.DBSystem;
 import org.bigbase.carrot.redis.util.Utils;
 
 import static org.bigbase.carrot.util.Utils.byteBufferToString;
@@ -227,5 +228,6 @@ public abstract class CommandBase {
   @After
   public void tearDown() {
     map.dispose();
+    DBSystem.reset();
   }
 }

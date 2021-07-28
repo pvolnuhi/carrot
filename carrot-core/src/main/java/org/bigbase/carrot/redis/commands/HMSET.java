@@ -47,7 +47,5 @@ public class HMSET implements RedisCommand {
     // HMSET is deprecated as of 4.0 - we use HSET instead
     int num = Hashes.HSET(map, keyPtr, keySize, kvs);
     // But HMSET has only one simple string reply: +OK
-    //INT_REPLY(outBufferPtr, num);
   }
-
 }

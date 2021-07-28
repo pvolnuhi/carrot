@@ -1489,6 +1489,12 @@ public class Hashes {
    */
   public static long HSCAN(BigSortedMap map, long keyPtr, int keySize, long lastSeenFieldPtr,
       int lastSeenFieldSize, int count, long buffer, int bufferSize, String regex) {
+    
+    // Clear first 4 bytes
+    UnsafeAccess.putInt(buffer, 0);
+    // Clear first 4 bytes of value arena
+    UnsafeAccess.putInt(valueArena.get(), 0);
+    
     Key key = getKey(keyPtr, keySize);
     HashScanner scanner = null;
     try {
@@ -1513,10 +1519,7 @@ public class Hashes {
       }
       int c = 1; // There will always be at least one element (last seen)
       long ptr = buffer + Utils.SIZEOF_INT;
-      // Clear first 4 bytes
-      UnsafeAccess.putInt(buffer, 0);
-      // Clear first 4 bytes of value arena
-      UnsafeAccess.putInt(valueArena.get(), 0);
+ 
       // 06-24
       //int lastSeenSize = 0;
       long lastPtr = ptr;

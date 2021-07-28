@@ -64,7 +64,7 @@ public class ZREMRANGEBYRANK implements RedisCommand {
 
     } catch (NumberFormatException e) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,
-        "count is not a valid number");
+        ": " + e.getMessage());
     } 
   }
 

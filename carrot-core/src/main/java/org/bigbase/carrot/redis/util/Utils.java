@@ -30,6 +30,7 @@ import static org.bigbase.carrot.util.Utils.readUVInt;
 import static org.bigbase.carrot.util.Utils.sizeUVInt;
 import static org.bigbase.carrot.util.Utils.strToByteBuffer;
 import static org.bigbase.carrot.util.Utils.strToLong;
+import static org.bigbase.carrot.util.Utils.stringSize;
 
 import static org.bigbase.carrot.util.Utils.SIZEOF_INT;
 import static org.bigbase.carrot.util.Utils.SIZEOF_BYTE;
@@ -231,6 +232,7 @@ public class Utils {
    * @param buf Redis response buffer
    */
   public static void carrotToRedisResponse(long ptr, ByteBuffer buf) {
+    buf.rewind();
     int val = UnsafeAccess.toByte(ptr);
     ReplyType type = ReplyType.values()[val];
     
@@ -259,6 +261,9 @@ public class Utils {
       case ZARRAY1:
         zarray1Response(ptr, buf);
         break;
+      case MULTI_BULK:
+        multiBulkResponse(ptr, buf);
+        break;
       case ERROR:
         errorResponse(ptr, buf);
         break;
@@ -268,20 +273,69 @@ public class Utils {
     }
   }
   
+  private static void multiBulkResponse(long ptr, ByteBuffer buf) {
+    // 1. CURSOR
+    buf.put(BULK_TYPE);
+    ptr += SIZEOF_BYTE; // skip multi bulk type    
+    ptr += SIZEOF_BYTE; // skip type
+    long cursor = UnsafeAccess.toLong(ptr);
+    int curlen = stringSize(cursor);
+    ptr += SIZEOF_LONG;
+    longToStr(curlen, buf, buf.position());
+    buf.put(CRLF);
+    longToStr(cursor, buf, buf.position());
+    buf.put(CRLF);
+    int itype = UnsafeAccess.toByte(ptr);
+    ReplyType type = ReplyType.values()[itype];
+
+    switch (type) {
+      case VARRAY:
+        varrayResponse(ptr, buf);
+        break;
+      case ZARRAY:
+        zarrayResponse(ptr, buf);
+      default:
+        //TODO
+    }
+//    
+//    // 2. ARRAY    
+//    buf.put(ARR_TYPE);
+//    ptr += SIZEOF_BYTE;
+//    // skip serialized size for now TODO: later
+//    ptr += SIZEOF_INT;
+//    int len = UnsafeAccess.toInt(ptr);
+//    ptr += SIZEOF_INT;
+//    longToStr(len, buf, buf.position());
+//    buf.put(CRLF);
+//    
+//    for (int i = 0; i < len; i++) {
+//      int size = readUVInt(ptr);
+//      int sizeSize = sizeUVInt(size);
+//      ptr += sizeSize;
+//      buf.put(BULK_TYPE);
+//      longToStr(size, buf, buf.position());
+//      buf.put(CRLF);
+//      if(size > 0) {
+//        UnsafeAccess.copy(ptr, buf, size);
+//        buf.put(CRLF);
+//        ptr += size;
+//      }
+//    }    
+  }
+
   /**
    * Converts ZARRAY1 Carrot type to a Redis response
    * @param ptr memory address of a serialized Carrot response 
    * @param buf Redis response buffer
    */
   private static void zarray1Response(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(ARR_TYPE);
     ptr += SIZEOF_BYTE;
     // skip serialized size for now TODO: later
     ptr += SIZEOF_INT;
     int len = UnsafeAccess.toInt(ptr);
     ptr += SIZEOF_INT;
-    longToStr(len , buf, SIZEOF_BYTE);
+    longToStr(len , buf, buf.position());
     buf.put(CRLF);
     
     for (int i = 0; i < len; i++) {
@@ -304,14 +358,13 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void zarrayResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(ARR_TYPE);
     ptr += SIZEOF_BYTE;
     // skip serialized size for now TODO: later
     ptr += SIZEOF_INT;
     int len = UnsafeAccess.toInt(ptr);
     ptr += SIZEOF_INT;
-    longToStr(2 * len /* score+field*/, buf, SIZEOF_BYTE);
+    longToStr(2 * len /* score+field*/, buf, buf.position());
     buf.put(CRLF);
     
     for (int i = 0; i < len; i++) {
@@ -346,14 +399,13 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void varrayResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(ARR_TYPE);
     ptr += SIZEOF_BYTE;
     // skip serialized size for now TODO: later
     ptr += SIZEOF_INT;
     int len = UnsafeAccess.toInt(ptr);
     ptr += SIZEOF_INT;
-    longToStr(len, buf, SIZEOF_BYTE);
+    longToStr(len, buf, buf.position());
     buf.put(CRLF);
     
     for (int i = 0; i < len; i++) {
@@ -376,7 +428,6 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void errorResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(ERR_TYPE);
     ptr += SIZEOF_BYTE;
     int msgLen = UnsafeAccess.toInt(ptr);
@@ -394,14 +445,13 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void intArrayResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(ARR_TYPE);
     ptr += SIZEOF_BYTE;
     // skip serialized size for now TODO: later
     ptr += SIZEOF_INT;
     int len = UnsafeAccess.toInt(ptr);
     ptr += SIZEOF_INT;
-    longToStr(len, buf, SIZEOF_BYTE);
+    longToStr(len, buf, buf.position());
     buf.put(CRLF);
     for (int i=0; i < len; i++) {
       // Works only with ints
@@ -419,14 +469,13 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void arrayResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(ARR_TYPE);
     ptr += SIZEOF_BYTE;
     // skip serialized size for now TODO: later
     ptr += SIZEOF_INT;
     int len = UnsafeAccess.toInt(ptr);
     ptr += SIZEOF_INT;
-    longToStr(len, buf, SIZEOF_BYTE);
+    longToStr(len, buf, buf.position());
     buf.put(CRLF);
     
     for (int i = 0; i < len; i++) {
@@ -449,7 +498,6 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void bulkResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(BULK_TYPE);  
     ptr += SIZEOF_BYTE;
     int len = UnsafeAccess.toInt(ptr);
@@ -469,7 +517,6 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void intResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(INT_TYPE);
     ptr += SIZEOF_BYTE;
     long value = UnsafeAccess.toLong(ptr);
@@ -483,7 +530,6 @@ public class Utils {
    * @param buf Redis response buffer
    */
   private static void okResponse(long ptr, ByteBuffer buf) {
-    buf.rewind();
     buf.put(OK_RESP);
   }
   

@@ -37,8 +37,7 @@ public class ZREMRANGEBYSCORE implements RedisCommand {
       }
       inDataPtr += Utils.SIZEOF_INT;
       // skip command name
-      int clen = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT + clen;
+      inDataPtr = skip(inDataPtr, 1);
       
       int keySize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
@@ -56,18 +55,16 @@ public class ZREMRANGEBYSCORE implements RedisCommand {
         valSize -= Utils.SIZEOF_BYTE;
         valPtr += Utils.SIZEOF_BYTE; 
         inDataPtr += Utils.SIZEOF_BYTE;
-      } else if (UnsafeAccess.toByte(valPtr) == (byte) '['){
-        // start is inclusive
-        startInclusive = true;
-        valSize -= Utils.SIZEOF_BYTE;
-        valPtr += Utils.SIZEOF_BYTE; 
-        inDataPtr += Utils.SIZEOF_BYTE;
-      } else if (Utils.compareTo(NEG_INFINITY_FLAG, NEG_INFINITY_LENGTH, valPtr, valSize) != 0) {
-        throw new IllegalArgumentException(Utils.toString(valPtr, valSize));
+      } else if (Utils.compareTo(NEG_INFINITY_FLAG, NEG_INFINITY_LENGTH, valPtr, valSize) == 0) {
+        startInclusive = false;
+        start = - Double.MAX_VALUE;
+        inDataPtr += NEG_INFINITY_LENGTH;
       }
       
-      start = Utils.strToDouble(valPtr, valSize);
-      inDataPtr += valSize;
+      if (start == 0) {
+        start = Utils.strToDouble(valPtr, valSize);
+        inDataPtr += valSize;
+      }
       
       valSize = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
@@ -78,17 +75,16 @@ public class ZREMRANGEBYSCORE implements RedisCommand {
         valSize -= Utils.SIZEOF_BYTE;
         valPtr += Utils.SIZEOF_BYTE; 
         inDataPtr += Utils.SIZEOF_BYTE;
-      } else if (UnsafeAccess.toByte(valPtr) == (byte) '['){
-        // start is inclusive
-        endInclusive = true;
-        valSize -= Utils.SIZEOF_BYTE;
-        valPtr += Utils.SIZEOF_BYTE; 
-        inDataPtr += Utils.SIZEOF_BYTE;
-      } else if (Utils.compareTo(POS_INFINITY_FLAG, POS_INFINITY_LENGTH, valPtr, valSize) != 0) {
-        throw new IllegalArgumentException(Utils.toString(valPtr, valSize));
+      }  else if (Utils.compareTo(POS_INFINITY_FLAG, POS_INFINITY_LENGTH, valPtr, valSize) == 0) {
+        endInclusive = false;
+        end = Double.MAX_VALUE;
+        inDataPtr += POS_INFINITY_LENGTH;
       }
       
-      end = Utils.strToDouble(valPtr, valSize);
+      if (end == 0) {
+        end = Utils.strToDouble(valPtr, valSize);
+        inDataPtr += valSize;
+      }
       
       int num =
           (int) ZSets.ZREMRANGEBYSCORE(map, keyPtr, keySize, start, startInclusive, end, endInclusive);
@@ -96,10 +92,9 @@ public class ZREMRANGEBYSCORE implements RedisCommand {
       INT_REPLY(outBufferPtr, num);
       
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT);
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
     } catch (IllegalArgumentException ee) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ee.getMessage());
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": " + ee.getMessage());
     }
   }
-
 }

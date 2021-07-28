@@ -112,6 +112,13 @@ public class DBSystem {
   }
   
   /**
+   * Use for testing
+   */
+  public static void reset() {
+    seqId.set(0);
+  }
+  
+  /**
    * Saves cursor id with associated value (last seen key)
    * @param map sorted map storage
    * @param cursorId cursor id
@@ -125,7 +132,7 @@ public class DBSystem {
     long keyPtr = buildKey(ptr, Utils.SIZEOF_LONG);
     int keySize = getSystemKeySize(Utils.SIZEOF_LONG);
     boolean result = 
-        map.put(keyPtr, keySize, ptr, valSize, DEFAULT_CURSOR_EXPIRATION + java.lang.System.currentTimeMillis());
+        map.put(keyPtr, keySize, valPtr, valSize, DEFAULT_CURSOR_EXPIRATION + java.lang.System.currentTimeMillis());
     UnsafeAccess.free(ptr);
     return result;
   }

@@ -76,14 +76,15 @@ public class ZRANGE implements RedisCommand {
       if (withScores) {
         UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.ZARRAY.ordinal());
       } else {
-        UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.ZARRAY1.ordinal());
+        UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.VARRAY.ordinal());        
       }
+      
       UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, size + off);
 
     } catch (NumberFormatException e) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,
-        "count is not a valid number");
-    } 
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
+    } catch (IllegalArgumentException ee) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, ": " + ee.getMessage());      
+    }
   }
-
 }

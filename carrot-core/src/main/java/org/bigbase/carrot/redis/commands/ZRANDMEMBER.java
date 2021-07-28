@@ -69,7 +69,16 @@ public class ZRANDMEMBER implements RedisCommand {
       int size =
           (int) ZSets.ZRANDMEMBER(map, keyPtr, keySize, count, withScores, outBufferPtr + off, outBufferSize - off);
       if (!countSpecified) {
+        // WITHSCORES = false if count is not specified
         UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.BULK_STRING.ordinal());
+        // Update length of a field (- SIZEOF_DOUBLE)
+        int len = Utils.readUVInt(outBufferPtr + off + Utils.SIZEOF_INT);
+        int lenSize = Utils.sizeUVInt(len);
+        // Copy field
+        UnsafeAccess.copy(outBufferPtr + off + Utils.SIZEOF_INT + lenSize + Utils.SIZEOF_DOUBLE, 
+          outBufferPtr + off, len - Utils.SIZEOF_DOUBLE);
+        UnsafeAccess.putInt(outBufferPtr + Utils.SIZEOF_BYTE, len - Utils.SIZEOF_DOUBLE);
+        return;
       } else if (withScores) {
         UnsafeAccess.putByte(outBufferPtr, (byte) ReplyType.ZARRAY.ordinal());
       } else {
@@ -79,8 +88,10 @@ public class ZRANDMEMBER implements RedisCommand {
 
     } catch (NumberFormatException e) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_NUMBER_FORMAT,
-        "count is not a valid number");
-    } 
+        ": " + e.getMessage());
+    } catch (IllegalArgumentException ee) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, 
+        ": " + ee.getMessage());
+    }
   }
-
 }
