@@ -303,6 +303,9 @@ public class ZSetsAPITest {
   @Ignore
   @Test
   public void testZRANDMEMBER () {
+    
+    //TODO: check multiple \r\n in output
+    
     System.out.println("ZSets ZRANDMEMBER multiple keys test");
     int numMembers = 1000;
     int numIterations = 100;
