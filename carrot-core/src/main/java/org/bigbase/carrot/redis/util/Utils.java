@@ -297,30 +297,6 @@ public class Utils {
       default:
         //TODO
     }
-//    
-//    // 2. ARRAY    
-//    buf.put(ARR_TYPE);
-//    ptr += SIZEOF_BYTE;
-//    // skip serialized size for now TODO: later
-//    ptr += SIZEOF_INT;
-//    int len = UnsafeAccess.toInt(ptr);
-//    ptr += SIZEOF_INT;
-//    longToStr(len, buf, buf.position());
-//    buf.put(CRLF);
-//    
-//    for (int i = 0; i < len; i++) {
-//      int size = readUVInt(ptr);
-//      int sizeSize = sizeUVInt(size);
-//      ptr += sizeSize;
-//      buf.put(BULK_TYPE);
-//      longToStr(size, buf, buf.position());
-//      buf.put(CRLF);
-//      if(size > 0) {
-//        UnsafeAccess.copy(ptr, buf, size);
-//        buf.put(CRLF);
-//        ptr += size;
-//      }
-//    }    
   }
 
   /**

@@ -112,88 +112,89 @@ public class StringsTest {
   }
   
   private void allTests() throws OperationFailedException {
-    setUp();
-    testSetIfNotExists();
-    tearDown();
-    setUp();
-    testSetIfExists();
-    tearDown();
-    setUp();
-    testSetWithTTL();
-    tearDown();
+//    setUp();
+//    testSetIfNotExists();
+//    tearDown();
+//    setUp();
+//    testSetIfExists();
+//    tearDown();
+//    setUp();
+//    testSetWithTTL();
+//    tearDown();
     //TODO - FIXME
-    //setUp();
-    //testSetGetWithTTL();
-    //tearDown();    
     setUp();
-    testGetExpire();
-    tearDown();
-    setUp();
-    testIncrementLongWrongFormat();
-    tearDown();
-    setUp();
-    testIncrementDoubleWrongFormat();
-    tearDown();
-    setUp();
-    testIncrementLong();
-    tearDown();
-    setUp();
-    testIncrementDouble();
-    tearDown();
-    setUp();
-    testSetGet();
-    tearDown();
-    setUp();
-    testSetRemove();
-    tearDown();
-    setUp();
-    testAppend();
-    tearDown();
-    setUp();
-    testGetDelete();
-    tearDown();
-    setUp();
-    testGetEx();
-    tearDown();
-    setUp();
-    testGetSet();
-    tearDown();
-    setUp();
-    testStrLength();
-    tearDown();
-    setUp();
-    testSetEx();
-    tearDown();
-    setUp();
-    testPSetEx();
-    tearDown();
-    setUp();
-    testMget();
-    tearDown();
-    
-    setUp();
-    testMSet();
-    tearDown();
-    
-    setUp();
-    testMSetNX();
+    testSetGetWithTTL();
     tearDown();    
-    setUp();
-    testSetGetBit();
-    tearDown();
-    setUp();
-    testGetRange();
-    tearDown();
-    setUp();
-    testSetRange();
-    tearDown();
-    setUp();
-    testBitCount();
-    tearDown();
-    
-    setUp();
-    testBitPosition();
-    tearDown();
+
+//    setUp();
+//    testGetExpire();
+//    tearDown();
+//    setUp();
+//    testIncrementLongWrongFormat();
+//    tearDown();
+//    setUp();
+//    testIncrementDoubleWrongFormat();
+//    tearDown();
+//    setUp();
+//    testIncrementLong();
+//    tearDown();
+//    setUp();
+//    testIncrementDouble();
+//    tearDown();
+//    setUp();
+//    testSetGet();
+//    tearDown();
+//    setUp();
+//    testSetRemove();
+//    tearDown();
+//    setUp();
+//    testAppend();
+//    tearDown();
+//    setUp();
+//    testGetDelete();
+//    tearDown();
+//    setUp();
+//    testGetEx();
+//    tearDown();
+//    setUp();
+//    testGetSet();
+//    tearDown();
+//    setUp();
+//    testStrLength();
+//    tearDown();
+//    setUp();
+//    testSetEx();
+//    tearDown();
+//    setUp();
+//    testPSetEx();
+//    tearDown();
+//    setUp();
+//    testMget();
+//    tearDown();
+//    
+//    setUp();
+//    testMSet();
+//    tearDown();
+//    
+//    setUp();
+//    testMSetNX();
+//    tearDown();    
+//    setUp();
+//    testSetGetBit();
+//    tearDown();
+//    setUp();
+//    testGetRange();
+//    tearDown();
+//    setUp();
+//    testSetRange();
+//    tearDown();
+//    setUp();
+//    testBitCount();
+//    tearDown();
+//    
+//    setUp();
+//    testBitPosition();
+//    tearDown();
     
   }
   
@@ -408,7 +409,9 @@ public class StringsTest {
     
     res = Strings.SETGET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 
       exp, MutationOptions.NX, true, buffer, bufferSize);
-    assertEquals(GET_FAILED,  res);
+    assertEquals(kv.valueSize,  (int) res);
+    assertTrue(Utils.compareTo(kv.valuePtr, kv.valueSize, buffer, (int)res) == 0);
+
     
     result = Strings.DELETE(map, kv.keyPtr, kv.keySize);
     assertTrue(result);
@@ -1030,7 +1033,7 @@ public class StringsTest {
       end = size - 1;
     }
     if (end < 0 || end < start || start >= size) {
-      return 0;
+      return -1;
     }
     UnsafeAccess.copy(ptr + start, buffer, end - start + 1);
     return (int) (end - start + 1);
