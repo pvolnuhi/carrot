@@ -38,6 +38,7 @@ public class Errors {
   static final byte[] ERR_POSITIVE_NUMBER_EXPECTED = "Positive number expected".getBytes();
   static final String ERR_MIN_SPECIFIED = "Either '(' or '[' or '-' can be specified for a min argument";
   static final String ERR_MAX_SPECIFIED = "Either '(' or '[' or '+' can be specified for a max argument";
+  static final byte[] ERR_UNSUPPORTED_COMMAND = "Unsupported command".getBytes();
   
   public static void write(long buffer, byte[] type, byte[] message) {
     int off = 0;

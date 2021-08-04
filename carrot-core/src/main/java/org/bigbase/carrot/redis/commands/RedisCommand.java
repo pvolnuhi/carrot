@@ -186,6 +186,15 @@ public interface RedisCommand {
   static final long CH_FLAG = UnsafeAccess.allocAndCopy("CH", 0, "CH".length());
   static final int CH_LENGTH = "CH".length();
   
+  static final long SAVE_FLAG = UnsafeAccess.allocAndCopy("SAVE", 0, "SAVE".length());
+  static final int SAVE_LENGTH = "SAVE".length();
+  
+  static final long NOSAVE_FLAG = UnsafeAccess.allocAndCopy("NOSAVE", 0, "NOSAVE".length());
+  static final int NOSAVE_LENGTH = "NOSAVE".length();
+  
+  static final long SCHEDULE_FLAG = UnsafeAccess.allocAndCopy("SCHEDULE", 0, "SCHEDULE".length());
+  static final int SCHEDULE_LENGTH = "SCHEDULE".length();
+  
   default void NULL_STRING_REPLY (long ptr) {
     UnsafeAccess.putByte(ptr,  (byte) ReplyType.BULK_STRING.ordinal());
     UnsafeAccess.putInt(ptr + Utils.SIZEOF_BYTE, -1);

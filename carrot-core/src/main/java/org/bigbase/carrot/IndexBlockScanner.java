@@ -269,7 +269,6 @@ public final class IndexBlockScanner implements Closeable{
     
     if (b == null) {
       //TODO: is it normal?
-      ///*DEBUG*/ System.err.println(Thread.currentThread().getName() +": BLOCK is null in IndexBlockDirectMemoryScanner.setStartStopRows");
       try {
         close();
       } catch (IOException e) {
@@ -324,8 +323,7 @@ public final class IndexBlockScanner implements Closeable{
     this.indexBlock = b;
   }
   
-
-  
+ 
   /**
    * Advance scanner by one data block
    * @return data block scanner or null

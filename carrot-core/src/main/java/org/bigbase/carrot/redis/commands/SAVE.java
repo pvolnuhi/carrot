@@ -15,32 +15,26 @@
  *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  */
-package org.bigbase.carrot.redis;
+package org.bigbase.carrot.redis.commands;
 
-/**
- * Class which keeps all the configuration parameters
- * for Redis server
- * @author Vladimir Rodionov
- *
- */
-public class RedisConf {
+import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.server.Server;
+import org.bigbase.carrot.util.UnsafeAccess;
 
-  
-  public static RedisConf getInstance() {
-    //TODO - read from file
-    return new RedisConf();
-  }
-  /**
-   * Maximum size of ZSet in a compact representation
-   * @return maximum size
-   */
-  public int getMaxZSetCompactSize() {
-    //TODO
-    return 512;
-  }
-  
-  public int getCommandsCount() {
-    //
-    return 103;
+public class SAVE implements RedisCommand {
+
+  @Override
+  public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
+    int numArgs = UnsafeAccess.toInt(inDataPtr);
+    if (numArgs != 1) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
+      return;
+    }
+    
+    boolean result = Server.SAVE(map);
+    if (!result) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_OPERATION_FAILED);
+      return;
+    }
   }
 }

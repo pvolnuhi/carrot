@@ -1291,7 +1291,6 @@ public class Utils {
        long v = Math.abs(rnd.nextLong()) % max;
        ret[i] = v;
      }
-     System.out.println();
      Arrays.sort(ret);
      return ret;
   }
