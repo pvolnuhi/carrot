@@ -115,7 +115,7 @@ public class RedisHashesAtomicCounters {
     long endTime = System.currentTimeMillis();
         
     System.out.println("Loaded " + N +" counters into hash, total size="+totalDataSize
-      + " in "+ (endTime - startTime) );
+      + " in "+ (endTime - startTime) + "ms" );
     System.out.println("Press any button ...");
     System.in.read();
     
@@ -137,7 +137,7 @@ public class RedisHashesAtomicCounters {
     long endTime = System.currentTimeMillis();
         
     System.out.println("Deleted " + N +" counters"
-      + " in "+ (endTime - startTime) );
+      + " in "+ (endTime - startTime) + "ms" );
   }
   
   private static int nextScoreSkewed(Random r) {

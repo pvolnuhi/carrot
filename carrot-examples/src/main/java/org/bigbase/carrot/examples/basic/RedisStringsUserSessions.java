@@ -113,7 +113,7 @@ public class RedisStringsUserSessions {
     System.out.println("Loaded " + userSessions.size() +" user sessions, total size="+totalDataSize
       + " in "+ (endTime - startTime) );
    
-    
+    count = 0;
     System.out.println("Press any button ...");
     System.in.read();
     startTime = System.currentTimeMillis();

@@ -78,10 +78,7 @@ public class RedisHashesAddresses {
   static long totalDataSize = 0;
   static List<Address> addressList ;
   
-  
-  
-  public static void main(String[] args) throws IOException, OperationFailedException {
-    
+  public static void main(String[] args) throws IOException, OperationFailedException {  
     addressList = Address.loadFromFile(args[0]);
     System.out.println("RUN Redis ");
     runTest();
@@ -123,5 +120,4 @@ public class RedisHashesAddresses {
       client.del(skey);
     }
   }
-
 }

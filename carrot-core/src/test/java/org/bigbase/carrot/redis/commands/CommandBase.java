@@ -17,17 +17,23 @@
  */
 package org.bigbase.carrot.redis.commands;
 
-import java.nio.ByteBuffer;
-
-import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.CommandProcessor;
-import org.bigbase.carrot.redis.db.DBSystem;
-import org.bigbase.carrot.redis.util.Utils;
-
 import static org.bigbase.carrot.util.Utils.byteBufferToString;
 import static org.bigbase.carrot.util.Utils.strToByteBuffer;
 import static org.junit.Assert.assertEquals;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+
+import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.CommandProcessor;
+import org.bigbase.carrot.redis.RedisConf;
+import org.bigbase.carrot.redis.Server;
+import org.bigbase.carrot.redis.db.DBSystem;
+import org.bigbase.carrot.redis.util.Utils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,6 +62,7 @@ public abstract class CommandBase {
     outDirect = ByteBuffer.allocateDirect(4096);
   }
   
+  //@Ignore
   @Test
   public void testValidRequests() {
     String[] validRequests = getValidRequests();
@@ -84,6 +91,48 @@ public abstract class CommandBase {
   }
   
   @Test
+  public void testValidRequestsNetworkMode() throws UnknownHostException, IOException, InterruptedException {
+    // Start server
+    Server.start();    
+    
+    // Connect client
+    Socket client = new Socket("localhost", RedisConf.getInstance().getServerPort());
+    DataOutputStream os =new DataOutputStream(client.getOutputStream());
+    DataInputStream is = new DataInputStream(client.getInputStream());
+    
+    String[] validRequests = getValidRequests();
+    String[] validResponses = getValidResponses();
+    
+    for (int i = 0; i < validRequests.length; i++) {
+      
+      String inline = validRequests[i];
+      String request = Utils.inlineToRedisRequest(inline);
+      String expResponse = validResponses[i];
+      byte[] expBytes = new byte[expResponse.length()];
+      System.out.println("REQUEST:");
+      System.out.println(inline);
+      
+      os.write(request.getBytes());
+      is.readFully(expBytes);
+      
+      String result = new String(expBytes);
+      
+      System.out.println("\nRESULT:");
+      System.out.println(result);
+
+      if (validResponses[i].equals(SKIP_VERIFY)) {
+        //TODO: we need some verification
+      } else {
+        assertEquals(validResponses[i], result);
+      }
+    }
+    
+    client.close();
+    Server.shutdown();
+  }
+  
+  //@Ignore
+  @Test
   public void testValidRequestsInline() {
     String[] validRequests = getValidRequests();
     String[] validResponses = getValidResponses();
@@ -103,6 +152,7 @@ public abstract class CommandBase {
     }
   }
   
+  //@Ignore
   @Test
   public void testValidRequestsDirectBuffer() {
     String[] validRequests = getValidRequests();
@@ -123,6 +173,7 @@ public abstract class CommandBase {
     }
   }
   
+  //@Ignore
   @Test
   public void testValidRequestsInlineDirectBuffer() {
     String[] validRequests = getValidRequests();
@@ -144,6 +195,7 @@ public abstract class CommandBase {
   }
   // INVALID REQUESTS
   
+ // @Ignore
   @Test
   public void testInValidRequests() {
     String[] invalidRequests = getInvalidRequests();
@@ -165,6 +217,7 @@ public abstract class CommandBase {
     }
   }
   
+  //@Ignore
   @Test
   public void testInValidRequestsInline() {
     String[] invalidRequests = getInvalidRequests();
@@ -185,6 +238,7 @@ public abstract class CommandBase {
     }
   }
   
+  //@Ignore
   @Test
   public void testInValidRequestsDirectBuffer() {
     String[] invalidRequests = getInvalidRequests();
@@ -205,6 +259,7 @@ public abstract class CommandBase {
     }
   }
   
+  //@Ignore
   @Test
   public void testInValidRequestsInlineDirectBuffer() {
     String[] invalidRequests = getInvalidRequests();

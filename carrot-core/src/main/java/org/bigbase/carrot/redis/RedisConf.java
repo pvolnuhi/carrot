@@ -17,6 +17,10 @@
  */
 package org.bigbase.carrot.redis;
 
+import org.bigbase.carrot.compression.Codec;
+import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.compression.CodecType;
+
 /**
  * Class which keeps all the configuration parameters
  * for Redis server
@@ -25,6 +29,7 @@ package org.bigbase.carrot.redis;
  */
 public class RedisConf {
 
+  public final static int DEFAULT_REDIS_PORT = 6379;
   
   public static RedisConf getInstance() {
     //TODO - read from file
@@ -39,8 +44,48 @@ public class RedisConf {
     return 512;
   }
   
+  /**
+   * Returns number of supported commands
+   * @return number of supported 
+   */
   public int getCommandsCount() {
     //
     return 103;
+  }
+  
+  /**
+   * Returns server port
+   * @return server port number
+   */
+  public int getServerPort() {
+    return DEFAULT_REDIS_PORT;
+  }
+  
+  /**
+   * Returns working thread pool size
+   * 
+   */
+  public int getWorkingThreadPoolSize() {
+    //TODO
+    int num = Runtime.getRuntime().availableProcessors();
+    return num / 2 - 2;
+  }
+  
+  /**
+   * Get maximum data store size
+   * @return maximum data store size
+   */
+  public long getDataStoreMaxSize() {
+    //TODO
+    return (long) 10 * 1024 * 1024 * 1024;
+  }
+  
+  /**
+   * Get compression codec
+   * @return codec
+   */
+  public Codec getCompressionCodec() {
+    //TODO
+    return CodecFactory.getCodec(CodecType.LZ4.ordinal());
   }
 }

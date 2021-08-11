@@ -54,6 +54,69 @@ public class Utils {
   static final byte[] OK_RESP = "+OK\r\n".getBytes();
   static final byte[] CRLF = "\r\n".getBytes();
   
+  
+  /**
+   * Converts Redis request (raw) to an internal Carrot 
+   * representation. Provided memory buffer MUST be sufficient to keep all 
+   * converted data
+   * @param buf request data
+   * @return true if success, false - otherwise (not a full request)
+   */
+  public static boolean requestIsComplete(ByteBuffer buf) {
+    
+    buf.flip(); // do not double flip!!!
+    int len = 0;
+    
+    // Check first byte
+    if (ARR_TYPE != buf.get(0)) {
+      buf.rewind();
+      int limit = buf.limit();
+      if (limit < 2) {
+        return false;
+      }
+      // I hope it is correct
+      return buf.get(limit - 2) == (byte) '\r' && buf.get(limit - 1) == (byte) '\n';
+    }
+    
+    // Read first line to get array length
+    int lsize = readLine(buf);
+    if (lsize < 0) {
+      // Wrong format
+      return false;
+    }
+    // Read array length
+    len = (int) strToLong(buf, 1, lsize - 3 /*less first byte and last two */);
+    if (len <= 0) {
+      return false;
+    }
+
+    int pos = lsize;
+    // move to next line
+    buf.position(pos);
+    
+    for (int i = 0; i < len; i++) {
+      lsize = readLine(buf);
+      if (lsize < 0) {
+        // wrong format
+        return false;
+      }
+      int strlen =  (int) strToLong(buf, pos + 1, lsize - 3);
+      if (strlen <= 0) {
+        return false;
+      }
+      if (buf.get(pos) != BULK_TYPE) {
+        return false;
+      }
+      pos += lsize;
+
+      // We expect request consists of array of bulk strings
+      buf.position(pos);
+      pos += strlen + 2; // 2 - \r\n
+      buf.position(pos);
+    }
+    return true;
+  }
+  
   /**
    * Converts Redis request (raw) to an internal Carrot 
    * representation. Provided memory buffer MUST be sufficient to keep all 
