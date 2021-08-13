@@ -68,7 +68,7 @@ public class RedisConf {
   public int getWorkingThreadPoolSize() {
     //TODO
     int num = Runtime.getRuntime().availableProcessors();
-    return num / 2 - 2;
+    return num / 4;
   }
   
   /**
