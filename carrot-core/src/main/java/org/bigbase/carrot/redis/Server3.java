@@ -20,13 +20,11 @@ package org.bigbase.carrot.redis;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
-import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.Iterator;
-import java.util.Set;
+import java.util.function.Consumer;
 
 import org.bigbase.carrot.BigSortedMap;
  
@@ -36,7 +34,7 @@ import org.bigbase.carrot.BigSortedMap;
  *  Scalability and performance is not a goal #1 yet
  */
  
-public class Server2 {
+public class Server3 {
   
   /**
    * Executor service
@@ -63,7 +61,9 @@ public class Server2 {
     return started;
   }
   
-  
+  /**
+   * Start server in a separate thread
+   */
   public static void start() {
     new Thread(() -> {
       try {
@@ -81,22 +81,21 @@ public class Server2 {
         // TODO Auto-generated catch block
         e.printStackTrace();
       }
-      
       log("started="+ started);
     }
   }
   
   public static void main(String[] args) throws IOException {
     log("Carrot server starting ...");
-    
+
     initStore();
     log("Store started");
-    
+
     startExecutorService();
     log("Executor service started");
-    
+
     // Selector: multiplexor of SelectableChannel objects
-    Selector selector = Selector.open(); // selector is open here
+    final Selector selector = Selector.open(); // selector is open here
     log("Selector started");
 
     // ServerSocketChannel: selectable channel for stream-oriented listening sockets
@@ -105,13 +104,14 @@ public class Server2 {
 
     int port = RedisConf.getInstance().getServerPort();
     InetSocketAddress serverAddr = new InetSocketAddress("localhost", port);
- 
-    // Binds the channel's socket to a local address and configures the socket to listen for connections
+
+    // Binds the channel's socket to a local address and configures the socket to listen for
+    // connections
     serverSocket.bind(serverAddr);
-    log("Carrot server started on port="+ port);
+    log("Carrot server started on port=" + port);
     // Adjusts this channel's blocking mode.
     serverSocket.configureBlocking(false);
- 
+
     int ops = serverSocket.validOps();
     serverSocket.register(selector, ops, null);
     log("Selector registered server");
@@ -119,52 +119,38 @@ public class Server2 {
     started = true;
     log("Carrot server started.");
 
+    Consumer<SelectionKey> action = key -> {
+
+      try {
+        if (!key.isValid()) return;
+        if (key.isAcceptable()) {
+          SocketChannel client = serverSocket.accept();
+
+          // Adjusts this channel's blocking mode to false
+          client.configureBlocking(false);
+          client.setOption(StandardSocketOptions.TCP_NODELAY, true);
+          // Operation-set bit for read operations
+          client.register(selector, SelectionKey.OP_READ);
+          log("Connection Accepted: " + client.getLocalAddress() + "\n");
+        } else if (key.isReadable() && key.attachment() == null) {
+          service.submit(key);
+        }
+      } catch (IOException e) {
+        log("Shutting down server ...");
+        service.shutdown();
+        store.dispose();
+        store = null;
+        service = null;
+        log("Complete");
+      }
+
+    };
+
     // Infinite loop..
     // Keep server running
-    try {
-      while (true) {
-
-        // Selects a set of keys whose corresponding channels are ready for I/O operations
-        selector.select();
-
-        // token representing the registration of a SelectableChannel with a Selector
-        Set<SelectionKey> keys = selector.selectedKeys();
-        Iterator<SelectionKey> keysIterator = keys.iterator();
-
-        while (keysIterator.hasNext()) {
-          SelectionKey myKey = keysIterator.next();
-          if (!myKey.isValid()) {
-            keysIterator.remove();
-            continue;
-          }
-          // Tests whether this key's channel is ready to accept a new socket connection
-          if (myKey.isAcceptable()) {
-            SocketChannel client = serverSocket.accept();
-
-            // Adjusts this channel's blocking mode to false
-            client.configureBlocking(false);
-            client.setOption(StandardSocketOptions.TCP_NODELAY, true);
-            // Operation-set bit for read operations
-            client.register(selector, SelectionKey.OP_READ);
-            log("Connection Accepted: " + client.getLocalAddress() + "\n");
-
-            // Tests whether this key's channel is ready for reading
-            // and is not being currently processed
-          } else if (myKey.isReadable() && myKey.attachment() == null) {
-            service.submit(myKey);
-          }
-          keysIterator.remove();
-        }
-      }
-    } catch (ClosedSelectorException e) {
-      log("Shutting down server ...");
-      service.shutdown();
-      serverSocket.close();
-      store.dispose();
-      store = null;
-      service = null;
-      selector = null;
-      log("Complete");
+    while (true) {
+      // Selects a set of keys whose corresponding channels are ready for I/O operations
+      selector.select(action);
     }
   }
  

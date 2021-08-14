@@ -76,7 +76,7 @@ class WorkThread extends Thread {
   /*
    * Busy loop max iteration
    */
-  private final static long BUSY_LOOP_MAX = 1000000;
+  private final static long BUSY_LOOP_MAX = 10000;
 
   /*
    * Reusable object 
@@ -96,7 +96,7 @@ class WorkThread extends Thread {
   static ThreadLocal<ByteBuffer> inBuf = new ThreadLocal<ByteBuffer>() {
     @Override
     protected ByteBuffer initialValue() {
-      return ByteBuffer.allocate(bufferSize);
+      return ByteBuffer.allocateDirect(bufferSize);
     }
   };
   
@@ -106,7 +106,7 @@ class WorkThread extends Thread {
   static ThreadLocal<ByteBuffer> outBuf = new ThreadLocal<ByteBuffer>() {
     @Override
     protected ByteBuffer initialValue() {
-      return ByteBuffer.allocate(bufferSize);
+      return ByteBuffer.allocateDirect(bufferSize);
     }
   };
   
@@ -161,19 +161,25 @@ class WorkThread extends Thread {
     while (true) {
       SelectionKey key = null;
       long counter = 0;
+      long timeout = 0;
       busy = false;
       // wait for next task
       while((key = nextKey.getAndSet(null)) == null) {
+        
         if (counter < BUSY_LOOP_MAX) {
           counter ++;
           Thread.onSpinWait();
         } else {
+          timeout += 1;
+          if (timeout > 10) timeout = 10;
           try {
-            Thread.sleep(1);
+            Thread.sleep(timeout);
           } catch (InterruptedException e) {
           }
         }  
       }
+      counter = 0;
+      timeout = 0;
       // We are busy now
       busy = true;
       
