@@ -28,7 +28,35 @@ import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.util.Utils;
 
 public class RequestHandlers {
+  
+  static long epochStartNanos = System.nanoTime();
+  
+  static class Attachment {
+    private long accessTime;
+    private boolean inUse = false;
     
+    Attachment(){
+      accessTime = System.nanoTime() - epochStartNanos;
+      setInUse(true);
+    }
+    
+    boolean  inUse() {
+      return inUse;
+    }
+    
+    void setInUse(boolean b) {
+      this.inUse = b;
+    }
+    
+    long lastAccess() {
+      return accessTime;
+    }
+    
+    void access() {
+      accessTime = System.nanoTime() - epochStartNanos;
+    }
+        
+  }  
   /*
    * Request handlers
    */
@@ -73,21 +101,12 @@ public class RequestHandlers {
 }
 
 class WorkThread extends Thread {
+  
   /*
    * Busy loop max iteration
    */
   private final static long BUSY_LOOP_MAX = 10000;
 
-  /*
-   * Reusable object 
-   */
-  static ThreadLocal<Object> inuseFlag = new ThreadLocal<Object>() {
-    @Override
-    protected Object initialValue() {
-     return new Object();
-    }
-  };
-  
   static int bufferSize = 256 * 1024;
   
   /*
@@ -146,12 +165,47 @@ class WorkThread extends Thread {
    * @param key selection key
    */
   void nextKey(SelectionKey key) {
-    key.attach(inuseFlag.get());
+    key.attach(new RequestHandlers.Attachment());
     while (!nextKey.compareAndSet(null, key)) {
       Thread.onSpinWait();
     }
   }
   
+  /**
+   * Release key - mark it not in use
+   * @param key
+   */
+  void release(SelectionKey key) {
+    RequestHandlers.Attachment att = (RequestHandlers.Attachment) key.attachment();
+    att.setInUse(false);
+  }
+  
+  
+ /**
+  *  Busy loop with expo-linear back off
+  */
+  
+  private SelectionKey waitForKey() {
+    long counter = 0;
+    long timeout = 0;
+    SelectionKey key = null;
+    // wait for next task
+    while((key = nextKey.getAndSet(null)) == null) {    
+      // Exponential (actually, linear :)) back off
+      if (counter < BUSY_LOOP_MAX) {
+        counter ++;
+        Thread.onSpinWait();
+      } else {
+        timeout += 1;
+        if (timeout > 10) timeout = 10;
+        try {
+          Thread.sleep(timeout);
+        } catch (InterruptedException e) {
+        }
+      }  
+    }
+    return key;
+  }
   /*
    * Main loop
    */
@@ -160,29 +214,10 @@ class WorkThread extends Thread {
     // infinite loop
     while (true) {
       SelectionKey key = null;
-      long counter = 0;
-      long timeout = 0;
       busy = false;
-      // wait for next task
-      while((key = nextKey.getAndSet(null)) == null) {
-        
-        if (counter < BUSY_LOOP_MAX) {
-          counter ++;
-          Thread.onSpinWait();
-        } else {
-          timeout += 1;
-          if (timeout > 10) timeout = 10;
-          try {
-            Thread.sleep(timeout);
-          } catch (InterruptedException e) {
-          }
-        }  
-      }
-      counter = 0;
-      timeout = 0;
+      key = waitForKey();
       // We are busy now
       busy = true;
-      
       SocketChannel channel = (SocketChannel) key.channel();
       // Read request first
       ByteBuffer in = inBuf.get();
@@ -230,7 +265,7 @@ class WorkThread extends Thread {
         }
       } finally {
         // Release selection key - ready for the next request
-        key.attach(null);
+        release(key);
         nextKey.set(null);
         // set busy flag to false
         busy = false;

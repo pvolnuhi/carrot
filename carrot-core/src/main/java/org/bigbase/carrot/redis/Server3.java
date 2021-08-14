@@ -125,14 +125,16 @@ public class Server3 {
         if (!key.isValid()) return;
         if (key.isAcceptable()) {
           SocketChannel client = serverSocket.accept();
-
           // Adjusts this channel's blocking mode to false
           client.configureBlocking(false);
           client.setOption(StandardSocketOptions.TCP_NODELAY, true);
           // Operation-set bit for read operations
           client.register(selector, SelectionKey.OP_READ);
           log("Connection Accepted: " + client.getLocalAddress() + "\n");
-        } else if (key.isReadable() && key.attachment() == null) {
+        } else if (key.isReadable()) {
+          // Check if it is in use
+          RequestHandlers.Attachment att = (RequestHandlers.Attachment)key.attachment();
+          if (att !=null && att.inUse()) return;
           service.submit(key);
         }
       } catch (IOException e) {
@@ -143,9 +145,7 @@ public class Server3 {
         service = null;
         log("Complete");
       }
-
     };
-
     // Infinite loop..
     // Keep server running
     while (true) {

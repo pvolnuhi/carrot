@@ -150,7 +150,11 @@ public class Server2 {
 
             // Tests whether this key's channel is ready for reading
             // and is not being currently processed
-          } else if (myKey.isReadable() && myKey.attachment() == null) {
+          } else if (myKey.isReadable()) {
+            RequestHandlers.Attachment att = (RequestHandlers.Attachment) myKey.attachment();
+            if (att != null && att.inUse()) {
+              continue;
+            }
             service.submit(myKey);
           }
           keysIterator.remove();
