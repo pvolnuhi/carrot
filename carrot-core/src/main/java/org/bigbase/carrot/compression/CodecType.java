@@ -63,7 +63,7 @@ public enum CodecType {
   public Codec getCodec() {
     switch (id) {
       case 0:
-        return null;
+        return CodecFactory.getInstance().getCodec(CodecType.NONE);
       case 1:
         return CodecFactory.getInstance().getCodec(CodecType.LZ4);
       case 2: 

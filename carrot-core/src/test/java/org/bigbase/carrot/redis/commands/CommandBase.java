@@ -31,7 +31,7 @@ import java.nio.ByteBuffer;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.CommandProcessor;
 import org.bigbase.carrot.redis.RedisConf;
-import org.bigbase.carrot.redis.Server;
+import org.bigbase.carrot.redis.RedisServer;
 import org.bigbase.carrot.redis.db.DBSystem;
 import org.bigbase.carrot.redis.util.Utils;
 import org.junit.After;
@@ -93,7 +93,7 @@ public abstract class CommandBase {
   @Test
   public void testValidRequestsNetworkMode() throws UnknownHostException, IOException, InterruptedException {
     // Start server
-    Server.start();    
+    RedisServer.start();    
     
     // Connect client
     Socket client = new Socket("localhost", RedisConf.getInstance().getServerPort());
@@ -128,7 +128,7 @@ public abstract class CommandBase {
     }
     
     client.close();
-    Server.shutdown();
+    RedisServer.shutdown();
   }
   
   //@Ignore

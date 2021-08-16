@@ -20,13 +20,11 @@ package org.bigbase.carrot.redis;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
-import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.Iterator;
-import java.util.Set;
+import java.util.function.Consumer;
 
 import org.bigbase.carrot.BigSortedMap;
  
@@ -36,7 +34,7 @@ import org.bigbase.carrot.BigSortedMap;
  *  Scalability and performance is not a goal #1 yet
  */
  
-public class Server2 {
+public class RedisServer {
   
   /**
    * Executor service
@@ -63,11 +61,13 @@ public class Server2 {
     return started;
   }
   
-  
+  /**
+   * Start server in a separate thread
+   */
   public static void start() {
     new Thread(() -> {
       try {
-        Server.main(new String[] {});
+        RedisServer.main(new String[] {});
       } catch (IOException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();
@@ -81,22 +81,21 @@ public class Server2 {
         // TODO Auto-generated catch block
         e.printStackTrace();
       }
-      
       log("started="+ started);
     }
   }
   
   public static void main(String[] args) throws IOException {
-    log("Carrot server starting ...");
-    
-    initStore();
-    log("Store started");
-    
+    log("Carrot-Redis server starting ...");
+    String confFilePath = args.length > 0? args[0]: null;
+    initStore(confFilePath);
+    log("Internal store started");
+
     startExecutorService();
     log("Executor service started");
-    
+
     // Selector: multiplexor of SelectableChannel objects
-    Selector selector = Selector.open(); // selector is open here
+    final Selector selector = Selector.open(); // selector is open here
     log("Selector started");
 
     // ServerSocketChannel: selectable channel for stream-oriented listening sockets
@@ -105,74 +104,53 @@ public class Server2 {
 
     int port = RedisConf.getInstance().getServerPort();
     InetSocketAddress serverAddr = new InetSocketAddress("localhost", port);
- 
-    // Binds the channel's socket to a local address and configures the socket to listen for connections
+
+    // Binds the channel's socket to a local address and configures the socket to listen for
+    // connections
     serverSocket.bind(serverAddr);
-    log("Carrot server started on port="+ port);
     // Adjusts this channel's blocking mode.
     serverSocket.configureBlocking(false);
- 
     int ops = serverSocket.validOps();
     serverSocket.register(selector, ops, null);
-    log("Selector registered server");
+    log("Carrot-Redis server started on port = " + port);
 
     started = true;
-    log("Carrot server started.");
 
+    Consumer<SelectionKey> action = key -> {
+
+      try {
+        if (!key.isValid()) return;
+        if (key.isAcceptable()) {
+          SocketChannel client = serverSocket.accept();
+          // Adjusts this channel's blocking mode to false
+          client.configureBlocking(false);
+          client.setOption(StandardSocketOptions.TCP_NODELAY, true);
+          // Operation-set bit for read operations
+          client.register(selector, SelectionKey.OP_READ);
+          log("Connection Accepted: " + client.getLocalAddress());
+        } else if (key.isReadable()) {
+          // Check if it is in use
+          RequestHandlers.Attachment att = (RequestHandlers.Attachment)key.attachment();
+          if (att !=null && att.inUse()) return;
+          service.submit(key);
+        }
+      } catch (IOException e) {
+        log("Shutting down server ...");
+        service.shutdown();
+        store.dispose();
+        store = null;
+        service = null;
+        log("Bye-bye folks. See you soon :)");
+      }
+    };
     // Infinite loop..
     // Keep server running
-    try {
-      while (true) {
-
-        // Selects a set of keys whose corresponding channels are ready for I/O operations
-        selector.select();
-
-        // token representing the registration of a SelectableChannel with a Selector
-        Set<SelectionKey> keys = selector.selectedKeys();
-        Iterator<SelectionKey> keysIterator = keys.iterator();
-
-        while (keysIterator.hasNext()) {
-          SelectionKey myKey = keysIterator.next();
-          if (!myKey.isValid()) {
-            keysIterator.remove();
-            continue;
-          }
-          // Tests whether this key's channel is ready to accept a new socket connection
-          if (myKey.isAcceptable()) {
-            SocketChannel client = serverSocket.accept();
-
-            // Adjusts this channel's blocking mode to false
-            client.configureBlocking(false);
-            client.setOption(StandardSocketOptions.TCP_NODELAY, true);
-            // Operation-set bit for read operations
-            client.register(selector, SelectionKey.OP_READ);
-            log("Connection Accepted: " + client.getLocalAddress() + "\n");
-
-            // Tests whether this key's channel is ready for reading
-            // and is not being currently processed
-          } else if (myKey.isReadable()) {
-            RequestHandlers.Attachment att = (RequestHandlers.Attachment) myKey.attachment();
-            if (att != null && att.inUse()) {
-              continue;
-            }
-            service.submit(myKey);
-          }
-          keysIterator.remove();
-        }
-      }
-    } catch (ClosedSelectorException e) {
-      log("Shutting down server ...");
-      service.shutdown();
-      serverSocket.close();
-      store.dispose();
-      store = null;
-      service = null;
-      selector = null;
-      log("Complete");
+    while (true) {
+      // Selects a set of keys whose corresponding channels are ready for I/O operations
+      selector.select(action);
     }
   }
  
-  
   public static void shutdown() {
     if (selector != null) {
       try {
@@ -183,8 +161,9 @@ public class Server2 {
       }
     }
   }
-  private static void initStore() {
-    RedisConf conf = RedisConf.getInstance();
+  
+  private static void initStore(String confFilePath) {
+    RedisConf conf = RedisConf.getInstance(confFilePath);
     long limit = conf.getDataStoreMaxSize();
     store = new BigSortedMap(limit);
     BigSortedMap.setCompressionCodec(conf.getCompressionCodec());
