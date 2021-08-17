@@ -17,6 +17,8 @@
  */
 package org.bigbase.carrot;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
@@ -60,6 +62,45 @@ import org.bigbase.carrot.util.Utils;
 //@SuppressWarnings("unused")
 public final class DataBlock  {
   private final static Logger LOG = Logger.getLogger(DataBlock.class.getName());
+  
+  /**
+   * For complex data types custom deallocators must be required
+   */
+  public static interface Deallocator {  
+    /**
+     * Custom deallocator must deallocate ALL additional data (except key-value)
+     * @param recordAddress address of a key-value record
+     * @return true if it was processed, false - otherwise
+     */
+    public boolean free(long recordAddress);
+  }
+  
+  /**
+   * Registered custom deallocators
+   */
+  static List<Deallocator> customDeallocators = new ArrayList<Deallocator>();
+  
+  /**
+   * Register custom memory disposer
+   * @param d memory disposer
+   */
+  
+  public static void addCustomDeallocator(Deallocator d) {
+    synchronized(customDeallocators) {
+      if (d != null) {
+        customDeallocators.add(d);
+      }
+    }
+  }
+  
+  /**
+   * For testing only
+   */
+  public static void clearDeallocators() {
+    synchronized(customDeallocators) {
+      customDeallocators.clear();
+    }
+  }
   
   public final static int KEY_SIZE_LENGTH = 2;
   public final static int VALUE_SIZE_LENGTH = 2;
@@ -2677,8 +2718,14 @@ public final class DataBlock  {
     long ptr = dataPtr;
 
     while (count++ < numRecords) {
+      
       int keylen = blockKeyLength(ptr);
       int vallen = blockValueLength(ptr);
+      //TODO: HACK?
+      if (keylen > 1) {
+        runCustomDeallocators(ptr);
+      }
+      
       AllocType type = getRecordAllocationType(ptr);
       if (freeExternalAllocs && getRecordAllocationType(ptr) != AllocType.EMBEDDED) {
         long addr = getExternalRecordAddress(ptr);
@@ -2709,7 +2756,17 @@ public final class DataBlock  {
 
   }
 
-  
+  private void runCustomDeallocators(long ptr) {
+    synchronized (customDeallocators) {
+      int num = customDeallocators.size();
+      for (int i = 0; i < num; i++) {
+        Deallocator cd = customDeallocators.get(i);
+        boolean result = cd.free(ptr);
+        if (result) break;
+      }
+    }
+  }
+
   /**
    * Used for testing only
    */

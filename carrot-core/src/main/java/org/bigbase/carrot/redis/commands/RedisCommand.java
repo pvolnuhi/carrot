@@ -195,6 +195,12 @@ public interface RedisCommand {
   static final long SCHEDULE_FLAG = UnsafeAccess.allocAndCopy("SCHEDULE", 0, "SCHEDULE".length());
   static final int SCHEDULE_LENGTH = "SCHEDULE".length();
   
+  static final long SYNC_FLAG = UnsafeAccess.allocAndCopy("SYNC", 0, "SYNC".length());
+  static final int SYNC_LENGTH = "SYNC".length();
+  
+  static final long ASYNC_FLAG = UnsafeAccess.allocAndCopy("ASYNC", 0, "SYNC".length());
+  static final int ASYNC_LENGTH = "ASYNC".length();
+  
   default void NULL_STRING_REPLY (long ptr) {
     UnsafeAccess.putByte(ptr,  (byte) ReplyType.BULK_STRING.ordinal());
     UnsafeAccess.putInt(ptr + Utils.SIZEOF_BYTE, -1);

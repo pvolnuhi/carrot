@@ -27,17 +27,19 @@ import java.nio.channels.SocketChannel;
 import java.util.function.Consumer;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.lists.Lists;
  
 /**
  *
- *  Simple network server for MVP
+ *  Simple network server for MVP (minimum viable product)
  *  Scalability and performance is not a goal #1 yet
+ *  
  */
  
 public class RedisServer {
   
   /**
-   * Executor service
+   * Executor service (request handlers)
    */
   static RequestHandlers service;
   
@@ -51,6 +53,9 @@ public class RedisServer {
    */
   static Selector selector;
   
+  /**
+   * Server started (for testing)
+   */
   static boolean started = false;
   
   /**
@@ -85,13 +90,20 @@ public class RedisServer {
     }
   }
   
+  /**
+   * 
+   * Network server Main method (entry point)
+   * 
+   * @param args command line argument list (path to a configuration file)
+   * @throws IOException
+   */
   public static void main(String[] args) throws IOException {
     log("Carrot-Redis server starting ...");
     String confFilePath = args.length > 0? args[0]: null;
     initStore(confFilePath);
     log("Internal store started");
 
-    startExecutorService();
+    startRequestHandlers();
     log("Executor service started");
 
     // Selector: multiplexor of SelectableChannel objects
@@ -166,10 +178,13 @@ public class RedisServer {
     RedisConf conf = RedisConf.getInstance(confFilePath);
     long limit = conf.getDataStoreMaxSize();
     store = new BigSortedMap(limit);
+    //TODO: Load data from a configured snapshot directory
     BigSortedMap.setCompressionCodec(conf.getCompressionCodec());
+    // Register custom memory deallocator for LIST data type
+    Lists.registerDeallocator();
   }
 
-  private static void startExecutorService() {
+  private static void startRequestHandlers() {
     RedisConf conf = RedisConf.getInstance();
     int numThreads = conf.getWorkingThreadPoolSize();
     service = RequestHandlers.create(store, numThreads);

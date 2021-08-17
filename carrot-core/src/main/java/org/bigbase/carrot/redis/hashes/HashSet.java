@@ -192,6 +192,7 @@ public class HashSet extends Operation{
       // We can't split existing KV , so insert new one
       //TODO: UPDATE == true (exists == true)
       // WRONG CODE
+      //TODO: TEST
       insertNewKVandFieldValue(fieldPtr, fieldSize);
       return true;
     } else {

@@ -42,7 +42,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 public class BigSortedMap {
-	
+
   Log LOG = LogFactory.getLog(BigSortedMap.class);
   
 //TODO: configurable compression - default codec
@@ -702,6 +702,7 @@ public class BigSortedMap {
   public boolean put(long keyPtr, int keyLength, long valuePtr, int valueLength, 
       long expire, boolean reuseValue) {
 
+    
     long version = getSequenceId();
     IndexBlock kvBlock = getThreadLocalBlock();
     kvBlock.putForSearch(keyPtr, keyLength, version);
@@ -1631,16 +1632,33 @@ public class BigSortedMap {
    * Disposes map, deallocate all the memory
    */
   public void dispose() {
-    for(IndexBlock b: map.keySet()) {
-    	b.free();
+    synchronized(map) {
+      for(IndexBlock b: map.keySet()) {
+        b.free();
+      }
+      map.clear();
+      
+//      totalAllocatedMemory.set(0);
+//      totalBlockDataSize.set(0);
+//      totalBlockIndexSize.set(0);
+//      totalExternalDataSize.set(0);
+//      totalIndexSize.set(0);
+//      totalDataInDataBlocksSize.set(0);
+//      totalDataInIndexBlocksSize.set(0);
     }
-    map.clear();
-    totalAllocatedMemory.set(0);
-    totalBlockDataSize.set(0);
-    totalBlockIndexSize.set(0);
-    totalExternalDataSize.set(0);
-    totalIndexSize.set(0);
-    totalDataInDataBlocksSize.set(0);
-    totalDataInIndexBlocksSize.set(0);
+  }
+  
+  public void flushAll() {
+    long start = System.currentTimeMillis();
+    dispose();
+    initNodes();
+    long end = System.currentTimeMillis();
+    /*DEBUG*/
+    System.out.println("flush all took:"+ (end - start) + "ms");
+  }
+  
+  public void flush (int db) {
+    //TODO: flush DB by DB's id
+    flushAll();
   }
 }

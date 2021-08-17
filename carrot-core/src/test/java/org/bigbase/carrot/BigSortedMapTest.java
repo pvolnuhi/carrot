@@ -101,6 +101,9 @@ public class BigSortedMapTest {
     testDeleteUndeleted();
     testExists();
     testPutGet();
+    
+    // This call must be the last
+    testFlushAll();
   }
 
   @Test
@@ -197,6 +200,24 @@ public class BigSortedMapTest {
     }
   }
 
+  @Ignore
+  @Test
+  public void testFlushAll() {
+    System.out.println("testFlushAll");
+
+    map.flushAll();
+    
+    // Check that all keys have been deleted
+    for (int i = 1; i <= totalLoaded; i++) {
+      byte[] key = ("KEY" + (i)).getBytes();
+      long keyPtr = UnsafeAccess.malloc(key.length);
+      UnsafeAccess.copy(key, 0, keyPtr, key.length);
+      boolean res = map.exists(keyPtr, key.length);
+      UnsafeAccess.free(keyPtr);
+      assertEquals(false, res);
+    }
+  }
+  
   private List<byte[]> delete(int num) {
     Random r = new Random();
     int numDeleted = 0;

@@ -48,7 +48,20 @@ import org.bigbase.carrot.util.Utils;
 /**
  * Support for packing multiple field-values into one K-V value
  * under the same key. This is for compact representation of naturally ordered
- * HASHEs. key -> field -> value under common key
+ * HASHEs. key -> field -> value under a common key
+ * 
+ * In a key-value store, hash data is stored in a value.
+ * 
+ * Value format:
+ * 
+ * N - number of pairs - 2 bytes
+ * {
+ *  field size - VLE (variable length encoding)
+ *  value size - VLE (variable length encoding)
+ *  field data
+ *  value data 
+ * } +N
+ * 
  * @author Vladimir Rodionov
  *
  */

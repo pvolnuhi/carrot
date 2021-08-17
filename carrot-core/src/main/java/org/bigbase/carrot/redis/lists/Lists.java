@@ -20,6 +20,8 @@ package org.bigbase.carrot.redis.lists;
 
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.DataBlock;
+
 import org.bigbase.carrot.redis.util.Commons;
 import org.bigbase.carrot.redis.util.DataType;
 import org.bigbase.carrot.util.Key;
@@ -35,7 +37,6 @@ import java.util.List;
 /**
  * Lists: collections of string elements sorted according to the order of insertion. 
  * They are basically linked lists.
- * @author Vladimir Rodionov
  *
  */
 public class Lists {
@@ -43,7 +44,19 @@ public class Lists {
   public static enum Side {
     LEFT, RIGHT;
   }
+  
+  /**
+   * 
+   * Custom memory disposer for List data type
+   */
+  static class Deallocator implements DataBlock.Deallocator {
 
+    @Override
+    public boolean free(long recordAddress) {
+      return Lists.dispose(recordAddress);
+    }
+  }
+    
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
     protected Long initialValue() {
@@ -103,6 +116,13 @@ public class Lists {
   
   static long getTotalAllocatedMemory() {
     return BigSortedMap.totalAllocatedMemory.get();
+  }
+  
+  /**
+   * Register custom memory deallocator
+   */
+  public static void registerDeallocator() {
+    DataBlock.addCustomDeallocator(new Deallocator());
   }
   
   /**
@@ -199,6 +219,50 @@ public class Lists {
     } finally {
       KeysLocker.writeUnlock(key);
     }
+  }
+  
+  /**
+   * This method is called on BSM.dispose() and works for List data types only
+   * @param map sorted map storage
+   * @param keyPtr key address (FULL key including size and type prefix)
+   * @param keySize key size
+   * @return true if it was List data type, false - otherwise
+   */
+  public static boolean dispose(long recordAddress) {
+    long addr = DataBlock.keyAddress(recordAddress);
+    
+    if (DataType.getDataType(addr) != DataType.LIST) {
+      return false;
+    }
+    
+    long keyPtr = DataType.internalKeyToExternalKeyAddress(addr);
+    int keySize = DataType.externalKeyLength(addr);
+    long valuePtr = DataBlock.valueAddress(recordAddress);
+    
+    //TODO: implement as the Operation (speed optimization and atomicity)
+    Key key = getKey(keyPtr, keySize);
+    try {
+      KeysLocker.writeLock(key);
+      long firstSegmentAddress = UnsafeAccess.toLong(valuePtr + Utils.SIZEOF_INT); 
+      if (firstSegmentAddress == 0) {
+        // Empty list?
+        return true;
+      }
+      Segment s = segment.get();
+      s.setDataPointer(firstSegmentAddress);
+      if (s != null) {
+        long nextPtr = 0;
+        do {
+          nextPtr = s.getNextAddress();
+          s.free();
+          s.setDataPointer(nextPtr);
+        } while(nextPtr > 0);
+      }
+      // We do not delete K-V
+    } finally {
+      KeysLocker.writeUnlock(key);
+    }
+    return true;
   }
   
   /**
@@ -706,8 +770,14 @@ public class Lists {
         long dataPtr = s.insert(pivotPtr, pivotSize, elemPtr, elemSize, after);
         if (dataPtr > 0) {
           if (s.isFirst()) {
+            boolean last = s.isLast();
             // update address of the first segment
             UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, dataPtr);
+            if (last) {
+              // update last too
+              UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, dataPtr);
+            }
+            
           } else if (s.isLast()) {
             // update last segment address
             UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, dataPtr);
@@ -1271,6 +1341,7 @@ public class Lists {
       int valueBufSize = valueArenaSize.get();
       Segment s = reverse? lastSegment(map, kPtr, kSize, valueBuf, valueBufSize):
         firstSegment(map, kPtr, kSize, valueBuf, valueBufSize);
+      
       // Now valueBuf contains list's Value= NUMBER ELEMENTS, FIRST SEGMENT ADDRESS, LAST SEGMENT ADDRESS
       if (s == null) {
         return 0;
@@ -1467,7 +1538,6 @@ public class Lists {
       }
       
       if (needUpdate) {
-        //UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, s.next(s).getDataPtr());
         map.put(kPtr, kSize, valueBuf, Utils.SIZEOF_INT + Utils.SIZEOF_LONG + Utils.SIZEOF_LONG, 0);
       }
       // Number of elements in this list

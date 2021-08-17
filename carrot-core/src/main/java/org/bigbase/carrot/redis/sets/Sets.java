@@ -34,7 +34,6 @@ import org.bigbase.carrot.BigSortedMapScanner;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.redis.util.Commons;
 import org.bigbase.carrot.redis.util.DataType;
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -49,7 +48,14 @@ import org.bigbase.carrot.util.Utils;
  * 
  * [KEY_SIZE]KEY0-> Value([e1,e2,e3,...,eX]) [KEY_SIZE]KEYeX+1->Value([eX+1,eX+2,...])
  * [KEY_SIZE] prepends Key to avoid possible key collisions
- * @author Vladimir Rodionov
+ * 
+ * Value format:
+ * 
+ * N - number of elements - 2 bytes
+ * {
+ *  element size - VLE (variable length encoding)
+ *  element data 
+ * } +N
  *
  */
 public class Sets {
@@ -901,15 +907,18 @@ public class Sets {
     int keySize = key.length();
     
     long result = SPOP(map, keyPtr, keySize, buffer, bufSize, count) ;
-    List<String> list = new ArrayList<String>();
-    int total = UnsafeAccess.toInt(buffer);
-    long ptr = buffer + Utils.SIZEOF_INT;
-    for (int i = 0; i < total; i++) {
-      int mSize = Utils.readUVInt(ptr);
-      int mSizeSize = Utils.sizeUVInt(mSize);
-      String s = Utils.toString(ptr + mSizeSize, mSize);
-      list.add(s);
-      ptr += mSize + mSizeSize;
+    List<String> list = null;
+    if (result > 0) {
+      list = new ArrayList<String>();
+      int total = UnsafeAccess.toInt(buffer);
+      long ptr = buffer + Utils.SIZEOF_INT;
+      for (int i = 0; i < total; i++) {
+        int mSize = Utils.readUVInt(ptr);
+        int mSizeSize = Utils.sizeUVInt(mSize);
+        String s = Utils.toString(ptr + mSizeSize, mSize);
+        list.add(s);
+        ptr += mSize + mSizeSize;
+      }
     }
     UnsafeAccess.free(keyPtr);
     UnsafeAccess.free(buffer);
@@ -1165,15 +1174,18 @@ public class Sets {
     int keySize = key.length();
     
     long result = SRANDMEMBER(map, keyPtr, keySize, buffer, bufSize, count) ;
-    List<String> list = new ArrayList<String>();
-    int total = UnsafeAccess.toInt(buffer);
-    long ptr = buffer + Utils.SIZEOF_INT;
-    for (int i = 0; i < total; i++) {
-      int mSize = Utils.readUVInt(ptr);
-      int mSizeSize = Utils.sizeUVInt(mSize);
-      String s = Utils.toString(ptr + mSizeSize, mSize);
-      list.add(s);
-      ptr += mSize + mSizeSize;
+    List<String> list = null;
+    if (result > 0) {
+      list = new ArrayList<String>();
+      int total = UnsafeAccess.toInt(buffer);
+      long ptr = buffer + Utils.SIZEOF_INT;
+      for (int i = 0; i < total; i++) {
+        int mSize = Utils.readUVInt(ptr);
+        int mSizeSize = Utils.sizeUVInt(mSize);
+        String s = Utils.toString(ptr + mSizeSize, mSize);
+        list.add(s);
+        ptr += mSize + mSizeSize;
+      }
     }
     UnsafeAccess.free(keyPtr);
     UnsafeAccess.free(buffer);

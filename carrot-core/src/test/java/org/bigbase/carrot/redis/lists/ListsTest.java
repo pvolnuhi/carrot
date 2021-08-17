@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Random;
 
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.redis.lists.Lists.Side;
@@ -98,10 +99,12 @@ public class ListsTest {
   private void tearDown() {
     // Dispose
     map.dispose();
+    
+    DataBlock.clearDeallocators();
+    
     UnsafeAccess.free(key.address);
     UnsafeAccess.free(buffer);
     values.stream().forEach( x -> UnsafeAccess.free(x.address));
-
     BigSortedMap.printMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
   }
@@ -146,6 +149,11 @@ public class ListsTest {
   }
   
   private void allTests() {
+    
+    setUp();
+    testDeallocator();
+    tearDown();
+    
     setUp();
     testLREM();
     tearDown();
@@ -196,6 +204,32 @@ public class ListsTest {
     tearDown();
   }
   
+  
+  
+  @Ignore
+  @Test
+  public void testDeallocator () {
+    System.out.println("Test Deallocator");
+    // Register LIST deallocator
+    Lists.registerDeallocator();
+    
+    Key key = getKey();
+    
+    for (int i = 0; i < n; i++) {
+      Value v = values.get(i);
+      long[] elemPtrs = new long[] {v.address};
+      int[] elemSizes = new int[] {v.length};
+      long len  = Lists.LPUSH(map, key.address, key.length, elemPtrs, elemSizes);
+      assertEquals(i + 1, (int) len);
+    }
+    System.out.println("Before BSM.dispose:");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    System.out.println("After BSM.dispose:");
+    assertEquals(n, (int) Lists.LLEN(map, key.address, key.length));
+    
+    
+  }
   @Ignore
   @Test
   public void testRPUSHX() {
@@ -988,7 +1022,9 @@ public class ListsTest {
         assertEquals(n + j, (int) size);
       }
       // Remove all
+
       removed = Lists.LREM(map, key.address, key.length, -toInsert, v.address, v.length);
+
       assertEquals(toInsert, (int) removed);
       assertEquals(n - 1, (int) Lists.LLEN(map, key.address, key.length));
       if (i % 10 == 0) {
