@@ -18,6 +18,8 @@
 package org.bigbase.carrot.util;
 
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.BufferOverflowException;
@@ -25,6 +27,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -39,6 +43,10 @@ public final class UnsafeAccess {
   public static boolean debug = false; 
   
   public static class MallocStats {
+    
+    public static interface TraceFilter{
+      public boolean recordAllocationStackTrace(int size);
+    }
     /*
      * Number of memory allocations
      */
@@ -59,7 +67,79 @@ public final class UnsafeAccess {
      * Allocation map
      */
     private RangeTree allocMap = new RangeTree();
-        
+    
+    /**
+     * Is stack trace record enabled
+     */
+    private boolean stackTraceRecordingEndbled = false;
+    
+    
+    /**
+     * Stack trace filter
+     */
+    
+    private TraceFilter filter = null;
+    
+    /**
+     * Trace recorder maximum record number 
+     */
+    
+    private int strLimit = Integer.MAX_VALUE; // default - no limit
+    
+    /**
+     * Stack traces map (allocation address -> stack trace)
+     */
+    private Map<Long, String> stackTraceMap = 
+        Collections.synchronizedMap(new HashMap<Long, String>());
+    
+    /**
+     * Is stack trace recording enabled
+     * @return true, false
+     */
+    public boolean isStackTraceRecordingEnabled() {
+      return this.stackTraceRecordingEndbled;
+    }
+    
+    /**
+     * Set STR enabled
+     * @param b
+     */
+    public void setStackTraceRecordingEnabled(boolean b) {
+      this.stackTraceRecordingEndbled = b;
+    }
+    
+    /**
+     * Set STR filter
+     * @param f filter
+     */
+    public void setStackTraceRecordingFilter(TraceFilter f) {
+      this.filter = f;
+    }
+    
+    /**
+     * Get STR filter
+     * @return filter
+     */
+    public TraceFilter getStackTraceRecordingFilter() {
+      return this.filter;
+    }
+    
+    /**
+     * Set stack trace recording limit
+     * @param limit maximum number of records to keep
+     */
+    public void setStackTraceRecordingLimit(int limit) {
+      this.strLimit = limit;
+    }
+    
+    /**
+     * Get STR limit
+     * @return limit
+     */
+    public int getStackTraceRecordingLimit() {
+      return this.strLimit;
+    }
+    
     /**
      * Returns total number of memory allocations
      * @return number
@@ -91,8 +171,27 @@ public final class UnsafeAccess {
       if (r != null) {
         System.err.println("Allocation collision ["+ r.start +"," + r.size+"]");
       }
+      if (isStackTraceRecordingEnabled()) {
+        if (stackTraceMap.size() < strLimit) {
+          if (filter != null && !filter.recordAllocationStackTrace((int)alloced)) {
+            return;
+          }
+          stackTraceMap.put(address, stackTrace());
+        }
+      }
     }
 
+    private String stackTrace() {
+      PrintStream errStream = System.err;
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      PrintStream ps = new PrintStream(baos);
+      System.setErr(ps); 
+      Thread.dumpStack();
+      System.setErr(errStream);
+      String s= baos.toString();
+      return s;
+    }
+    
     @SuppressWarnings("unused")
     private void dumpIfAlloced(String str, long address, int value, long alloced) {
       if (alloced == value) {
@@ -128,6 +227,9 @@ public final class UnsafeAccess {
 
       freed.addAndGet(mem.size);      
       freeEvents.incrementAndGet();
+      if (isStackTraceRecordingEnabled()) {
+        stackTraceMap.remove(address);
+      }
     }
     
     /**
@@ -170,12 +272,19 @@ public final class UnsafeAccess {
         System.out.println("Orphaned allocation sizes:");
         for(Map.Entry<Range, Range> entry: allocMap.entrySet()) {
           System.out.println(entry.getKey().start +" size="+ entry.getValue().size);
+          if (isStackTraceRecordingEnabled()) {
+            String strace = stackTraceMap.get(entry.getKey().start);
+            if (strace != null) {
+              System.out.println(strace);
+            }
+          }
         }
       }
       System.out.println();
     }
     
   }
+  
   
   /**
    * Memory allocator statistics
@@ -243,6 +352,74 @@ public final class UnsafeAccess {
    * Private constructor
    */
   private UnsafeAccess(){}
+  
+  /**
+   * Malloc stats methods
+   */
+  
+  /**
+   * Set debug mode enabled/disabled
+   * @param b
+   */
+  public static void setMallocDebugEnabled(boolean b) {
+    UnsafeAccess.debug = b;
+  }
+  
+  /**
+   * Is malloc debug enabled
+   * @return enabled/disabled
+   */
+  public static boolean isMallocDebugEnabled() {
+    return UnsafeAccess.debug;
+  }
+  
+  /**
+   * Set STR enabled
+   * @param b true or false
+   */
+  public static void setMallocDebugStackTraceEnabled(boolean b) {
+    mallocStats.setStackTraceRecordingEnabled(b);
+  }
+  
+  /**
+   * Is STR enabled
+   * @return true or false
+   */
+  public static boolean isMallocDebugStackTraceEnabled() {
+    return mallocStats.isStackTraceRecordingEnabled();
+  }
+  
+  /**
+   * Set STR filter
+   * @param f filter
+   */
+  public static void setStackTraceRecordingFilter(MallocStats.TraceFilter f) {
+    mallocStats.setStackTraceRecordingFilter(f);
+  }
+  
+  /**
+   * Get STR filter
+   * @return filter
+   */
+  public static MallocStats.TraceFilter getStackTraceRecordingFilter() {
+    return mallocStats.getStackTraceRecordingFilter();
+  }
+  
+  /**
+   * Set STR limit
+   * @param limit
+   */
+  public static void setStackTraceRecordingLimit(int limit) {
+    mallocStats.setStackTraceRecordingLimit(limit);
+  }
+  
+  /**
+   * Get STR limit
+   * @return limit
+   */
+  public static int getStackTraceRecordingLimit() {
+    return mallocStats.getStackTraceRecordingLimit();
+  }
   
   /**
    * Get memory address for direct byte buffer
@@ -658,7 +835,7 @@ public final class UnsafeAccess {
     if (dst.isDirect()) {
       long addr = address(dst);
       addr += pos;
-      copy(src, addr, len);
+      copy_no_dst_check(src, addr, len);
     } else {
       byte[] buf = dst.array();
       copy(src, buf, pos, len);
@@ -682,11 +859,12 @@ public final class UnsafeAccess {
     if (src.isDirect()) {
       long addr = address(src);
       addr += pos;
-      copy(addr, ptr, len);
+      copy_no_src_check(addr, ptr, len);
     } else {
       byte[] buf = src.array();
       copy(buf, pos, ptr, len);
     }
+    src.position(pos + len);
   }
   /**
    * Copies the bytes from given array's offset to length part into the given buffer.
@@ -772,6 +950,42 @@ public final class UnsafeAccess {
     }
   }
 
+  /**
+   * Copy data in memory (no src check in a debug memory mode)
+   * @param src source address
+   * @param dst destination address
+   * @param len number of bytes to copy
+   */
+  public static void copy_no_src_check(long src, long dst, long len) {
+    mallocStats.checkAllocation(dst, (int)len);
+
+    while (len > 0) {
+      long size = (len > UNSAFE_COPY_THRESHOLD) ? UNSAFE_COPY_THRESHOLD : len;
+      theUnsafe.copyMemory(src, dst, size);
+      len -= size;
+      src += size;
+      dst += size;
+    }
+  }
+  
+  /**
+   * Copy data in memory (no dst check in a debug memory mode)
+   * @param src source address
+   * @param dst destination address
+   * @param len number of bytes to copy
+   */
+  public static void copy_no_dst_check(long src, long dst, long len) {
+    mallocStats.checkAllocation(src, (int)len);
+
+    while (len > 0) {
+      long size = (len > UNSAFE_COPY_THRESHOLD) ? UNSAFE_COPY_THRESHOLD : len;
+      theUnsafe.copyMemory(src, dst, size);
+      len -= size;
+      src += size;
+      dst += size;
+    }
+  }
+  
   /**
    * Unsafe copy
    * @param src source
