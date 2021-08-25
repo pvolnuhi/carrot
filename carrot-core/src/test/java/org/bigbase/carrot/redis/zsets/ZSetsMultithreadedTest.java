@@ -38,13 +38,21 @@ public class ZSetsMultithreadedTest {
   BigSortedMap map;
   int valueSize = 16;
   int keySize = 16;
-  int setSize = 10000;
-  int keysNumber = 5000; // per thread
-  int numThreads = 6;
+  int setSize = 1000;
+  int keysNumber = 50; // per thread
+  int numThreads = 1;
   List<Value> values;
   List<Double> scores;
   long setupTime;
-
+  
+  
+  static {
+    UnsafeAccess.setMallocDebugEnabled(true);
+//    UnsafeAccess.setMallocDebugStackTraceEnabled(true);
+//    UnsafeAccess.setStackTraceRecordingFilter((x) -> x >= 2000);
+//    UnsafeAccess.setStackTraceRecordingLimit(10000);
+  }
+  
   private List<Value> getValues() {
     byte[] buffer = new byte[valueSize / 2];
     Random r = new Random();
@@ -88,11 +96,12 @@ public class ZSetsMultithreadedTest {
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       setUp();
       runTest();
       tearDown();
+
       BigSortedMap.printMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
@@ -112,7 +121,6 @@ public class ZSetsMultithreadedTest {
       UnsafeAccess.mallocStats.printStats();
     }
   }
-  
   
   @Ignore
   @Test
@@ -147,7 +155,7 @@ public class ZSetsMultithreadedTest {
             Double d = ZSets.ZSCORE(map, ptr, keySize, v.address, v.length);
             assertEquals(scs[0], d);
             loaded++;
-            if (loaded % 1000000 == 0) {
+            if (loaded % 10000 == 0) {
               System.out.println(Thread.currentThread().getName() + " loaded "+ loaded);
             }
           }
@@ -184,7 +192,7 @@ public class ZSetsMultithreadedTest {
             Double res = ZSets.ZSCORE(map, ptr, keySize, v.address, v.length);
             assertEquals(expScore, res);
             read++;
-            if (read % 1000000 == 0) {
+            if (read % 1000 == 0) {
               System.out.println(Thread.currentThread().getName() + " read "+ read);
             }
           }
@@ -289,4 +297,5 @@ public class ZSetsMultithreadedTest {
     System.out.println("Deleting of " + numThreads * keysNumber + " sets in " + (end - start)+"ms");
     assertEquals(0L, BigSortedMap.countRecords(map));
   }
+  
 }

@@ -17,6 +17,9 @@
  */
 package org.bigbase.carrot;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -44,9 +47,9 @@ import org.bigbase.carrot.util.Utils;
      dataSize                 (2 bytes)
      numRecords               (2 bytes)
      seqNumberSplitOrMerge    (1 byte) - no need for single thread version
-     compressed               (1 byte)
-     threadSafe               (1 byte)
-     numDeletedAndUpdatedRecords (2 bytes)
+     aux                      (1 byte)
+     numExternalAllocs        (2 bytes)
+     numCustomAllocs          (2 bytes)       
 
  [BLOCK_START_KEY] = [len][key]
      [len] - 2 bytes
@@ -54,11 +57,6 @@ import org.bigbase.carrot.util.Utils;
      [version] - 8 bytes
      [type]    - 1 byte (DELETE=0, PUT =1) 
 
- */
-/**
- * TODO: how to handle deletion of a first key in a first data block?
- * @author jenium65
- *
  */
 
 public final class IndexBlock implements Comparable<IndexBlock> {
@@ -74,7 +72,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public static int MAX_BLOCK_SIZE = 4096;
 
-	public final static int DATA_BLOCK_STATIC_PREFIX = 19;
+	public final static int DATA_BLOCK_STATIC_PREFIX = 20;
 	//public final static int VERSION_SIZE = 8;
 	public final static int TYPE_SIZE = 1;
 	public final static int DATA_BLOCK_STATIC_OVERHEAD = DATA_BLOCK_STATIC_PREFIX /*+ VERSION_SIZE*/ 
@@ -248,7 +246,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * @param initial size
 	 */
 	IndexBlock(int size) {
-		this.dataPtr = UnsafeAccess.malloc(size);
+		this.dataPtr = UnsafeAccess.mallocZeroed(size);
 		if (dataPtr == 0) {
 			// TODO: OOM handling
 			throw new RuntimeException("Failed to allocate " + size + " bytes");
@@ -532,7 +530,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	}
 
 
-	private boolean insertBlock(DataBlock bb) {
+	boolean insertBlock(DataBlock bb) {
 		// required space for new entry
 		int len = bb.getFirstKeyLength();
 
@@ -542,14 +540,15 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 			return false;
 		}
 		long addr = bb.getFirstKeyAddress();
-		long version = bb.getFirstKeyVersion();
+		long version = 0;
 		Op type = bb.getFirstKeyType();
 		long pos = search(addr, len, version, type);
-		// Get to the next index record
-		int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(pos);
-		pos += skip;
-
-		UnsafeAccess.copy(pos, pos + required, blockDataSize - (pos - dataPtr));
+		if (pos > this.dataPtr || !isEmpty()) {
+		  // Get to the next index record
+		  int skip = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + blockKeyLength(pos);
+		  pos += skip;
+		  UnsafeAccess.copy(pos, pos + required, blockDataSize - (pos - dataPtr));
+		}
 		bb.register(this, pos - dataPtr);
 
 		this.blockDataSize += required;
@@ -1018,7 +1017,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
   private void processDeletes(List<Key> toDelete) {
 	  if (toDelete == null) return;
 	  Utils.sortKeys(toDelete);
-	  for(int i = toDelete.size() -1; i >= 0; i--) {
+	  for(int i = toDelete.size() - 1; i >= 0; i--) {
 	    Key key = toDelete.get(i);
 	    deleteBlockStartWith(key);
 	    UnsafeAccess.free(key.address);
@@ -1423,21 +1422,14 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * @return address to insert (or update)
 	 */
   private long search(long keyPtr, int keyLength, long version, Op type) {
+    if (isEmpty()) return this.dataPtr;
     long ptr = dataPtr;
     long prevPtr = NOT_FOUND;
     int count = 0;
-//    long recentTxId = BigSortedMap.getMostRecentActiveTxSeqId();
-//    if (DEBUG)
-//    /*DEBUG*/ System.out.println("IndexBlock search=" + Utils.toString(keyPtr, keyLength) + 
-//      " l=" + keyLength);
     
     while (count++ < numDataBlocks) {
       int keylen = keyLength(ptr);
       int res = Utils.compareTo(keyPtr, keyLength, keyAddress(ptr), keylen);
-//      if (DEBUG)
-//      /*DEBUG*/ System.out.println("IB =" + Utils.toString(keyAddress(ptr), keylen) + 
-//        " res=" + res + " l=" + keylen) ;
-
       if (res < 0) {
         if (prevPtr == NOT_FOUND) {
           // It is possible situation (race condition when first key in
@@ -1447,28 +1439,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
           return prevPtr;
         }
       } else if (res == 0) {
-        // compare versions
-        /*long ver = version(ptr);
-        if (ver < recentTxId) {
-          if (ver < version) {
-            if (prevPtr == NOT_FOUND && count > 1) {
-              // FATAL error???
-              return ptr = NOT_FOUND;
-            }
-            return count > 1 ? prevPtr : ptr;
-          } else if (ver == version) {
-            byte _type = type(ptr);
-            if (_type > type.ordinal() && count > 1) {
-              if (prevPtr == NOT_FOUND) {
-                // FATAL error???
-                return ptr = NOT_FOUND;
-              }
-              return count > 1 ? prevPtr : ptr;
-            }
-          }
-        } else {*/
           return ptr;
-        //}
       }
       prevPtr = ptr;
       if (isExternalBlock(ptr)) {
@@ -2466,5 +2437,39 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		} finally {
 			readUnlock();
 		}
+	}
+	
+	/**
+	 * PERSISTENCE
+	 * @throws IOException 
+	 */
+	
+	void saveData(FileChannel fc, ByteBuffer buf) throws IOException {
+	  DataBlock db = null;
+	  while ((db = nextBlock(db, true)) != null) {
+	    db.saveData(fc, buf);
+	  }
+	}
+	
+	DataBlock loadData(FileChannel fc, ByteBuffer buf) throws IOException {
+	  
+	  while(true) {
+	    DataBlock next = DataBlock.loadData(fc, buf);
+	    if (next == null) {
+	      return null;
+	    }
+	    // Prepare buffer for next block load operation
+	    //buf.compact();
+	    // set pos = 0 and limit = old pos
+	    //buf.flip();
+	    
+	    next.decompressDataBlockIfNeeded();
+	    
+	    if (insertBlock(next) == false) {
+	      // Uncompressed
+	      return next;
+	    };
+	    next.compressDataBlockIfNeeded();
+	  }
 	}
 }

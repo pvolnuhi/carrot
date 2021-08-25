@@ -135,7 +135,6 @@ public class BigSortedMapScanner extends Scanner{
       ptr = startRowPtr;
       length = startRowLength;
     }
-
     if (ptr != 0) {
       key = tlKey.get();
       key.reset();
@@ -146,16 +145,16 @@ public class BigSortedMapScanner extends Scanner{
         currentIndexBlock = key != null ? reverse ? cmap.lowerKey(key) : cmap.floorKey(key)
             : reverse ? cmap.lastKey() : cmap.firstKey();
         
-        currentIndexBlock.readLock();
+        currentIndexBlock.readLock();        
         // TODO: Fix the code
         if (currentIndexBlock.hasRecentUnsafeModification()) {
           IndexBlock tmp =
-              key != null ? reverse ? cmap.lowerKey(key) : cmap.floorKey(key) : cmap.lastKey();
+              key != null ? reverse ? cmap.lowerKey(key) : cmap.floorKey(key) :reverse? cmap.lastKey(): cmap.firstKey();
           if (tmp != currentIndexBlock) {
             continue;
           }
         }
-
+        
         if (!isMultiSafe) {
           indexScanner =
               IndexBlockScanner.getScanner(currentIndexBlock, this.startRowPtr,
@@ -168,7 +167,6 @@ public class BigSortedMapScanner extends Scanner{
         if (indexScanner != null) {
           blockScanner =
               reverse ? indexScanner.previousBlockScanner() : indexScanner.nextBlockScanner();
-//          updateNextFirstKey();
         }
         break;
         // TODO null
@@ -223,27 +221,27 @@ public class BigSortedMapScanner extends Scanner{
     return this.stopRowLength;
   }
   
-  //TODO : is it safe?
-  private void updateNextFirstKey() {
-    if (reverse) {
-      return;
-    }
-    if (this.toFree > 0) {
-      UnsafeAccess.free(toFree);
-    }
-    this.toFree = this.nextBlockFirstKey;
-    IndexBlock next = map.getMap().higherKey(this.currentIndexBlock);
-    if (next != null) {
-      byte[] firstKey = next.getFirstKey();
-      this.nextBlockFirstKey = UnsafeAccess.allocAndCopy(firstKey, 0, firstKey.length);
-      this.nextBlockFirstKeySize = firstKey.length;
-    }   
+  //TODO : is it safe? TODO: delete
+//  private void updateNextFirstKey() {
+//    if (reverse) {
+//      return;
+//    }
+//    if (this.toFree > 0) {
+//      UnsafeAccess.free(toFree);
+//    }
+//    this.toFree = this.nextBlockFirstKey;
+//    IndexBlock next = map.getMap().higherKey(this.currentIndexBlock);
+//    if (next != null) {
+//      byte[] firstKey = next.getFirstKey();
+//      this.nextBlockFirstKey = UnsafeAccess.allocAndCopy(firstKey, 0, firstKey.length);
+//      this.nextBlockFirstKeySize = firstKey.length;
+//    }   
 //    long address = this.currentIndexBlock.lastRecordAddress();
 //    long ptr = DataBlock.keyAddress(address);
 //    int size = DataBlock.keyLength(address);
 //    this.nextBlockFirstKey = UnsafeAccess.allocAndCopy(ptr, size);
 //    this.nextBlockFirstKeySize = size;
-  }
+//  }
   
   public boolean hasNext() throws IOException {
     /*if (reverse) {

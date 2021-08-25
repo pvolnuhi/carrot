@@ -33,7 +33,7 @@ import org.bigbase.carrot.util.Utils;
  * in order to index bytes starting from the end of the string, where -1 is 
  * the last byte, -2 is the penultimate, and so forth.
  * Non-existent keys are treated as empty strings, so the command will return zero.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringBitCount extends Operation {

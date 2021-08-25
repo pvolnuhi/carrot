@@ -17,7 +17,12 @@
  */
 package org.bigbase.carrot.redis.lists;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+
 import org.bigbase.carrot.compression.CodecType;
+import org.bigbase.carrot.util.IOUtils;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -30,7 +35,6 @@ import org.bigbase.carrot.util.Utils;
  * 4. Segment data size in bytes - 2 bytes
  * 5. Number of elements in the segment - 2 bytes
  * 6. Compression type (codec) - 1 byte 
- * @author Vladimir Rodionov
  *
  */
 
@@ -44,7 +48,7 @@ public final class Segment {
   public final static int SEGMENT_OVERHEAD = 2 * ADDRESS_SIZE + SEGMENT_SIZE + 
       + SEGMENT_DATA_SIZE + COMPRESSION_TYPE_SIZE + ELEMENT_NUMBER_SIZE;
   public final static int MAXIMUM_SEGMENT_SIZE = 4096;
-  public final static int EXTERNAL_ALLOC_THRESHOLD = 256;
+  public final static int EXTERNAL_ALLOC_THRESHOLD = 512;
   
   static ThreadLocal<Segment> segment = new ThreadLocal<Segment>() {
     @Override
@@ -509,8 +513,7 @@ public final class Segment {
     int toMove = extAlloc? Utils.SIZEOF_INT + Utils.SIZEOF_LONG + Utils.sizeUVInt(0) :
       elemSize + eSizeSize;
 
-    int requiredSize = dataSize + SEGMENT_OVERHEAD + toMove;//extAlloc? dataSize + SEGMENT_OVERHEAD + Utils.SIZEOF_INT +
-        //Utils.SIZEOF_LONG + Utils.sizeUVInt(0): dataSize + SEGMENT_OVERHEAD + elemSize + eSizeSize;
+    int requiredSize = dataSize + SEGMENT_OVERHEAD + toMove;
     if (requiredSize <= segmentSize || expand(requiredSize)) {      
       dataSize = getDataSize();
       segmentSize = getSize();
@@ -524,7 +527,7 @@ public final class Segment {
         
         int zeroSize = Utils.sizeUVInt(0);
         Utils.writeUVInt(this.dataPtr + offset, 0);
-        UnsafeAccess.putInt(this.dataPtr + zeroSize, elemSize);
+        UnsafeAccess.putInt(this.dataPtr + offset + zeroSize, elemSize);
         UnsafeAccess.putLong(this.dataPtr + offset + zeroSize + Utils.SIZEOF_INT, ptr);
       } else {
         Utils.writeUVInt(this.dataPtr + offset, elemSize);
@@ -1125,5 +1128,136 @@ public final class Segment {
       total++;
     }
     return total;
+  }
+  
+  /**
+   * Segment SerDe
+   * TODO: EXTERNAL ALLOCATIONS SUPPORT
+   */
+  
+  /**
+   * Save segment data to 
+   * @param fc file channel to write data to
+   * @param buf byte buffer to use
+   * @throws IOException 
+   */
+  void serialize(FileChannel fc, ByteBuffer buf) throws IOException {
+    int size = getSegmentSize(this.dataPtr);
+    // Assumption buf.capacity is always > than segment size
+    if (buf.capacity() - buf.position() < size) {
+      IOUtils.drainBuffer(buf, fc);
+    }
+    // Copy segment data
+    UnsafeAccess.copy(this.dataPtr, buf, size);
+    
+    // Now check external allocations
+    long ptr = this.dataPtr + SEGMENT_OVERHEAD;
+    int dataSize = getDataSize();
+    long limit = ptr + dataSize;
+    while(ptr < limit) {
+      int eSize = Utils.readUVInt(ptr);
+      if (eSize == 0) {
+        // External allocations
+        int eSizeSize = Utils.sizeUVInt(eSize);
+        int extSize = UnsafeAccess.toInt(ptr + eSizeSize);
+        long extPtr = UnsafeAccess.toLong(ptr + eSizeSize + Utils.SIZEOF_INT);
+        int required = Utils.SIZEOF_INT + extSize;
+        if (buf.capacity() - buf.position() < required) {
+          IOUtils.drainBuffer(buf, fc);
+        }
+        boolean drainBuffer = false;
+        if (buf.capacity() < required) {
+          // Special treatment for extra large elements
+          // FIXME: in a future
+          // TODO: test
+          ByteBuffer bb = ByteBuffer.allocate(required);
+          buf = bb;
+          drainBuffer = true;
+        }
+        // Write length
+        buf.putInt(extSize);
+        // Copy element
+        UnsafeAccess.copy(extPtr, buf, extSize);
+        if (drainBuffer) {
+          // Drain temporarily allocated buffer
+          IOUtils.drainBuffer(buf, fc);
+        }
+        // Advance pointer
+        ptr += eSizeSize + Utils.SIZEOF_INT + Utils.SIZEOF_LONG;
+        continue;
+      }
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+      ptr += bSize + bSizeSize;
+    }
+  }
+  
+  /**
+   * Returns address of a deserialized segment
+   * @param fc file channel to read data from
+   * @param buf byte buffer to use
+   * @return address of a segment
+   */
+  static long deserialize(FileChannel fc, ByteBuffer buf) throws IOException {
+
+    long avail =  IOUtils.ensureAvailable(fc, buf, SEGMENT_OVERHEAD);
+    if (avail < SEGMENT_OVERHEAD) {
+      if (avail == 0) {
+        return -1;
+      } else {
+        throw new IOException("Unexpected end-of-stream");
+      }
+    }
+    // Read size of a segment
+    int off = 2 * ADDRESS_SIZE;
+    int pos = buf.position();
+    int size = buf.getShort(pos + off);
+    // Allocate memory for the segment data
+    long ptr = UnsafeAccess.mallocZeroed(size);  
+    
+    avail = IOUtils.ensureAvailable(fc, buf, size);
+    
+    if (avail < size) {
+      throw new IOException("Unexpected end-of-stream");
+    }
+    // Update statistics
+    Lists.allocMemory(size);
+    // Copy segment data
+    UnsafeAccess.copy(buf,  ptr,  size);
+    
+    // Now scan segment and materialize external allocations
+    long cptr = ptr;
+    int dataSize = getSegmentDataSize(ptr);
+    ptr += SEGMENT_OVERHEAD;
+    long limit = ptr + dataSize;
+    while(ptr < limit) {
+      int eSize = Utils.readUVInt(ptr);
+      if (eSize == 0) {
+        // External allocations
+        int eSizeSize = Utils.sizeUVInt(eSize);
+        int extSize = UnsafeAccess.toInt(ptr + eSizeSize);        
+        int required = Utils.SIZEOF_INT + extSize;
+        avail = IOUtils.ensureAvailable(fc, buf, required);
+        if (avail < required) {
+          throw new IOException("Unexpected end-of-stream");
+        }
+        // Read size
+        int bsize = buf.getInt();
+        assert bsize == extSize;
+        long addr = UnsafeAccess.malloc(extSize);
+        UnsafeAccess.copy(buf,  addr, extSize);
+        // Memory housekeeping
+        Lists.allocMemory(extSize);
+        // Update external address
+        UnsafeAccess.putLong(ptr + eSizeSize + Utils.SIZEOF_INT, addr);
+        // Advance pointer
+        ptr += eSizeSize + Utils.SIZEOF_INT + Utils.SIZEOF_LONG;
+        continue;
+      }
+      int bSize = elementBlockSize(ptr);
+      int bSizeSize = Utils.sizeUVInt(bSize);
+      ptr += bSize + bSizeSize;
+    }
+    return cptr;
   }
 }

@@ -17,6 +17,9 @@
  */
 package org.bigbase.carrot;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -64,28 +67,271 @@ public final class DataBlock  {
   private final static Logger LOG = Logger.getLogger(DataBlock.class.getName());
   
   /**
-   * For complex data types custom deallocators must be required
+   * For complex data types custom deallocators
+   * must be required
    */
-  public static interface Deallocator {  
+  public static interface DeAllocator {  
     /**
      * Custom deallocator must deallocate ALL additional data (except key-value)
      * @param recordAddress address of a key-value record
      * @return true if it was processed, false - otherwise
      */
     public boolean free(long recordAddress);
+    
+    /**
+     * Checks if this particular record must be processed by this allocator
+     * @param recordAddress
+     * @return true - if yes, false - otherwise
+     */
+    public boolean isCustomRecord(long recordAddress);
+    
+    /**
+     * Checks if this particular key (record) must be processed by this allocator
+     * @param keyAddress key address
+     * @param keySize key size
+     * @return true - if yes, false - otherwise
+     */
+    public boolean isCustomKey(long keyAddress, int keySize);
+    
+  }
+  
+  /**
+   * For complex data types custom Serializer/Deserializer 
+   * can be required
+   *
+   */
+  public static interface SerDe {
+    /**
+     * Serialize custom Key-Value to a file channel
+     * @param recordAddress address of a record to serialize
+     * @param fc file channel
+     * @param workBuf work byte buffer
+     * @return true if record was serialized, false - if it was not,
+     *    (not a custom record or other serde must be tried)
+     */
+    public boolean serialize(long recordAddress, FileChannel fc, ByteBuffer workBuf)
+      throws IOException;
+    
+    /**
+     * De-serialize custom Key-Value from a file channel
+     * @param recordAddress - address of a de-serialized record in a data block
+     * @param fc file channel
+     * @param workBuf work buffer
+     * Custom allocators can change value, but not a size.
+     * @return true if record was de-serialized, false - if it was not,
+     *    (not a custom record or other serde must be tried)
+     */
+    public boolean deserialize(long recordAddress, FileChannel fc, ByteBuffer workBuf)
+      throws IOException;
+  }
+  
+  
+  /**
+   * 
+   * Class to handle serialization - deserialization
+   * of an externally allocated K-V record
+   * 
+   * Format of externally allocated record
+   * 
+   * AllocType.EXT_KEY_VALUE:
+   * 
+   * key-size = 0
+   * value-size = 12
+   * 
+   * value:
+   * 
+   * 4 - bytes - total size of K-V
+   * 8 - address of an externally allocated K-V
+   * 
+   * External K-V allocation format:
+   * 
+   * 4 - key length
+   * 4 - value length
+   * key
+   * value
+   * 
+   * AlocType.EXT_VALUE:
+   * 
+   * key-size = variable
+   * value-size = 12
+   * 
+   * value:
+   * 
+   * 4 - bytes - total size of Value
+   * 8 - address of an externally allocated Value
+   * 
+   * External Value allocation format:
+   * value
+   * 
+   */
+  static class ExternalAllocSerDe implements SerDe {
+
+    @Override
+    public final boolean serialize(long recordAddress, FileChannel fc, ByteBuffer workBuf) 
+      throws IOException 
+    {
+      if (getRecordAllocationType(recordAddress) == AllocType.EMBEDDED) {
+        return false;
+      }
+      if (isCustomAllocated(recordAddress)) {
+        return false; // Custom SerDe must be used
+      }
+      
+      boolean flush = false;
+      long valuePtr = valueAddress(recordAddress);
+      int valueLength = valueLength(recordAddress);
+      
+      AllocType type = getRecordAllocationType(recordAddress);
+      int requiredSize = valueLength + 
+          Utils.SIZEOF_BYTE + 2 * Utils.SIZEOF_INT;
+      if (type == AllocType.EXT_KEY_VALUE) {
+        requiredSize += keyLength(recordAddress);
+      }
+      
+      // Make sure that buffer is cleared - clear() before starting using serialization
+      // clear() sets position = 0, limit = capacity
+      if (workBuf.capacity() - workBuf.position() < requiredSize) {
+        // Flush buffer to a file channel
+        if (workBuf.position() > 0) {
+          drainBuffer(workBuf, fc);
+        }
+        if (workBuf.capacity() < requiredSize) {
+          // For extra large K-V we allocate transient byte buffer
+          // TODO: needs optimization?
+          workBuf = ByteBuffer.allocate(requiredSize);
+          flush = true;
+        }
+      }
+      
+      // Write allocation type
+      workBuf.put((byte) type.ordinal());
+      // Write data
+      int keyLength = keyLength(recordAddress);
+      long keyPtr = keyAddress(recordAddress);
+      if (type == AllocType.EXT_KEY_VALUE) {
+        // write key length
+        workBuf.putInt(keyLength);
+      } else {
+        workBuf.putInt(0);
+      }
+      // write value length
+      workBuf.putInt(valueLength);
+      if (type == AllocType.EXT_KEY_VALUE) {
+        // write key
+        UnsafeAccess.copy(keyPtr, workBuf, keyLength);
+      }
+      // Write value data
+      UnsafeAccess.copy(valuePtr, workBuf, valueLength);
+      if (flush) {
+        drainBuffer(workBuf, fc);
+      }
+      return true;
+    }
+
+    @Override
+    public boolean deserialize(long recordAddress, FileChannel fc, ByteBuffer workBuf) 
+      throws IOException 
+    {
+      if (getRecordAllocationType(recordAddress) == AllocType.EMBEDDED) {
+        return false;
+      }
+      if (isCustomAllocated(recordAddress)) {
+        return false; // Custom SerDe must be used
+      }
+      
+      if (workBuf.remaining() < Utils.SIZEOF_BYTE + 2 * Utils.SIZEOF_INT) {
+        //Compact can be expensive?
+        workBuf.compact();
+        fc.read(workBuf);
+        while(workBuf.position() < Utils.SIZEOF_BYTE + 2 * Utils.SIZEOF_INT) {
+          fc.read(workBuf);
+        }
+        // Prepare for read
+        workBuf.flip();
+      }
+      int typeOrdinal = workBuf.get();
+      AllocType type = AllocType.values()[typeOrdinal];
+      int keySize = 0;
+      int valueSize = 0;
+      keySize = workBuf.getInt();
+      valueSize= workBuf.getInt();
+      
+      int toRead = keySize + valueSize;
+      if (toRead > workBuf.capacity() - workBuf.position()) {        
+        
+        workBuf.compact();
+        if (toRead > workBuf.capacity() - workBuf.position()) {
+          // Allocate temp buffer
+          ByteBuffer tmp = ByteBuffer.allocate(toRead);
+          workBuf.flip();
+          tmp.put(workBuf);
+          workBuf = tmp;
+        }
+        // Changed tmp -> workBuf
+        int read = workBuf.position();
+        
+        int n = 0;
+        while (true) {
+          n = fc.read(workBuf);
+          if (n == -1) throw new IOException ("Unexpected End-Of-Stream");
+          read += n;
+          if (read >= toRead) {
+            break;
+          }
+        }
+        workBuf.flip();        
+      } else if (toRead > workBuf.remaining()) {
+        // Read more
+        workBuf.mark();
+        int read = workBuf.remaining();
+        workBuf.position(workBuf.limit());
+        int n = 0;
+        while(true) {
+          n = fc.read(workBuf);
+          if (n == -1) throw new IOException ("Unexpected End-Of-Stream");
+          read += n;
+          if (read >= toRead) {
+            break;
+          }
+        }
+        workBuf.reset();
+      }
+      
+      int size  = type == AllocType.EXT_VALUE? toRead: 2 * Utils.SIZEOF_INT + toRead;
+      long ptr = UnsafeAccess.malloc(size);
+      // Update memory stats
+      BigSortedMap.totalAllocatedMemory.addAndGet(size);
+      if (type == AllocType.EXT_KEY_VALUE) {
+        UnsafeAccess.putInt(ptr, keySize);
+        UnsafeAccess.putInt(ptr + Utils.SIZEOF_INT, valueSize);
+        UnsafeAccess.copy(workBuf, ptr + 2 * Utils.SIZEOF_INT, keySize);
+        // Copy value data
+        UnsafeAccess.copy(workBuf, ptr + 2 * Utils.SIZEOF_INT + keySize, valueSize);
+      } else {
+        // Copy value data
+        UnsafeAccess.copy(workBuf, ptr, valueSize);
+      }
+      // Update record
+      long valuePtr = DataBlock.valueAddressInRecord(recordAddress);
+      // Write size
+      UnsafeAccess.putInt(valuePtr, size);
+      // Write data address
+      UnsafeAccess.putLong(valuePtr + Utils.SIZEOF_INT, ptr);
+      return true;
+    }
   }
   
   /**
    * Registered custom deallocators
    */
-  static List<Deallocator> customDeallocators = new ArrayList<Deallocator>();
+  static List<DeAllocator> customDeallocators = new ArrayList<DeAllocator>();
   
   /**
-   * Register custom memory disposer
-   * @param d memory disposer
+   * Register custom memory deallocator
+   * @param d memory deallocator
    */
   
-  public static void addCustomDeallocator(Deallocator d) {
+  public static void addCustomDeallocator(DeAllocator d) {
     synchronized(customDeallocators) {
       if (d != null) {
         customDeallocators.add(d);
@@ -94,11 +340,46 @@ public final class DataBlock  {
   }
   
   /**
+   * Registered SerDe's
+   */
+  static List<SerDe> serdes = new ArrayList<SerDe>();
+  
+  /**
+   * Add custom serializer/deserializer
+   * @param sd serde
+   */
+  public static void addCustomSerDe(SerDe sd) {
+    synchronized(serdes) {
+      if (sd != null) {
+        serdes.add(sd);
+      }
+    }
+  }
+  
+  /**
+   *  SerDes has at least one custom serializer - for external allocations
+   */
+  static {
+    serdes.add(new ExternalAllocSerDe());
+  }
+  
+  /**
    * For testing only
    */
   public static void clearDeallocators() {
     synchronized(customDeallocators) {
       customDeallocators.clear();
+    }
+  }
+  
+  /**
+   * For testing only
+   */
+  public static void clearSerDes() {
+    synchronized(serdes) {
+      serdes.clear();
+      // Add default one
+      serdes.add(new ExternalAllocSerDe());
     }
   }
   
@@ -227,6 +508,7 @@ public final class DataBlock  {
   public static enum AllocType {
     EMBEDDED, EXT_VALUE, EXT_KEY_VALUE;
   }
+  
   /**
    * Checks if K-V must be stored externally
    * @param keySize
@@ -234,10 +516,10 @@ public final class DataBlock  {
    * @return true, if - yes, false - otherwise
    */
   public static AllocType getAllocType (int keySize, int valueSize) {
-    if( keySize + valueSize + RECORD_TOTAL_OVERHEAD < MAX_BLOCK_SIZE/2 
+    if( keySize + valueSize + RECORD_TOTAL_OVERHEAD < MAX_BLOCK_SIZE / 2 
         -/*SAFE for first block*/ RECORD_TOTAL_OVERHEAD - 2) {
       return AllocType.EMBEDDED;
-    } else if (keySize + RECORD_TOTAL_OVERHEAD + ADDRESS_SIZE + INT_SIZE < MAX_BLOCK_SIZE/2 -
+    } else if (keySize + RECORD_TOTAL_OVERHEAD + ADDRESS_SIZE + INT_SIZE < MAX_BLOCK_SIZE / 2 -
         /*SAFE for first block*/ RECORD_TOTAL_OVERHEAD - 2) {
       return AllocType.EXT_VALUE;
     } else {
@@ -245,6 +527,32 @@ public final class DataBlock  {
     }
   }  
 
+  /**
+   * Checks if record is externally allocated (key, value or both)
+   * @param recordAddress address of a K-V record
+   * @return true or false
+   */
+  static boolean isExternallyAllocated(long recordAddress) {
+    int keyLength = keyLength(recordAddress);
+    int valueLength = valueLength(recordAddress);
+    return getAllocType(keyLength, valueLength) != AllocType.EMBEDDED;
+  }
+  
+  /**
+   * Checks if a given K-V record was allocated by a custom allocator
+   * @param recordAddress record address
+   * @return true or false
+   */
+  static boolean isCustomAllocated(long recordAddress) {
+    int numDeallocators = customDeallocators.size();
+    for (int i = 0; i < numDeallocators; i++) {
+      DeAllocator d = customDeallocators.get(i);
+      if (d.isCustomRecord(recordAddress)) return true;
+    }
+    return false;
+  }
+  
+  
   final static int dataPtrOffset = 0;
 
   /*
@@ -281,11 +589,17 @@ public final class DataBlock  {
   final static int COMPRESSED_MASK = 8; // 000001000;
   
   /*
-   * Number of deleted & updated records (2 bytes) - is used during compaction
-   * actually, they are pending records waiting for compaction
+   * Number of records with external allocations (key, value or both)
+   * This is used to optimize snapshot of a data block
    */
-  final static int numDeletedAndUpdatedRecordsOffset = 16;
+  final static int numExtAllocsOffset = 16;
 
+  /*
+   * Number of records with custom allocations
+   * This is used to optimize snapshot of a data block
+   */
+  final static int numCustomAllocsOffset = 18;
+  
   /*
    * Block's address (current)
    */
@@ -301,7 +615,6 @@ public final class DataBlock  {
    */
   short compDataSize = 0;
   
-  
   /*
    * Compressed data block size 
    */
@@ -313,16 +626,41 @@ public final class DataBlock  {
    */
   short blockSize;
 
+  /*
+   * Data size
+   */
   short dataInBlockSize;
   
+  /*
+   * Number of records
+   */
   short numRecords;
   
-  short numDeletedAndUpdatedRecords;
+  /*
+   * Update sequence number 
+   */
     
   byte seqNumberSplitOrMerge;
   
-  //boolean compressed;
+  /*
+   * Number of records with external allocations
+   */
+  short numExtAllocs;
   
+  /*
+   * Number of records with a custom allocations
+   */
+  short numCustomAllocs;
+  
+  
+  /*
+   * Used when data block is being loaded from a snapshot
+   */
+  short codecCompressData = -1;
+  
+  /*
+   * Is it thread safe?
+   */
   volatile boolean threadSafe;
   /*
    * Block header address (in index block)
@@ -375,7 +713,7 @@ public final class DataBlock  {
     }
     BigSortedMap.totalAllocatedMemory.addAndGet(size);
     BigSortedMap.totalBlockDataSize.addAndGet(size);
-    this.blockSize = (short)size;
+    this.blockSize = (short) size;
   }
 
   /**
@@ -393,6 +731,7 @@ public final class DataBlock  {
   }
   
   protected boolean isFirstBlock() {
+    if (getNumberOfRecords() == 0) return false;
     // First key = {0}
     return keyLength(dataPtr) == 1 && UnsafeAccess.toByte(keyAddress(dataPtr)) == 0;
   }
@@ -419,6 +758,10 @@ public final class DataBlock  {
     this.dataPtr = getDataPtr();
     this.valid = true;
     this.mutation = false;
+    // Added 08-20-21
+    this.codecCompressData = -1;
+    this.numExtAllocs = 0;
+    this.numCustomAllocs = 0;
   }
   
   private boolean isMutationOp() {
@@ -439,6 +782,7 @@ public final class DataBlock  {
   
   /**
    * Before data access and/or modification
+   * TODO: Verify that this work with detached blocks
    */
   final void decompressDataBlockIfNeeded(boolean useSecondBuffer) {
     if (!isCompressed()) {
@@ -469,7 +813,6 @@ public final class DataBlock  {
   public void compressDataBlockIfNeeded() {
     if (!isCompressionEnabled()) return;
     if (isCompressed()) return;
-    //byte[] fk = getFirstKey();
           
     boolean wasCompressed = this.compressedDataPtr != 0;
     
@@ -559,15 +902,20 @@ public final class DataBlock  {
     setBlockSize(this.blockSize);
     setDataInBlockSize(dataInBlockSize);
     setNumberOfRecords(numRecords);
-    setNumberOfDeletedAndUpdatedRecords(numDeletedAndUpdatedRecords);
     setSeqNumberSplitOrMerge(seqNumberSplitOrMerge);
     setThreadSafe(threadSafe);
-    // TODO compression
-    setCompressed(false);
-    setCompressionCodec(BigSortedMap.codec);
+    if (codecCompressData < 0) {
+      setCompressed(false);
+      setCompressionCodec(BigSortedMap.codec);
+    } else {
+      setCompressed((codecCompressData & COMPRESSED_MASK) != 0);
+      setCompressionCodec(CodecFactory.getCodec(this.codecCompressData & CODEC_MASK));
+    }
+    setNumberOfExtAllocsRecords(numExtAllocs);
+    setNumberOfCustomAllocsRecords(numCustomAllocs);
   }
  
-  private static AllocType getRecordAllocationType(long ptr) {
+  public static AllocType getRecordAllocationType(long ptr) {
     if( blockKeyLength(ptr) == EXTERNAL_KEY_VALUE) {
       return AllocType.EXT_KEY_VALUE;
     } else if (UnsafeAccess.toShort(ptr + KEY_SIZE_LENGTH) == EXTERNAL_VALUE) {
@@ -637,6 +985,12 @@ public final class DataBlock  {
     return UnsafeAccess.toLong(ptr + RECORD_TOTAL_OVERHEAD + klen + INT_SIZE);
   }
   
+  
+  public static long valueAddressInRecord(long ptr) {
+    int klen = blockKeyLength(ptr);
+    return ptr + RECORD_TOTAL_OVERHEAD + klen;
+  }
+  
   /**
    * WARNING: Public API
    * @param ptr
@@ -654,8 +1008,6 @@ public final class DataBlock  {
   
   public static long version(long ptr) {
     return 0;
-    //short keylen = blockKeyLength(ptr);
-    //return UnsafeAccess.toLong(ptr + RECORD_PREFIX_LENGTH + keylen);
   }
   
   /**
@@ -698,8 +1050,12 @@ public final class DataBlock  {
    * @param ptr
    */
   final void setDataPtr(long ptr) {
-    UnsafeAccess.putLong(this.indexPtr, ptr);
-    UnsafeAccess.storeFence();
+    if (!detached()) {
+      UnsafeAccess.putLong(this.indexPtr, ptr);
+      UnsafeAccess.storeFence();
+    } else {
+      this.dataPtr = ptr;
+    }
   }
 
   /**
@@ -723,8 +1079,12 @@ public final class DataBlock  {
    * @param v block size
    */
   final void setBlockSize(short v) {
-    UnsafeAccess.putShort(this.indexPtr + blockSizeOffset, v);
-    UnsafeAccess.storeFence();
+    if (!detached()) {
+      UnsafeAccess.putShort(this.indexPtr + blockSizeOffset, v);
+      UnsafeAccess.storeFence();
+    } else {
+      this.blockSize = v;
+    }
   }
 
   /**
@@ -753,8 +1113,12 @@ public final class DataBlock  {
    * @param v data size
    */
   final void setDataInBlockSize(short v) {
-    UnsafeAccess.putShort(indexPtr + dataSizeOffset, v);
-    UnsafeAccess.storeFence();
+    if (!detached()) {
+      UnsafeAccess.putShort(indexPtr + dataSizeOffset, v);
+      UnsafeAccess.storeFence();
+    } else {
+      this.dataInBlockSize = v;
+    }
   }
 
   /**
@@ -785,8 +1149,12 @@ public final class DataBlock  {
    * @param v number
    */
   final void setNumberOfRecords(short v) {
-    UnsafeAccess.putShort(indexPtr + numRecordsOffset, v);
-    UnsafeAccess.storeFence();
+    if (!detached()) {
+      UnsafeAccess.putShort(indexPtr + numRecordsOffset, v);
+      UnsafeAccess.storeFence();
+    } else {
+      this.numRecords = v;
+    }
   }
 
   /**
@@ -799,35 +1167,71 @@ public final class DataBlock  {
   }
 
   /**
-   * Get number of deleted records
+   * Get number of records with external allocations
    * @return number
    */
-  final short getNumberOfDeletedAndUpdatedRecords() {
+  final short getNumberOfExtAllocsRecords() {
     if (!detached()) {
-      return UnsafeAccess.toShort(indexPtr + numDeletedAndUpdatedRecordsOffset);
+      return UnsafeAccess.toShort(indexPtr + numExtAllocsOffset);
     } else {
-      return this.numDeletedAndUpdatedRecords;
+      return this.numExtAllocs;
     }
   }
 
   /**
-   * Set number of deleted records
+   * Set number of externally allocated records
    * @param v number
    */
-  final void setNumberOfDeletedAndUpdatedRecords(short v) {
-    UnsafeAccess.putShort(indexPtr + numDeletedAndUpdatedRecordsOffset, v);
-    UnsafeAccess.storeFence();
-
+  final void setNumberOfExtAllocsRecords(short v) {
+    if (!detached()) {
+      UnsafeAccess.putShort(indexPtr + numExtAllocsOffset, v);
+      UnsafeAccess.storeFence();
+    } else {
+      this.numExtAllocs = v;
+    }
   }
 
   /**
-   * Increment number of deleted records
+   * Increment number of externally allocated records
    */
-  final void incrNumberDeletedAndUpdatedRecords(short val) {
-    short v = getNumberOfDeletedAndUpdatedRecords();
-    setNumberOfDeletedAndUpdatedRecords((short) (v + val));
+  final void incrNumberOfExtAllocsRecords(short val) {
+    short v = getNumberOfExtAllocsRecords();
+    setNumberOfExtAllocsRecords((short) (v + val));
   }
 
+  /**
+   * Get number of records with custom allocations
+   * @return number
+   */
+  final short getNumberOfCustomAllocsRecords() {
+    if (!detached()) {
+      return UnsafeAccess.toShort(indexPtr + numCustomAllocsOffset);
+    } else {
+      return this.numCustomAllocs;
+    }
+  }
+
+  /**
+   * Set number of custom allocated records
+   * @param v number
+   */
+  final void setNumberOfCustomAllocsRecords(short v) {
+    if (!detached()) {
+      UnsafeAccess.putShort(indexPtr + numCustomAllocsOffset, v);
+      UnsafeAccess.storeFence();
+    } else {
+      this.numCustomAllocs = v;
+    }
+  }
+
+  /**
+   * Increment number of custom allocated records
+   */
+  final void incrNumberOfCustomAllocsRecords(short val) {
+    short v = getNumberOfCustomAllocsRecords();
+    setNumberOfCustomAllocsRecords((short) (v + val));
+  }
+  
   /**
    * Get sequence number split or merge
    * @return sequence number
@@ -885,7 +1289,11 @@ public final class DataBlock  {
    * @return compressed
    */
   final boolean isCompressed() {
-    return (UnsafeAccess.toByte(indexPtr + auxOffset) & COMPRESSED_MASK) != 0;
+    if (!detached()) {
+      return (UnsafeAccess.toByte(indexPtr + auxOffset) & COMPRESSED_MASK) != 0;
+    } else {
+      return (codecCompressData & COMPRESSED_MASK) != 0;
+    }
   }
 
   /**
@@ -893,21 +1301,34 @@ public final class DataBlock  {
    * @param b
    */
   final void setCompressed(boolean b) {
-    int v = UnsafeAccess.toByte(indexPtr + auxOffset);
-    if (b) {
-      v |= COMPRESSED_MASK;
+    if (!detached()) {
+      int v = UnsafeAccess.toByte(indexPtr + auxOffset);
+      if (b) {
+        v |= COMPRESSED_MASK;
+      } else {
+        v &= ~COMPRESSED_MASK;
+      }
+      UnsafeAccess.putByte(indexPtr + auxOffset, (byte)v);
+      UnsafeAccess.storeFence();
     } else {
-      v &= ~COMPRESSED_MASK;
+      if (b) {
+        this.codecCompressData |= COMPRESSED_MASK;
+      } else {
+        this.codecCompressData &= ~COMPRESSED_MASK;
+      }
     }
-    UnsafeAccess.putByte(indexPtr + auxOffset, (byte)v);
-    UnsafeAccess.storeFence();
   }
   /**
    * Returns compression codec id
    * @return codec id
    */
   final Codec getCompressionCodec() {
-    int id = UnsafeAccess.toByte(indexPtr + auxOffset) & CODEC_MASK;
+    int id;
+    if(!detached()) {
+      id = UnsafeAccess.toByte(indexPtr + auxOffset) & CODEC_MASK;
+    } else {
+      id = this.codecCompressData & CODEC_MASK;
+    }
     return CodecFactory.getCodec(id);
   }
   
@@ -918,12 +1339,26 @@ public final class DataBlock  {
    */
   final void setCompressionCodec(Codec codec) {
     // codec is between 0 and 7, 0 - no compression
+    if (detached()) {
+      // in detached mode we have already codec set in codecCompressData field
+      return;
+    }
     int type = codec == null? 0: codec.getType().ordinal();
     int v = UnsafeAccess.toByte(indexPtr + auxOffset);
     v &= 0xf8;
     v |= (codec == null? 0: type);
     UnsafeAccess.putByte(indexPtr + auxOffset, (byte)v);
     UnsafeAccess.storeFence();
+  }
+  
+  //TODO: not used - elegible for removal
+  final void setAllCompressData(byte v) {
+    UnsafeAccess.putByte(indexPtr + auxOffset, v);
+    UnsafeAccess.storeFence();
+  }
+  
+  final byte getAllCompressData() {
+    return UnsafeAccess.toByte(indexPtr + auxOffset);
   }
   
   /**
@@ -1053,7 +1488,7 @@ public final class DataBlock  {
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
-    UnsafeAccess.copy(valuePtr, recAddress + 2*INT_SIZE + keyLength, valueLength);
+    UnsafeAccess.copy(valuePtr, recAddress + 2 * INT_SIZE + keyLength, valueLength);
     return recAddress;
   }
   
@@ -1283,12 +1718,10 @@ public final class DataBlock  {
     boolean onlyExactOverwrite = false;
     boolean recordOverwrite = false;
     boolean keyOverwrite = false; // key the same, value is different in size
-    // Get the most recent active Tx Id or snapshot Id (scanner)
-    //long mostRecentActiveTxId = BigSortedMap.getMostRecentActiveTxSeqId();
+   
     try {
       writeLock();
       
-      //onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
 
@@ -1301,7 +1734,6 @@ public final class DataBlock  {
         return true;
       }
       // TODO: verify what search returns if not found
-      //long foundSeqId = -1;
       boolean foundExternal = false;
       if (addr < dataPtr + dataSize) {
         int keylen = keyLength(addr);
@@ -1316,28 +1748,17 @@ public final class DataBlock  {
             keyOverwrite = true;
             foundExternal = getRecordAllocationType(addr) != AllocType.EMBEDDED;
           }
-//          if (keyOverwrite) {
-//            // Get seqId of existing record
-//            foundSeqId = getRecordSeqId(addr);
-//          }
         }
       }
 
       int newRecLen = RECORD_TOTAL_OVERHEAD + keyLength + valueLength;
       // Classical case: the same key is not found
       boolean insert = !keyOverwrite;
-      // The same key was found but we have to preserve
-      // old value due to active Tx or snapshot scanner
-      //insert = insert || (keyOverwrite /*&& (foundSeqId < mostRecentActiveTxId)*/);
-      // Overwrite only if there are no conflicting Tx or snapshots
-      boolean overwrite = recordOverwrite /*&& (foundSeqId > mostRecentActiveTxId)*/;
-
-//      if (onlyExactOverwrite && !overwrite && insert) {
-//        // Failed to put - split the block
-//        return false;
-//      }
+      // Overwrite 
+      boolean overwrite = recordOverwrite;
             
       if (insert) {
+        // New K-V
         int oldBlockSize = blockSize;
         onlyExactOverwrite = compactExpandIfNecessary(keyLength + valueLength);
         if (onlyExactOverwrite) {
@@ -1370,11 +1791,13 @@ public final class DataBlock  {
 
         incrNumberOfRecords((short) 1);
         incrDataSize((short) newRecLen);
-        if (keyOverwrite) {
-          incrNumberDeletedAndUpdatedRecords((short) 1);
+        // Check custom allocations
+        if (isCustomKey(keyPtr, keyLength)) {
+          incrNumberOfCustomAllocsRecords( (short) 1);
         }
+        // We do not check external allocations b/c it is not external
       } else if (overwrite) {
-        // UPDATE existing
+        // UPDATE existing (same key and value size)
         // We do overwrite of existing record
         UnsafeAccess.copy(valuePtr, addr + RECORD_TOTAL_OVERHEAD + keyLength,
           valueLength);
@@ -1386,16 +1809,17 @@ public final class DataBlock  {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
+        // Do nothing with important numbers: custom and external allocations
       } else {
         // Neither insert nor overwrite - delete, then - insert
         // keyOverwrite = true
         // delete existing, put new
-
+        // Same key means we do not check for number of custom allocations - 
+        // it will remain the same, but we check external ones in deallocateIfExternalRecord
         int keylen = foundExternal? blockKeyLength(addr): keyLength(addr);// must be equal to keyLength
         int vallen = foundExternal? blockValueLength(addr): valueLength(addr);
         int existRecLen = keylen + vallen + RECORD_TOTAL_OVERHEAD;
 
-                
         int toMove = foundExternal? (keyLength + valueLength + RECORD_TOTAL_OVERHEAD - existRecLen):
           (valueLength - vallen);
         
@@ -1410,14 +1834,12 @@ public final class DataBlock  {
             addr = search(keyPtr, keyLength, version);
           }
         }
-        
-//        if (onlyExactOverwrite /*&& (dataSize + toMove > blockSize)*/) {
-//          // failed to insert, split is required
-//          return false;
-//        }
-        
+        // HERE we decrement external allocations
+        if (isExternallyAllocated(addr)) {
+          incrNumberOfExtAllocsRecords((short) -1);
+        }
         deallocateIfExternalRecord(addr);
-
+        
         // move from offset to offset + moveDist
         UnsafeAccess.copy(addr + existRecLen, addr + existRecLen + toMove,
           dataPtr + dataSize - addr - existRecLen);
@@ -1432,7 +1854,6 @@ public final class DataBlock  {
         // Set version, expire, op type and eviction (0)
         setRecordSeqId(addr, version);
         // Do not reset eviction field
-        // setRecordEviction(addr, 0L);
         if (expire >= 0) {
           setRecordExpire(addr, expire);
         }
@@ -1465,8 +1886,7 @@ public final class DataBlock  {
     boolean onlyExactOverwrite = false;
     boolean recordOverwrite = false;
     boolean keyOverwrite = false; // key the same, value is different in size
-    // Get the most recent active Tx Id or snapshot Id (scanner)
-    //long mostRecentActiveTxId = BigSortedMap.getMostRecentActiveTxSeqId();
+    
     AllocType type = getAllocType(keyLength, valueLength);
     boolean freeValue = false;
     // TODO: result check
@@ -1494,7 +1914,6 @@ public final class DataBlock  {
       boolean append = addr == (dataPtr + dataSize);
       boolean extAddr = !append && getRecordAllocationType(addr) != AllocType.EMBEDDED;
       // TODO: verify what search returns if not found
-      //long foundSeqId = -1;
       if (addr < dataPtr + dataSize) {
         int keylen = keyLength(addr);
         int vallen = valueLength(addr);
@@ -1508,21 +1927,14 @@ public final class DataBlock  {
           } else if (res == 0) {
             keyOverwrite = true;
           }
-//          if (keyOverwrite) {
-//            // Get seqId of existing record
-//            foundSeqId = getRecordSeqId(addr);
-//          }
         }
       }
   
       int newRecLength = RECORD_TOTAL_OVERHEAD + newKVLength;
       // Classical case: the same key is not found
       boolean insert = !keyOverwrite;
-      // The same key was found but we have to preserve
-      // old value due to active Tx or snapshot scanner
-      //insert = insert || (keyOverwrite /*&& (foundSeqId < mostRecentActiveTxId)*/);
       // Overwrite only if there are no conflicting Tx or snapshots
-      boolean overwrite = recordOverwrite /*&& (foundSeqId > mostRecentActiveTxId)*/;
+      boolean overwrite = recordOverwrite;
 
       if (onlyExactOverwrite && !overwrite && insert) {
         // Failed to put - split the block
@@ -1536,7 +1948,7 @@ public final class DataBlock  {
         // move from offset to offset + moveDist
         if (type == AllocType.EXT_KEY_VALUE) {
           freeValue = true;
-          int kvSize = keyLength + valueLength + 2 *INT_SIZE;
+          int kvSize = keyLength + valueLength + 2 * INT_SIZE;
           recAddress = allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, valueLength);
         
           UnsafeAccess.copy(addr, addr + newRecLength, dataPtr + dataSize - addr);
@@ -1570,8 +1982,11 @@ public final class DataBlock  {
 
         incrNumberOfRecords((short) 1);
         incrDataSize((short) newRecLength);
-        if (keyOverwrite) {
-          incrNumberDeletedAndUpdatedRecords((short) 1);
+        // Increment external allocation number
+        incrNumberOfExtAllocsRecords((short) 1);
+        // Check custom allocations
+        if (isCustomKey(keyPtr, keyLength)) {
+          incrNumberOfCustomAllocsRecords((short) 1);
         }
       } else if (overwrite) {
         // Keys are the same, values have the same size - both new and old records 
@@ -1596,6 +2011,7 @@ public final class DataBlock  {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
+        // Do nothing for number of external and custom allocations
       } else if (!extAddr){
         // Keys are the same, values are not, old k-v is EMBEDDED
         // Neither insert nor overwrite - delete, then - insert
@@ -1626,6 +2042,7 @@ public final class DataBlock  {
           // Update key-value length
           UnsafeAccess.putShort(addr, (short) EXTERNAL_KEY_VALUE);
           UnsafeAccess.putShort(addr + KEY_SIZE_LENGTH, (short) (INT_SIZE + ADDRESS_SIZE));
+          
         } else { // AlocType.EXT_VALUE
           //CHANGE
           recAddress = reuseValue? valuePtr: allocateAndCopyExternalValue(valuePtr, valueLength);
@@ -1653,14 +2070,15 @@ public final class DataBlock  {
         }
         setRecordType(addr, Op.PUT);
         incrDataSize((short) toMove);
-
+        // Key exists, value - different, new value is EXTERNAL, old value - EMBEDDED
+        incrNumberOfExtAllocsRecords((short) 1);
+        // Since key exists - no need to update number of custom allocations
       } else if (extAddr) {
         // Keys are the same, values are not, but old k-v is EXTERNAL type of allocation
         // As since keys are the same, both new and old records have the same type of 
         // external allocation, either EXT_VALUE or EXT_KEY_VALUE
         // Deallocate existing allocation
 
-        //deallocateIfExternalRecord(addr);
         if (type == AllocType.EXT_KEY_VALUE) {
           //TODO: realloc reconsider
           freeValue = true;
@@ -1692,6 +2110,7 @@ public final class DataBlock  {
           setRecordExpire(addr, expire);
         }
         setRecordType(addr, Op.PUT);
+        // No need to update number of external and custom allocations
       }
       return true;
     } finally {
@@ -1701,7 +2120,6 @@ public final class DataBlock  {
       writeUnlock();
     }
   }
-  
   
   final long search(long keyPtr, int keyLength, long version) {
     return search(keyPtr, keyLength, version, false);
@@ -1868,6 +2286,10 @@ public final class DataBlock  {
       UnsafeAccess.copy(ptr, startRange, this.dataPtr + dataSize - ptr);
       incrDataSize((short)(-deletedSize));
       setNumberOfRecords((short)(numRecords - deleted));
+      // Update important numbers
+      updateExtCustomAllocs();
+      // shrink
+      shrink();
     }
     return deleted;
   }
@@ -1956,8 +2378,9 @@ public final class DataBlock  {
         if (foundSeqId < mostRecentActiveTxId) {
           insert = true; // we can't delete immediately
         }
+        
         AllocType type =  getRecordAllocationType(addr);
-
+        
         if (type == AllocType.EXT_KEY_VALUE && insert) {
           keyLength = blockKeyLength(addr);
           valueLength = blockValueLength(addr); // 12 bytes
@@ -1994,8 +2417,19 @@ public final class DataBlock  {
           }
         }
         
+        // Update important counters
+        if (type != AllocType.EMBEDDED) {
+          if (isExternallyAllocated(addr)) {
+            incrNumberOfExtAllocsRecords((short) -1);
+          }
+        }
+        if (isCustomAllocated(addr)) {
+          incrNumberOfCustomAllocsRecords((short) -1);
+        }
+        
         if (insert) {
-          // TODO: test case for this code
+          //TODO: remove this code
+          //TODO: test case for this code
           //TODO: key is must be allocated externally due to size case !!!
           
           // New K-V INSERT or we can't overwrite because of active Tx or snapshot
@@ -2022,9 +2456,7 @@ public final class DataBlock  {
           setRecordType(addr, Op.DELETE);
 
           incrNumberOfRecords((short) 1);
-          incrDataSize((short) moveDist);
-          incrNumberDeletedAndUpdatedRecords((short)1);
-          
+          incrDataSize((short) moveDist);          
           result = OpResult.OK;
           
         } else {
@@ -2044,6 +2476,7 @@ public final class DataBlock  {
           dataSize = getDataInBlockSize();
           result = OpResult.OK;
         }
+        
         // We check that block is empty before
         // updating first key in a parent index block, because
         // this call can deallocate current block
@@ -2446,6 +2879,7 @@ public final class DataBlock  {
     largeKVs.decrementAndGet();
     BigSortedMap.totalExternalDataSize.addAndGet(-size);
     BigSortedMap.totalAllocatedMemory.addAndGet(-size);
+    
   }
     
   /**
@@ -2502,13 +2936,19 @@ public final class DataBlock  {
       DataBlock right = new DataBlock((short)rightBlockSize);
 
       right.numRecords = (short)(oldNumRecords - num);
-      right.numDeletedAndUpdatedRecords = (short)0;
       right.dataInBlockSize = (short)rightDataSize;
       right.seqNumberSplitOrMerge = 0;
+            
       //TODO: compression
       //right.compressed = false;
       right.threadSafe = false;
       UnsafeAccess.copy(dataPtr + off, right.dataPtr, right.dataInBlockSize);
+      
+      // Update left an right external and custom allocations
+      if (getNumberOfExtAllocsRecords() > 0 || getNumberOfCustomAllocsRecords() > 0) {
+        updateExtCustomAllocs();
+        right.updateExtCustomAllocs();
+      }
       // shrink current
       shrink();
       return right;
@@ -2534,16 +2974,7 @@ public final class DataBlock  {
   final long getFirstKeyAddress() {
     return keyAddress(dataPtr);
   }
-  
-  /**
-   * Get first key version
-   * @return version
-   */
-  final long getFirstKeyVersion() {
-    int keylen = blockKeyLength(dataPtr);
-    return UnsafeAccess.toLong(dataPtr +RECORD_PREFIX_LENGTH + keylen);
-  }
-  
+    
   /**
    * Get first key type value
    * @return type 
@@ -2618,17 +3049,6 @@ public final class DataBlock  {
     return dataPtr + off;
   }
 
-  /**
-   * Should compact this block
-   * @return true, false
-   */
-  final boolean shouldCompact() {
-    int numRecords = getNumberOfRecords();
-    int numDeletedRecords = getNumberOfDeletedAndUpdatedRecords();
-    if (numRecords == 0) return false;
-    return (double) numDeletedRecords / numRecords > MIN_COMPACT_RATIO;
-  }
-
   final boolean shouldMerge() {
     return ((double)getDataInBlockSize())/getBlockSize() < MIN_MERGE_FACTOR;
   }
@@ -2648,6 +3068,11 @@ public final class DataBlock  {
       right.writeLock();
       // Increment sequence numbers
 
+      short lext = getNumberOfExtAllocsRecords();
+      short rext = right.getNumberOfExtAllocsRecords();
+      short lcus = getNumberOfCustomAllocsRecords();
+      short rcus = right.getNumberOfCustomAllocsRecords();
+      
       incrSeqNumberSplitOrMerge();
       right.incrSeqNumberSplitOrMerge();
 
@@ -2669,11 +3094,12 @@ public final class DataBlock  {
       UnsafeAccess.copy(right.dataPtr, this.dataPtr + dataSize, rightDataSize);
 
       incrNumberOfRecords(right.getNumberOfRecords());
-      setNumberOfDeletedAndUpdatedRecords((short)0);
       int size = right.getDataInBlockSize();
       incrDataSize((short)size);
-      // We need to decrement overall
-      //BigSortedMap.totalDataInDataBlocksSize.addAndGet(-size);
+      
+      setNumberOfExtAllocsRecords((short)(lext + rext));
+      setNumberOfCustomAllocsRecords((short)(lcus + rcus));
+      
       return true;
     } finally {
       right.writeUnlock();
@@ -2716,13 +3142,14 @@ public final class DataBlock  {
     int dataSize = getDataInBlockSize();
     
     long ptr = dataPtr;
-
+    
+    boolean runCustomDeallocs = customDeallocators.size() > 0;
+    
     while (count++ < numRecords) {
       
       int keylen = blockKeyLength(ptr);
       int vallen = blockValueLength(ptr);
-      //TODO: HACK?
-      if (keylen > 1) {
+      if (keylen > 1 && runCustomDeallocs) {
         runCustomDeallocators(ptr);
       }
       
@@ -2760,9 +3187,11 @@ public final class DataBlock  {
     synchronized (customDeallocators) {
       int num = customDeallocators.size();
       for (int i = 0; i < num; i++) {
-        Deallocator cd = customDeallocators.get(i);
-        boolean result = cd.free(ptr);
-        if (result) break;
+        DeAllocator cd = customDeallocators.get(i);
+        if (cd.isCustomRecord(ptr)) {
+          boolean result = cd.free(ptr);
+          if (result) break;
+        }
       }
     }
   }
@@ -2805,6 +3234,251 @@ public final class DataBlock  {
     byte[] last = getLastKey();
     if (last != null) {
       System.out.println("DataBlock last =" + Bytes.toHex(getLastKey()));
+    }
+  }
+  
+  
+  private boolean isCustomKey(long keyPtr, int keySize) {
+    int numAllocs = customDeallocators.size();
+    for (int i = 0; i < numAllocs; i++) {
+      DeAllocator d = customDeallocators.get(i);
+      if (d.isCustomKey(keyPtr, keySize)) return true;
+    }
+    return false;
+  }
+  
+  /**
+   * Run it during splits. MUST be OK for detached data blocks
+   */
+  private void updateExtCustomAllocs() {
+    //TODO: is it safe check?
+    if (!detached() && getNumberOfExtAllocsRecords() == 0 && 
+        getNumberOfCustomAllocsRecords() == 0) {
+      // do nothing
+      return;
+    }
+    long ptr = dataPtr;
+    int numRecords = getNumberOfRecords();
+    int num = 0;
+    this.numExtAllocs = 0;
+    this.numCustomAllocs = 0;
+    while (num < numRecords) {
+      if (isExternallyAllocated(ptr)) numExtAllocs ++;
+      if (isCustomAllocated(ptr)) numCustomAllocs ++;
+      short keylen = blockKeyLength(ptr);
+      short vallen = blockValueLength(ptr);
+      ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
+      num++;
+    }
+    if (!detached()) {
+      setNumberOfExtAllocsRecords(numExtAllocs);
+      setNumberOfCustomAllocsRecords(numCustomAllocs);
+    }
+  }
+  
+  /**
+   * PERSISTENCE API
+   * 
+   * Format of a serialized DataBlock:
+   * 
+   * 1 - BLOB=0/SERDE=1  - serialized as a blob or using serde
+   * 2 - compression codec - 0 - no compression
+   * 2 - data in a block size (compressed or not)
+   * 2 - number of external allocations
+   * 2 - number of custom allocations
+   * n - data block blob
+   * nn - auxilary external or custom allocations
+   */
+ 
+  static byte BLOB = 0;
+  static byte SERDE = 1;
+  
+  private static void drainBuffer(ByteBuffer buf, FileChannel fc) throws IOException {
+    buf.flip();
+    while(buf.hasRemaining()) {
+      fc.write(buf);
+    }
+    buf.clear();
+  }
+  
+  void saveData(FileChannel fc, ByteBuffer buf) throws IOException {
+    
+    //TODO - FIX THE CODE
+    // Write header
+    byte type = blockRequiresSerialization()? SERDE: BLOB;
+    int meta_block_size = 10;
+    if (buf.capacity() - buf.position() < meta_block_size) {
+      drainBuffer(buf, fc);
+    }
+    // Save meta
+    buf.put(type);
+    saveMeta(buf);
+    
+    int dataSize  = getDataInBlockSize();
+    long dataPtr = this.dataPtr;
+    if (buf.capacity() - buf.position() < dataSize) {
+      // We assume that buffer capacity is always > dataSize (capacity = 256KB, dataSize ~ 4KB)
+      drainBuffer(buf, fc);
+    }
+    
+    // Copy data block blob
+    UnsafeAccess.copy(dataPtr,  buf,  dataSize);
+    // That is it, folks ... if type == BLOB
+    if (type == SERDE) {
+      decompressDataBlockIfNeeded();
+      long ptr = this.dataPtr;
+      dataSize = getDataInBlockSize();
+      while(ptr < this.dataPtr + dataSize) {
+        int kSize = blockKeyLength(ptr);
+        int vSize = blockValueLength(ptr);
+        // If SerDe allocates its own byte buffer it MUST drain it before return
+        // Problem with allocations transient buffers in each call to serialize - is
+        // performance degradation in some rare situations
+        serialize(ptr, fc, buf);
+        ptr += kSize + vSize + RECORD_TOTAL_OVERHEAD;
+      }
+      compressDataBlockIfNeeded();
+    }    
+  }
+
+  private void serialize(long ptr, FileChannel fc, ByteBuffer buf) throws IOException {
+    int total = serdes.size();
+    for (int i = 0; i < total; i++) {
+      SerDe s = serdes.get(i);
+      if (s.serialize(ptr, fc, buf)) break;
+    }
+  }
+
+  private void saveMeta(ByteBuffer buf) {
+   
+    // Compression data
+    buf.put(getAllCompressData());
+    buf.putShort(getNumberOfRecords());
+    buf.putShort(getDataInBlockSize());
+    buf.putShort(getNumberOfExtAllocsRecords());
+    buf.putShort(getNumberOfCustomAllocsRecords());
+  }
+  
+  /**
+   * Checks if block requires serialization (due to presence of external or custom allocations)
+   * during backup (snapshot) operation
+   * @return true or false
+   */
+  private boolean blockRequiresSerialization() {
+    return getNumberOfExtAllocsRecords() > 0 || getNumberOfCustomAllocsRecords() > 0;
+  }
+  
+  /**
+   * LOAD DATA
+   */
+  
+  static DataBlock loadData(FileChannel fc, ByteBuffer buf) throws IOException {
+    // Read meta
+    byte type, codecCompData;
+    short numRecords, dataSize, numExtAllocs, numCustomAllocs;
+    int meta_block_size = 10;
+    // Total 10 bytes
+    if (buf.remaining() < meta_block_size) {
+      int read = buf.remaining();
+      buf.compact();
+      int n = 0;
+      while (true) {
+        n = fc.read(buf);
+        if (n == -1) {
+          if (read == 0) { return null; } // End-Of-Stream
+          else { throw new IOException("Unexpected End-Of-Stream"); }
+        }
+        read += n;
+        if (read >= meta_block_size) {
+          buf.flip();
+          break;
+        }
+      }
+    }
+    // Read meta section
+    type = buf.get();
+    codecCompData = buf.get();
+    numRecords = buf.getShort();
+    dataSize = buf.getShort();
+    numExtAllocs = buf.getShort();
+    numCustomAllocs = buf.getShort();
+
+    int blockSize = getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, dataSize);
+
+    DataBlock block = new DataBlock(blockSize);
+    block.numRecords = numRecords;
+    block.dataInBlockSize = dataSize;
+    block.numExtAllocs = numExtAllocs;
+    block.numCustomAllocs = numCustomAllocs;
+    // TODO: careful
+    block.codecCompressData = codecCompData;
+
+    // TODO: check the same code in ExternalAllocsSerDe
+
+    if (buf.remaining() < dataSize) {
+      if (buf.capacity() >= dataSize) {
+        int read = buf.remaining();
+        buf.compact();
+        int n = 0;
+        while (true) {
+          n = fc.read(buf);
+          if (n == -1) throw new IOException("Unexpected End-Of-Stream");
+          read += n;
+          if (read >= dataSize) {
+            buf.flip();
+            break;
+          }
+        }
+      } else {
+        //TODO
+        // THIS SHOULD NOT HAPPEN B/C our buffer is larger than typical data block ( < 4kb)
+        // Temporary buffer
+//        ByteBuffer bbuf = ByteBuffer.allocate(blockSize);
+//        buf.put(bbuf);
+//        // clear original
+//        buf.clear();
+//        buf.limit(0);
+//        int read = bbuf.position();
+//        int n = 0;
+//        while (true) {
+//          n = fc.read(bbuf);
+//          if (n == -1) throw new IOException("Unexpected End-Of-Stream");
+//          read += n;
+//          if (read >= dataSize) {
+//            // We will read from position 0
+//            bbuf.flip();
+//            // TODO: limit?
+//            buf = bbuf;
+//            break;
+//          }
+//        }
+      }
+    }
+    // Load block data blob
+    UnsafeAccess.copy(buf, block.dataPtr, dataSize);
+    
+    if (type == SERDE) {      
+      // BLOCK IS DETACHED HERE!!!! 
+      block.setMutationOp(true);
+      block.decompressDataBlockIfNeeded();
+      long ptr = block.dataPtr;
+      dataSize = block.getDataInBlockSize();
+      while (ptr < block.dataPtr + dataSize) {
+        int kSize = blockKeyLength(ptr);
+        int vSize = blockValueLength(ptr);
+        deserialize(ptr, fc, buf);
+        ptr += kSize + vSize + RECORD_TOTAL_OVERHEAD;
+      }
+      // Do not compress back. It will be compressed later in IndexBlock
+    }
+    return block;
+  }
+  
+  private static void deserialize(long ptr, FileChannel fc, ByteBuffer buf) throws IOException {
+    int total = serdes.size();
+    for (int i = 0; i < total; i++) {
+      SerDe s = serdes.get(i);
+      if (s.deserialize(ptr, fc, buf)) break;
     }
   }
 }

@@ -21,9 +21,11 @@ package org.bigbase.carrot.redis.lists;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
-
+import org.bigbase.carrot.DataBlock.AllocType;
+import org.bigbase.carrot.DataBlock.SerDe;
 import org.bigbase.carrot.redis.util.Commons;
 import org.bigbase.carrot.redis.util.DataType;
+import org.bigbase.carrot.util.IOUtils;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -31,12 +33,18 @@ import org.bigbase.carrot.util.Utils;
 
 import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Lists: collections of string elements sorted according to the order of insertion. 
  * They are basically linked lists.
+ * 
+ * Current limitation:
+ * Maximum list size is 2 ^31 ~ 2 billion elements
  *
  */
 public class Lists {
@@ -46,17 +54,139 @@ public class Lists {
   }
   
   /**
-   * 
-   * Custom memory disposer for List data type
+   * !!!!
+   * Custom memory disposer for List data type, MUST be registered in
+   * DataBlock
    */
-  static class Deallocator implements DataBlock.Deallocator {
+  static class DeAllocator implements DataBlock.DeAllocator {
 
     @Override
     public boolean free(long recordAddress) {
       return Lists.dispose(recordAddress);
     }
+
+    /**
+     * TODO: REQUIRES REFACTORING WHEN WE CHANGE KEY LAYOUT
+     */
+    @Override
+    public boolean isCustomRecord(long recordAddress) {
+      return DataType.isRecordOfType(recordAddress, DataType.LIST);
+    }
+
+    @Override
+    public boolean isCustomKey(long keyAddress, int keySize) {
+      return DataType.isKeyOfType(keyAddress, keySize, DataType.LIST);
+    }
   }
+  
+  /**
+   * 
+   * SerDe for List data type, MUST be registered with DataBlock
+   * 
+   * List format:
+   * 
+   * 1 byte  - compression codec (0 for now, future)
+   * 4 bytes - list size (number of elements)
+   * Segment+
+   * 
+   * Segment:
+   * Segment data (Segment header contains all needed information to deserialize it)
+   * 
+   * Last segment has nextSegment pointer NULL - this is how we handle end-of-list
+   * 
+   */
+  static class SerDe implements DataBlock.SerDe {
     
+    @Override
+    public final boolean serialize(long recordAddress, FileChannel fc, ByteBuffer workBuf) 
+      throws IOException 
+    {
+
+      if (!DataType.isRecordOfType(recordAddress, DataType.LIST)) {
+        return false; 
+      }
+      
+      long valuePtr = DataBlock.valueAddress(recordAddress);      
+      int requiredSize = Utils.SIZEOF_BYTE + Utils.SIZEOF_INT;
+      
+      // Make sure that buffer is cleared - clear() before starting using serialization
+      // clear() sets position = 0, limit = capacity
+      if (workBuf.capacity() - workBuf.position() < requiredSize) {
+        // Flush buffer to a file channel
+        if (workBuf.position() > 0) {
+          IOUtils.drainBuffer(workBuf, fc);
+        }
+      }
+      byte codec = 0;// Reserved for future compression support
+      // Write allocation type
+      workBuf.put(codec);
+      int numElements = UnsafeAccess.toInt(valuePtr);
+      workBuf.putInt(numElements);
+      
+      long address = UnsafeAccess.toLong(valuePtr + Utils.SIZEOF_INT);
+      
+      Segment s = segment.get();
+      s.setDataPointer(address);
+      do {
+        s.serialize(fc, workBuf);
+      } while (s.next(s) != null);
+      return true;
+    }
+    
+    @Override
+    public boolean deserialize(long recordAddress, FileChannel fc, ByteBuffer workBuf) 
+      throws IOException 
+    {
+      int numElements = 0;
+      long firstSegmentPtr = 0, lastSegmentPtr = 0;
+      if (!DataType.isRecordOfType(recordAddress, DataType.LIST)) {
+        return false; // Custom SerDe must be used
+      }
+      
+      long avail = IOUtils.ensureAvailable(fc, workBuf, Utils.SIZEOF_INT + Utils.SIZEOF_BYTE);
+      if (avail < Utils.SIZEOF_INT) {
+        throw new IOException("Unexpected end-of-stream");
+      }
+      // Skip codec for now it is empty
+      @SuppressWarnings("unused")
+      int codec = workBuf.get();
+      
+      numElements = workBuf.getInt();
+      long prev, current;
+      firstSegmentPtr = Segment.deserialize(fc, workBuf);
+      if (firstSegmentPtr < 0) throw new IOException("Unexpected end-of-stream");
+      prev = firstSegmentPtr;
+      if (!Segment.isLast(firstSegmentPtr)) {
+        do {
+          current = Segment.deserialize(fc, workBuf);
+          if (current < 0) {
+            lastSegmentPtr = prev;
+            Segment.setNextSegmentAddress(lastSegmentPtr, 0);
+            break;
+          }
+          Segment.setNextSegmentAddress(prev, current);
+          Segment.setPreviousSegmentAddress(current, prev);
+          if (Segment.isLast(current)) {
+            lastSegmentPtr = current;
+            // just to make sure :)
+            Segment.setNextSegmentAddress(lastSegmentPtr, 0);
+            break;
+          }
+          prev = current;
+        } while (true);
+      } else {
+        lastSegmentPtr = firstSegmentPtr;
+      }
+      long valuePtr = DataBlock.valueAddressInRecord(recordAddress);
+      // Update value
+      UnsafeAccess.putInt(valuePtr, numElements);
+      UnsafeAccess.putLong(valuePtr + Utils.SIZEOF_INT, firstSegmentPtr);
+      UnsafeAccess.putLong(valuePtr + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, lastSegmentPtr);
+      
+      return true;
+    }
+  }
+  
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
     protected Long initialValue() {
@@ -122,7 +252,14 @@ public class Lists {
    * Register custom memory deallocator
    */
   public static void registerDeallocator() {
-    DataBlock.addCustomDeallocator(new Deallocator());
+    DataBlock.addCustomDeallocator(new DeAllocator());
+  }
+  
+  /**
+   * Register List SerDe
+   */
+  public static void registerSerDe() {
+    DataBlock.addCustomSerDe(new SerDe());
   }
   
   /**

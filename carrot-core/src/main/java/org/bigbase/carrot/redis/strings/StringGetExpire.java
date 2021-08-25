@@ -25,7 +25,7 @@ import org.bigbase.carrot.util.Utils;
  * 
  * String GETEXPIRE operation. (Utility helper)
  * 
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringGetExpire extends Operation {

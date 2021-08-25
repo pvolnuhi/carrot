@@ -23,7 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * THis helper class performs safe group Key/KeyValue locking/unlocking
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class KeysLocker {

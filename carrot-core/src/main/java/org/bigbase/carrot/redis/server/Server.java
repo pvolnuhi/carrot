@@ -22,6 +22,7 @@ import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.RedisConf;
 import org.bigbase.carrot.redis.util.DataType;
+import org.bigbase.carrot.storage.SnapshotManager;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -199,21 +200,26 @@ public class Server {
   public static boolean SAVE(BigSortedMap map) {
     //TODO
     
+    SnapshotManager manager = SnapshotManager.getInstance();
+    return manager.takeSnapshot(map, true);
+  }
+
+  /**
+   * Save last snapshot time
+   * @param map sorted map storage
+   */
+  public static void updateLastSnapshotTime(BigSortedMap map) {
     // save last save
     long saveTime = System.currentTimeMillis();
     long ptr = LASTSAVE_KEY;
     int size = LASTSAVE_LENGTH;
     size = buildKey(ptr, size);
     ptr = keyArena.get();
-    
     long valPtr = valueArena.get();
     int valueSize = Utils.SIZEOF_LONG;
     // Set time
     UnsafeAccess.putLong(valPtr, saveTime);
-    
-    boolean result = map.put(ptr, size, valPtr, valueSize, 0);
-    //TODO assert result
-    return true;
+    map.put(ptr, size, valPtr, valueSize, 0);    
   }
   
   /**
@@ -234,24 +240,8 @@ public class Server {
    * @param map sorted map storage
    */
   public static void BGSAVE(BigSortedMap map) {
-    //TODO - start new thread
-    
-    
-    // save last save
-    long saveTime = System.currentTimeMillis();
-    long ptr = LASTSAVE_KEY;
-    int size = LASTSAVE_LENGTH;
-    size = buildKey(ptr, size);
-    ptr = keyArena.get();
-    
-    long valPtr = valueArena.get();
-    int valueSize = Utils.SIZEOF_LONG;
-    // Set time
-    UnsafeAccess.putLong(valPtr, saveTime);
-    
-    boolean result = map.put(ptr, size, valPtr, valueSize, 0);
-    //TODO assert result
-    
+    SnapshotManager manager = SnapshotManager.getInstance();
+    manager.takeSnapshot(map, false);    
   }
   
   /**
@@ -301,6 +291,9 @@ public class Server {
    */
   
   public static void FLUSHALL(BigSortedMap map) {
+    // TODO: async mode
+    // Create new empty store and flush old one
+    
     map.flushAll();
   }
   

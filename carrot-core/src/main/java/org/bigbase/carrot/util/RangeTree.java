@@ -48,11 +48,11 @@ public class RangeTree {
     
   }
    
-  public Range add(Range r) {
+  public synchronized Range add(Range r) {
     return map.put(r, r);
   }
   
-  public Range delete(long address ) {
+  public synchronized Range delete(long address ) {
     search.start = address;
     search.size = 0;
     return map.remove(search);
@@ -60,7 +60,7 @@ public class RangeTree {
   
   private Range search = new Range();
   
-  public boolean inside(long start, int size) {
+  public synchronized boolean inside(long start, int size) {
     search.start = start;
     search.size = size;
     Range r = map.floorKey(search);
@@ -74,11 +74,11 @@ public class RangeTree {
     return result;
   }
   
-  public int size() {
+  public synchronized int size() {
     return map.size();
   }
   
-  public Set<Map.Entry<Range, Range>> entrySet() {
+  public synchronized Set<Map.Entry<Range, Range>> entrySet() {
     return map.entrySet();
   }
 }

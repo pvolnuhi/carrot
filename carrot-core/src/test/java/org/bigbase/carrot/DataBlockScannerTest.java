@@ -379,7 +379,7 @@ public class DataBlockScannerTest {
         keys.add( new Key(ptr, length));
       }
     }
-    System.out.println(b.getNumberOfRecords() + " " + b.getNumberOfDeletedAndUpdatedRecords() + " " + b.getDataInBlockSize());
+    System.out.println(b.getNumberOfRecords() + " " + b.getDataInBlockSize());
     return keys;
   }
   

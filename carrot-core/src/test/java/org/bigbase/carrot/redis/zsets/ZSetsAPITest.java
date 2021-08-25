@@ -158,7 +158,7 @@ public class ZSetsAPITest {
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) + " Compression=NULL");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -166,7 +166,7 @@ public class ZSetsAPITest {
     }
   }
 
-  @Ignore
+  //@Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));

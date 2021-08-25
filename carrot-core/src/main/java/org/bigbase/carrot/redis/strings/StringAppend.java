@@ -27,7 +27,7 @@ import org.bigbase.carrot.util.Utils;
  * If key already exists and is a string, this command appends the value at the end of the string. 
  * If key does not exist it is created and set as an empty string, 
  * so APPEND will be similar to SET in this special case.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringAppend extends Operation {

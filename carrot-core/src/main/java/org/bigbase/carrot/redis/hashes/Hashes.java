@@ -62,7 +62,7 @@ import org.bigbase.carrot.util.Utils;
  *  value data 
  * } +N
  * 
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class Hashes {

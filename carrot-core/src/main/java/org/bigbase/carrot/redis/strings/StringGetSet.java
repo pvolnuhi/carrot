@@ -28,7 +28,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * old value stored at key. Returns an error when
  * key exists but does not hold a string value.
  * 
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringGetSet extends Operation {

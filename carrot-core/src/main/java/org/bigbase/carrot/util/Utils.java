@@ -761,6 +761,7 @@ public class Utils {
    * @param buffer buffer
    */
   public static void random16(long ptr, int len, long buffer) {
+    //System.err.println("random16="+ buffer);
     UnsafeAccess.putInt(buffer, murmurHash(ptr, len, 1));
     UnsafeAccess.putInt(buffer + SIZEOF_INT, murmurHash(ptr, len, 2));
     UnsafeAccess.putInt(buffer + 2 * SIZEOF_INT, murmurHash(ptr, len, 3));

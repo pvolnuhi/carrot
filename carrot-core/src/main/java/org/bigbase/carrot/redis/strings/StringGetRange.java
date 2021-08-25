@@ -31,7 +31,7 @@ import org.bigbase.carrot.util.Utils;
    * -2 the penultimate and so forth.
    * The function handles out of range requests by limiting the resulting range to the actual
    *  length of the string.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringGetRange extends Operation {

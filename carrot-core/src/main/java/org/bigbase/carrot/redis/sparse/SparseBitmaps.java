@@ -41,7 +41,7 @@ import org.bigbase.carrot.util.Utils;
  * are more memory efficient when population do not exceed 5-10%.
  * Bitmap storage allocation is done in chunks. Chunk size 4096 bytes.
  * Each chunk is stored in a compressed form. Compression codec is LZ4
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class SparseBitmaps {

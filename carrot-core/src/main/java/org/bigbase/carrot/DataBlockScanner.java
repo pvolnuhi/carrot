@@ -67,10 +67,6 @@ public final class DataBlockScanner extends Scanner{
    * Number of k-v's in this block
    */
   int numRecords;
-  /*
-   * Number of deleted records
-   */
-  int numDeletedRecords;
   
   /*
    * Maximum sequenceId (snapshotId)
@@ -198,7 +194,6 @@ public final class DataBlockScanner extends Scanner{
     this.blockSize = 0;
     this.dataSize = 0;
     this.numRecords = 0;
-    this.numDeletedRecords = 0;
     this.snapshotId = Long.MAX_VALUE;
     this.isFirst = false;
   }
@@ -208,7 +203,6 @@ public final class DataBlockScanner extends Scanner{
     this.startRowLength = len;
     if (startRowPtr != 0) {
       search(startRowPtr, startRowLength, snapshotId, Op.DELETE);
-      //skipDeletedAndIrrelevantRecords();// One more time
     } else {
       this.curPtr = this.ptr;
     }
@@ -313,12 +307,18 @@ public final class DataBlockScanner extends Scanner{
    * @throws RetryOperationException 
    */
   private void setBlock(DataBlock b) throws RetryOperationException {
-
+//    if(b.isEmpty() || !b.isValid()) {
+//      IndexBlock parent = b.indexBlock;
+//      int indexBlockSize = parent.getDataInBlockSize();
+//      long addr = parent.getAddress();
+//      System.err.println("Invalid or empty data block ptr="+ b.getDataPtr() +" size = "+ b.getBlockSize() +
+//        "index ptr="+ addr + " index limit =" + (addr + indexBlockSize) + 
+//        " block offset="+ b.getIndexPtr() +" valid=" + b.isValid()+" first="+ parent.isFirst);
+//    }
     b.decompressDataBlockIfNeeded();
     this.blockSize = BigSortedMap.maxBlockSize;
     this.dataSize = b.getDataInBlockSize();
     this.numRecords = b.getNumberOfRecords();
-    this.numDeletedRecords = b.getNumberOfDeletedAndUpdatedRecords();
     this.ptr = b.getAddress();
     this.curPtr = this.ptr;
     this.isFirst = b.isFirstBlock();
@@ -337,7 +337,6 @@ public final class DataBlockScanner extends Scanner{
    * @return true, false
    */
   public final boolean hasNext() {
-    //skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr >= this.dataSize) {
       return false;
     } else if (stopRowPtr != 0) {
@@ -351,6 +350,7 @@ public final class DataBlockScanner extends Scanner{
       return true;
     }
   }
+  
   public int getOffset() {
     return (int) (this.curPtr - this.ptr);
   }
@@ -360,7 +360,6 @@ public final class DataBlockScanner extends Scanner{
    */
   public final boolean next() {
 
-    //skipDeletedAndIrrelevantRecords();
     if (this.curPtr - this.ptr < this.dataSize) {
       int keylen = DataBlock.blockKeyLength(this.curPtr);
       int vallen = DataBlock.blockValueLength(this.curPtr);

@@ -20,7 +20,7 @@ package org.bigbase.carrot.redis.util;
 /**
  * 
  * Type of increment
- * @author Vladimir Rodionov
+ * 
  *
  */
 public enum IncrementType {

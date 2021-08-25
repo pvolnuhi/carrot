@@ -25,7 +25,7 @@ package org.bigbase.carrot.ops;
  * operation. The result can be one or two PUTs, which will be 
  * executed in the context of this atomic operation or one Delete and PUT
  * or no updates at all
- * @author Vladimir Rodionov
+ * 
  *
  */
 public abstract class Operation {

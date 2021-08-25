@@ -34,7 +34,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * Inserts new or overwrites existing chunk of a bitmap
- * @author Vladimir Rodionov
+ * 
  */
 
 public class SparseSetChunk extends Operation {

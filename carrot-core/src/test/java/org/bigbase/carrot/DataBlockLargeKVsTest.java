@@ -91,7 +91,6 @@ public class DataBlockLargeKVsTest extends DataBlockTest{
         UnsafeAccess.free(bufPtr);
       }
       assertEquals(keys.size() + 1, (int) b.getNumberOfRecords());
-      assertEquals(0, (int) b.getNumberOfDeletedAndUpdatedRecords());
       scanAndVerify(b, keys);
       b.free();
     }
@@ -134,7 +133,6 @@ public class DataBlockLargeKVsTest extends DataBlockTest{
         assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
       }
       assertEquals(keys.size() + 1, (int) b.getNumberOfRecords());
-      assertEquals(0, (int) b.getNumberOfDeletedAndUpdatedRecords());
       scanAndVerify(b, keys);
       b.free();
     }

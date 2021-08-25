@@ -25,7 +25,7 @@ import org.bigbase.carrot.util.Utils;
  * String value length operation.
  * Returns the length of the string value stored at key (in bytes). 
  * An error is returned when key holds a non-string value.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class SparseLength extends Operation {

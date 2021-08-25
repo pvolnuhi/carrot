@@ -30,7 +30,7 @@ import org.bigbase.carrot.util.Utils;
  * strings, so this command will make sure it holds a string large enough to be able to set value at offset.
  * Note that the maximum offset that you can set is 229 -1 (536870911), as Redis Strings are limited
  * to 512 megabytes. If you need to grow beyond this size, you can use multiple keys.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringSetRange extends Operation {

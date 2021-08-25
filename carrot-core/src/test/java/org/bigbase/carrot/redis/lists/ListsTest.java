@@ -29,11 +29,11 @@ import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.redis.lists.Lists.Side;
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.bigbase.carrot.util.Value;
+import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -51,6 +51,7 @@ public class ListsTest {
     //UnsafeAccess.debug = true;
   }
   
+
   private Key getKey() {
     long ptr = UnsafeAccess.malloc(keySize);
     byte[] buf = new byte[keySize];
@@ -101,6 +102,7 @@ public class ListsTest {
     map.dispose();
     
     DataBlock.clearDeallocators();
+    DataBlock.clearSerDes();
     
     UnsafeAccess.free(key.address);
     UnsafeAccess.free(buffer);
@@ -114,7 +116,7 @@ public class ListsTest {
   public void runAllNoCompression() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -122,12 +124,12 @@ public class ListsTest {
     }
   }
   
-  @Ignore
+  //@Ignore
   @Test
   public void runAllCompressionLZ4() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
       BigSortedMap.printMemoryAllocationStats();
@@ -149,6 +151,18 @@ public class ListsTest {
   }
   
   private void allTests() {
+    
+    setUp();
+    testListSerDeWithLargeElements();
+    tearDown();
+    
+    setUp();
+    testListWithLargeElements();
+    tearDown();
+    
+    setUp();
+    testListSerDe();
+    tearDown();
     
     setUp();
     testDeallocator();
@@ -228,8 +242,147 @@ public class ListsTest {
     System.out.println("After BSM.dispose:");
     assertEquals(n, (int) Lists.LLEN(map, key.address, key.length));
     
-    
   }
+  
+  @Ignore
+  @Test
+  public void testListWithLargeElements () {
+    System.out.println("Test List with large elements");    
+    Key key = getKey();
+    int largeSize = 1023;
+    long largePtr = UnsafeAccess.malloc(largeSize);
+    long bufPtr = UnsafeAccess.malloc(largeSize);
+    
+    byte[] buf = new byte[largeSize];
+    Random r = new Random();
+    r.nextBytes(buf);
+    UnsafeAccess.copy(buf, 0, largePtr, largeSize);
+        
+    for (int i = 0; i < n; i++) {
+      Value v = values.get(i);
+      long[] elemPtrs = new long[] {v.address};
+      int[] elemSizes = new int[] {v.length};
+      long len  = Lists.LPUSH(map, key.address, key.length, elemPtrs, elemSizes);
+      assertEquals(2 * i + 1, (int) len);
+      elemPtrs[0] = largePtr;
+      elemSizes[0] = largeSize;
+      len  = Lists.LPUSH(map, key.address, key.length, elemPtrs, elemSizes);
+      assertEquals(2 * i + 2, (int) len);
+    }
+       
+    System.out.println("After loading large values:");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    
+    for(int i = 0; i < n; i++) {
+      int size = Lists.RPOP(map, key.address, key.length, bufPtr, largeSize);
+      assertEquals(valueSize, size);
+      assertEquals( 0, Utils.compareTo(bufPtr, size, values.get(i).address, values.get(i).length));
+      size = Lists.RPOP(map, key.address, key.length, bufPtr, largeSize);
+      assertEquals(largeSize, size);
+      assertEquals( 0, Utils.compareTo(bufPtr, size, largePtr, largeSize));
+    }
+    
+    UnsafeAccess.free(largePtr);
+    UnsafeAccess.free(bufPtr);
+    Lists.DELETE(map, key.address, key.length);
+    assertEquals(0, (int)Lists.LLEN(map, key.address, key.length));
+  }
+  
+  @Ignore
+  @Test
+  public void testListSerDeWithLargeElements () {
+    System.out.println("Test List SerDe with large elements");  
+    // Register LIST deallocator
+    Lists.registerDeallocator();
+    Lists.registerSerDe();
+    Key key = getKey();
+    int largeSize = 1023;
+    long largePtr = UnsafeAccess.malloc(largeSize);
+    long bufPtr = UnsafeAccess.malloc(largeSize);
+    
+    byte[] buf = new byte[largeSize];
+    Random r = new Random();
+    r.nextBytes(buf);
+    UnsafeAccess.copy(buf, 0, largePtr, largeSize);
+    for (int i = 0; i < n; i++) {
+      Value v = values.get(i);
+      long[] elemPtrs = new long[] {v.address};
+      int[] elemSizes = new int[] {v.length};
+      long len  = Lists.LPUSH(map, key.address, key.length, elemPtrs, elemSizes);
+      assertEquals(2 * i + 1, (int) len);
+      elemPtrs[0] = largePtr;
+      elemSizes[0] = largeSize;
+      len  = Lists.LPUSH(map, key.address, key.length, elemPtrs, elemSizes);
+      assertEquals(2 * i + 2, (int) len);
+    }
+       
+    System.out.println("Before BSM.dispose:");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    
+    System.out.println("Taking snapshot");
+    map.snapshot();
+    map.dispose();
+    
+    System.out.println("After BSM.dispose:");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    map = BigSortedMap.loadStore();
+    
+    System.out.println("Load snapshot");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    // Verify data after load snapshot
+    for(int i = 0; i < n; i++) {
+      int size = Lists.RPOP(map, key.address, key.length, bufPtr, largeSize);
+      assertEquals(valueSize, size);
+      assertEquals( 0, Utils.compareTo(bufPtr, size, values.get(i).address, values.get(i).length));
+      size = Lists.RPOP(map, key.address, key.length, bufPtr, largeSize);
+      assertEquals(largeSize, size);
+      assertEquals( 0, Utils.compareTo(bufPtr, size, largePtr, largeSize));
+    }
+  }
+  
+  @Ignore
+  @Test
+  public void testListSerDe () {
+    System.out.println("Test List serializer");
+    // Register LIST deallocator
+    Lists.registerDeallocator();
+    Lists.registerSerDe();
+    Key key = getKey();
+    for (int i = 0; i < n; i++) {
+      Value v = values.get(i);
+      long[] elemPtrs = new long[] {v.address};
+      int[] elemSizes = new int[] {v.length};
+      long len  = Lists.LPUSH(map, key.address, key.length, elemPtrs, elemSizes);
+      assertEquals(i + 1, (int) len);
+    }
+       
+    System.out.println("Before BSM.dispose:");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    
+    System.out.println("Taking snapshot");
+    map.snapshot();
+    map.dispose();
+    System.out.println("After BSM.dispose:");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    map = BigSortedMap.loadStore();
+    
+    System.out.println("Load snapshot");
+    BigSortedMap.printMemoryAllocationStats();
+    UnsafeAccess.mallocStats.printStats();
+    long buffer = UnsafeAccess.malloc(valueSize);
+    for(int i = 0; i < n; i++) {
+      int size = Lists.RPOP(map, key.address, key.length, buffer, valueSize);
+      assertEquals(valueSize, size);
+      assertEquals( 0, Utils.compareTo(buffer, valueSize, values.get(i).address, values.get(i).length));
+    }
+  }
+  
   @Ignore
   @Test
   public void testRPUSHX() {

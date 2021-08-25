@@ -39,7 +39,7 @@ import org.bigbase.carrot.util.Utils;
 /**
  * This read-modify-write mutation is executed atomically and isolated
  * It adds new field - value to a given Hash, defined by a Key
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class HashSet extends Operation{

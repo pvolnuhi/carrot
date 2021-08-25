@@ -17,6 +17,7 @@
  */
 package org.bigbase.carrot.redis.util;
 
+import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
@@ -53,4 +54,34 @@ public enum DataType {
     return UnsafeAccess.toInt(ptr + Utils.SIZEOF_BYTE);
   }
   
+  /**
+   * Is it record of a given type
+   * @param recordAddress
+   * @param type data type
+   * @return true - if its List type, false - otherwise
+   */
+  public static boolean isRecordOfType(long recordAddress, DataType type) {
+    long keyPtr = DataBlock.keyAddress(recordAddress);
+    int keySize = DataBlock.keyLength(recordAddress);
+    if (keySize < Utils.SIZEOF_BYTE + Utils.SIZEOF_INT + 1) {
+      // Too small key to be custom
+      return false;
+    }
+    return UnsafeAccess.toByte(keyPtr) == type.ordinal();
+  }
+  
+  /**
+   * Is it key of a given type?
+   * @param keyAddress key address
+   * @param keySize key size
+   * @param type data type
+   * @return true or false
+   */
+  public static boolean isKeyOfType(long keyAddress, int keySize, DataType type) {
+    if (keySize < Utils.SIZEOF_BYTE + Utils.SIZEOF_INT + 1) {
+      // Too small key to be custom
+      return false;
+    }
+    return UnsafeAccess.toByte(keyAddress) == type.ordinal();
+  }
 }

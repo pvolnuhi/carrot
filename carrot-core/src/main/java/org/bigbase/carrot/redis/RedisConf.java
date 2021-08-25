@@ -38,6 +38,17 @@ public class RedisConf {
   public final static String CONF_ZSET_MAX_COMPACT_SIZE = "zset.compact.maxsize";
   public final static String CONF_SERVER_PORT = "server.port";
   public final static String CONF_THREAD_POOL_SIZE = "thread.pool.size";
+  
+  public final static String CONF_SNAPSHOT_DIR_PATH = "snapshot.dir.path";
+  public final static String CONF_SNAPSHOT_INTERVAL_SECS = "snapshot.interval.seconds";
+  public final static String CONF_SERVER_LOG_DIR_PATH = "server.log.dir.path";
+  public final static String CONF_SERVER_WAL_DIR_PATH = "server.wal.dir.path";
+  
+  
+  public final static int DEFAULT_SNAPSHOT_INTERVAL_SECS = 0;// no snapshots
+  public final static String DEFAULT_SERVER_WAL_DIR_PATH = "./WALs";
+  public final static String DEFAULT_SERVER_LOG_DIR_PATH = "./logs";
+  public final static String DEFAULT_SNAPSHOT_DIR_PATH = "./snapshots";
 
   public final static int DEFAULT_SERVER_PORT = 6379; 
   // As of v. 0.1
@@ -163,5 +174,41 @@ public class RedisConf {
       }
     }
     return CodecFactory.getCodec(CodecType.NONE.ordinal()); // no compression
+  }
+  
+  /**
+   * Get snapshot directory
+   * @return snapshot directory
+   */
+  public String getSnapshotDir() {
+    return props.getProperty(CONF_SNAPSHOT_DIR_PATH, DEFAULT_SNAPSHOT_DIR_PATH);
+  }
+  
+  /**
+   * Get snapshot interval in seconds
+   * @return snapshot interval
+   */
+  public int getSnapshotInterval() {
+    String value = props.getProperty(CONF_SNAPSHOT_INTERVAL_SECS);
+    if (value != null) {
+      return Integer.parseInt(value);
+    }
+    return DEFAULT_SNAPSHOT_INTERVAL_SECS;
+  }
+  
+  /**
+   * Get log directory
+   * @return log directory
+   */
+  public String getLogsDir() {
+    return props.getProperty(CONF_SERVER_LOG_DIR_PATH, DEFAULT_SERVER_LOG_DIR_PATH);
+  }
+  
+  /**
+   * Get log directory
+   * @return log directory
+   */
+  public String getWALDir() {
+    return props.getProperty(CONF_SERVER_WAL_DIR_PATH, DEFAULT_SERVER_WAL_DIR_PATH);
   }
 }

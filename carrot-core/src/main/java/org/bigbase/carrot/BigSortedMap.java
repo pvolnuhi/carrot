@@ -17,8 +17,13 @@
  */
 package org.bigbase.carrot;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,6 +40,8 @@ import org.bigbase.carrot.ops.IncrementInt;
 import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.ops.OperationFailedException;
+import org.bigbase.carrot.redis.RedisConf;
+import org.bigbase.carrot.redis.server.Server;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeysLocker;
@@ -78,6 +85,7 @@ public class BigSortedMap {
   
   static int maxBlockSize = DataBlock.MAX_BLOCK_SIZE;
   static int maxIndexBlockSize = IndexBlock.MAX_BLOCK_SIZE;
+  
   public static AtomicLong totalAllocatedMemory = new AtomicLong(0);
   /*
    * This tracks total data blocks size (memory allocated for data blocks)
@@ -310,10 +318,18 @@ public class BigSortedMap {
    * @param maxMemory - memory limit in bytes
    */
   public BigSortedMap(long maxMemory) {
-    this.maxMemory = maxMemory;
-    initNodes();
+    this(maxMemory, true);
   }
   
+  /**
+   * Constructor of a big sorted map
+   * @param maxMemory - memory limit in bytes
+   * @param init - initialize
+   */
+  public BigSortedMap(long maxMemory, boolean init) {
+    this.maxMemory = maxMemory;
+    if (init) initNodes();
+  }
   
   /**
    * Get total allocated memory
@@ -1661,4 +1677,250 @@ public class BigSortedMap {
     //TODO: flush DB by DB's id
     flushAll();
   }
+  
+  /******************************************************************************************************
+   * 
+   * Persistence API - data store disk snapshot READ-WRITE
+   * 
+   */
+  
+  /**
+   * I/O buffer - thread local
+   */
+  static ThreadLocal<ByteBuffer> bb = new ThreadLocal<ByteBuffer>() {
+    @Override
+    protected ByteBuffer initialValue() {
+      return ByteBuffer.allocateDirect(256 * 1024);
+    }
+  };
+  
+  // WRITE DATA
+  
+  public void snapshot() {
+    RedisConf conf = RedisConf.getInstance();
+    String snapshotDir = conf.getSnapshotDir();
+    // Check if dir exists
+    File dir = new File(snapshotDir);
+    if (dir.exists() == false) {
+      if (dir.mkdirs() == false) {
+        System.err.println("Snapshot failed. Can not create directory: " + dir.getAbsolutePath());
+        return;
+      }
+    }
+
+    File snapshotFile = new File(dir, "snapshot.data_tmp");
+    RandomAccessFile raf = null;
+    FileChannel fc = null;
+    try {
+      raf = new RandomAccessFile(snapshotFile, "rw");
+      fc = raf.getChannel();
+      // Save store meta data
+      saveStoreMeta(fc);
+    } catch (IOException e) {
+      System.err.println(
+        "Snapshot failed. Can not create snapshot file: " + snapshotFile.getAbsolutePath());
+      e.printStackTrace();
+      return;
+    }
+    
+    System.out.println("Snapshot file opened: " + snapshotFile.getAbsolutePath());
+     
+    // main loop over all index blocks
+    IndexBlock ib = null, cur = null;
+    int version = -1;
+    ByteBuffer buf = bb.get();
+    buf.clear();
+    while (true) {
+      try {
+        if (ib != null) {
+          version = ib.getSeqNumberSplitOrMerge();
+        }
+        cur = nextIndexBlock(ib);
+        if (cur == null) {
+          break;
+        } else if (cur.isValid() == false) {
+          //TODO: is it safe?
+          continue;
+        }
+        // Lock current index block
+        cur.readLock();
+        if (ib != null && ib.hasRecentUnsafeModification()) {
+          int v = ib.getSeqNumberSplitOrMerge();
+          if (v != version) {
+            // We caught IB split in fly
+            ib = cur;
+            continue;
+          }
+        }
+        // Process index block    
+        cur.saveData(fc, buf);
+        ib = cur;
+      } catch (RetryOperationException e) {
+        continue;
+      } catch (IOException e) {
+        System.err.println(
+          "Snapshot failed. Can not create snapshot file: " + snapshotFile.getAbsolutePath());
+        e.printStackTrace();
+        return;
+      } finally {
+        if (cur != null) {
+          cur.readUnlock();
+        }
+      }
+    }
+
+    // Close file
+    try {
+      // Drain buffer
+      buf.flip();
+      while(buf.hasRemaining()) {
+        fc.write(buf);
+      }      
+      raf.close();
+    } catch (IOException e) {
+      System.err.println("WARNING! " + e.getMessage());
+      e.printStackTrace();
+      //TODO: what to do?
+    }
+    
+    System.out.println("Snapshot file created: " + snapshotFile.getAbsolutePath());
+    // Update last snapshot time
+    Server.updateLastSnapshotTime(this);
+    
+    // Delete old snapshot
+    File oldSnapshotFile = new File(dir, "snapshot.data");
+    if (oldSnapshotFile.exists()) {
+      boolean result = oldSnapshotFile.delete();
+      if (!result) {
+        System.err.println("ERROR! Can not delete old snapshot file.");
+        return;
+      }
+    }
+    boolean result = snapshotFile.renameTo(oldSnapshotFile);
+    if (!result) {
+      System.err.println("ERROR! Can not rename new snapshot file: "+ snapshotFile.getAbsolutePath() + 
+        " to "+ oldSnapshotFile.getAbsolutePath());
+    }
+  }
+
+
+  private void saveStoreMeta(FileChannel channel) throws IOException {
+    ByteBuffer buf = ByteBuffer.allocate(Utils.SIZEOF_LONG * 4);
+    // 1. maxMemory
+    buf.putLong(maxMemory);
+    buf.putLong(totalDataInDataBlocksSize.get());
+    buf.putLong(totalCompressedDataInDataBlocksSize.get());
+    buf.putLong(totalExternalDataSize.get());
+
+    buf.flip();
+    while(buf.hasRemaining()) {
+      channel.write(buf);
+    }
+  }
+
+
+  final IndexBlock nextIndexBlock(IndexBlock ib) {
+    return ib == null? map.firstKey(): map.higherKey(ib);
+  }
+  
+  // READ DATA
+  public static BigSortedMap loadStore() {
+    BigSortedMap map = null;
+    RedisConf conf = RedisConf.getInstance();
+    String snapshotDir = conf.getSnapshotDir();
+    // Check if dir exists
+    File dir = new File(snapshotDir);
+    if (dir.exists() == false) {
+      System.err.println("Snapshot directory does not exists: " + dir.getAbsolutePath());
+      return null;
+    }
+
+    File snapshotFile = new File(dir, "snapshot.data");
+    RandomAccessFile raf = null;
+    FileChannel fc = null;
+    System.out.println(
+      "Started loading store data from: " + snapshotFile.getAbsolutePath() + " at " + new Date());
+
+    try {
+      raf = new RandomAccessFile(snapshotFile, "r");
+      fc = raf.getChannel();
+      // Save store meta data
+      map = loadStoreMeta(fc);
+    } catch (IOException e) {
+      System.err.println(
+        "Loading store failed. Can not open snapshot file: " + snapshotFile.getAbsolutePath());
+      return null;
+    }
+
+    ByteBuffer buf = bb.get();
+    buf.clear();
+
+    try {
+      // Read first chunk from file
+      fc.read(buf);
+      buf.flip();
+      DataBlock block = null;
+      boolean first = true;
+      do {
+        IndexBlock ib = new IndexBlock(maxIndexBlockSize);
+        if (first) {
+          ib.isFirst = true;
+          first = false;
+        }
+        if (block != null) {
+          //TODO: insert block into an empty index? Never tested
+          ib.insertBlock(block);
+          block.compressDataBlockIfNeeded();
+        }
+        block = ib.loadData(fc, buf);
+        if (!ib.isEmpty()) {
+          map.map.put(ib, ib);
+        }
+      } while (block != null);
+      System.out
+          .println("Loaded store from: " + snapshotFile.getAbsolutePath() + " at " + new Date());
+      return map;
+    } catch (IOException e) {
+      System.err.println(
+        "Loading store failed. Corrupted (?) snapshot file: " + snapshotFile.getAbsolutePath());
+      e.printStackTrace();
+    } finally {
+      // Close file
+      try {
+        raf.close();
+      } catch (IOException e) {
+        System.err.println("WARNING! " + e.getMessage());
+        e.printStackTrace();
+      }
+    }
+    return null;
+  }
+
+  private static BigSortedMap loadStoreMeta(FileChannel fc) throws IOException {
+    BigSortedMap map;
+    int toRead = Utils.SIZEOF_LONG * 4;
+    ByteBuffer buf = ByteBuffer.allocate(toRead);
+    int read = 0;
+    while( (read += fc.read(buf)) < toRead);
+    buf.flip();
+    
+    // 1. read max memory and 3 other counters
+    long value = buf.getLong();
+    map = new BigSortedMap(value, false);
+    value = buf.getLong();
+    totalDataInDataBlocksSize.set(value);
+    value = buf.getLong();
+    totalCompressedDataInDataBlocksSize.set(value);
+    value = buf.getLong();
+    totalExternalDataSize.set(value);
+    // 2.
+    BigSortedMap.totalAllocatedMemory.set(0);
+    BigSortedMap.totalBlockDataSize.set(0);
+    BigSortedMap.totalBlockIndexSize.set(0);
+    BigSortedMap.totalDataInIndexBlocksSize.set(0);   
+    BigSortedMap.totalIndexSize.set(0);
+    return map;
+  }
 }
+
+

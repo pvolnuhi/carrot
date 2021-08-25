@@ -177,7 +177,10 @@ public class RedisServer {
   private static void initStore(String confFilePath) {
     RedisConf conf = RedisConf.getInstance(confFilePath);
     long limit = conf.getDataStoreMaxSize();
-    store = new BigSortedMap(limit);
+    store = BigSortedMap.loadStore();
+    if (store == null) {
+      store = new BigSortedMap(limit);
+    }
     //TODO: Load data from a configured snapshot directory
     BigSortedMap.setCompressionCodec(conf.getCompressionCodec());
     // Register custom memory deallocator for LIST data type

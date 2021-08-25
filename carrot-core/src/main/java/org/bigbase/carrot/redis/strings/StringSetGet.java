@@ -27,7 +27,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * Set key to hold the string value. If key already holds a value, it is overwritten, 
  * regardless of its type. Any previous time to live associated with the key is 
  * discarded on successful SET operation (if keepTTL == false).
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringSetGet extends Operation {

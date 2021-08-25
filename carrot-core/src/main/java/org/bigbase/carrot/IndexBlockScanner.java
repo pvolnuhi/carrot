@@ -330,17 +330,24 @@ public final class IndexBlockScanner implements Closeable{
    */
   public final DataBlockScanner nextBlockScanner() {
 
-    if (isClosed()) {
-      return null;
+    try {
+      if (isClosed()) {
+        return null;
+      }
+      if (this.currentDataBlock != null && this.curDataBlockScanner != null) {
+        this.currentDataBlock.compressDataBlockIfNeeded();
+      }
+      DataBlock b = this.currentDataBlock;
+      if (this.curDataBlockScanner != null) {
+        b = this.indexBlock.nextBlock(this.currentDataBlock, isMultiSafe);
+      }
+      return setBlockAndReturnScanner(b);
+    } catch (RetryOperationException e) {
+      if (this.indexBlock.isValid() == false) {
+        return null;
+      }
     }
-    if (this.currentDataBlock != null && this.curDataBlockScanner != null) {
-      this.currentDataBlock.compressDataBlockIfNeeded();
-    }
-    DataBlock b = this.currentDataBlock;
-    if (this.curDataBlockScanner != null) {
-      b =  this.indexBlock.nextBlock(this.currentDataBlock, isMultiSafe);
-    }
-    return setBlockAndReturnScanner(b);
+    return null;
   }
 
   

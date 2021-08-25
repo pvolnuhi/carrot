@@ -36,7 +36,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * Supports String operations, found in Redis
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class Strings {

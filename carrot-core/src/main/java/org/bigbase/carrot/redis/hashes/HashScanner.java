@@ -29,7 +29,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * Scanner to iterate through hash field- values
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class HashScanner extends Scanner{

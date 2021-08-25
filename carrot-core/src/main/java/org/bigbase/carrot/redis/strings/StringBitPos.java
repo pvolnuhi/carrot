@@ -60,7 +60,7 @@ import static org.bigbase.carrot.util.UnsafeAccess.firstBitUnSetLong;
  * However, this behavior changes if you are looking for clear bits and specify a range with both start 
  * and end. If no clear bit is found in the specified range, the function returns -1 as the user specified 
  * a clear range and there are no 0 bits in that range.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringBitPos extends Operation {

@@ -19,7 +19,7 @@ package org.bigbase.carrot.util;
 
 /**
  * Key - Value class
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class KeyValue implements Comparable<KeyValue>{

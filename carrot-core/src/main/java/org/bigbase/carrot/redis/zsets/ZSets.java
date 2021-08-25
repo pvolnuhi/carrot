@@ -78,12 +78,27 @@ import org.bigbase.carrot.util.Utils;
  *  to  set and hash representation when number of elements exceeds some threshold, similar how Redis
  *  optimizes small LIST, HASH, ZSET into ziplist representation. 
  *  
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class ZSets {
   
-  private final static int CARD_MEMBER_SIZE = 16;// random bytes
+  private final static int CARD_MEMBER_SIZE = 1;// just 0
+  
+  private static ThreadLocal<Long> cardArena = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      long ptr = UnsafeAccess.mallocZeroed(1);
+      return ptr;
+    }
+  };
+  
+  private static ThreadLocal<Long> cardValueArena = new ThreadLocal<Long>() {
+    @Override
+    protected Long initialValue() {
+      return UnsafeAccess.malloc(8);
+    }
+  };
   
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
@@ -176,8 +191,9 @@ public class ZSets {
    * @return card pointer
    */
   private static long getCardinalityMember(long kPtr, int kSize) {
-    long ptr = UnsafeAccess.malloc(CARD_MEMBER_SIZE);
-    Utils.random16(kPtr, kSize, ptr);
+    long ptr = UnsafeAccess.mallocZeroed(CARD_MEMBER_SIZE);
+    //Utils.random16(kPtr, kSize, ptr);
+    
     return ptr;
   }
   
@@ -189,8 +205,10 @@ public class ZSets {
    * @return false/true
    */
   private static boolean isCardinalityMember(long mPtr, int mSize, long cardPtr) {
-    if (mSize != CARD_MEMBER_SIZE) return false;
-    return Utils.compareTo(mPtr, mSize, cardPtr, mSize) == 0;
+//    if (mSize != CARD_MEMBER_SIZE) return false;
+//    //return Utils.compareTo(mPtr, mSize, cardPtr, mSize) == 0;
+//    return UnsafeAccess.toByte(mPtr) == 0;
+    return false;
   }
   
   /**
@@ -389,26 +407,26 @@ public class ZSets {
       if (lock) {
         KeysLocker.readLock(k);
       }
-      checkKeyArena(CARD_MEMBER_SIZE);
-      // Build CARDINALITY member
-      long ptr  = keyArena.get();
-      int size = CARD_MEMBER_SIZE;
-      Utils.random16(keyPtr, keySize, ptr);
-      
-      long valueBuffer = valueArena.get();
-      int bufferSize = valueArenaSize.get();
-      // We need just 8 bytes
-      int vsize = Hashes.HGET(map, keyPtr, keySize, ptr, size, valueBuffer, bufferSize);
-      if (vsize == Utils.SIZEOF_LONG) {
-        long card = UnsafeAccess.toLong(valueBuffer); 
-        return card; 
-      } else if (vsize > 0){
-        //TODO - collision detected
-        //PANIC
-        System.err.println("ZCARD collision detected");
-        Thread.dumpStack();
-        System.exit(-1);
-      }
+//      //checkKeyArena(CARD_MEMBER_SIZE);
+//      // Build CARDINALITY member
+//      long ptr  = cardArena.get();
+//      int size = CARD_MEMBER_SIZE;
+//      //Utils.random16(keyPtr, keySize, ptr);
+//      
+//      long valueBuffer = cardValueArena.get();
+//      int bufferSize = Utils.SIZEOF_LONG;
+//      // We need just 8 bytes
+//      int vsize = Hashes.HGET(map, keyPtr, keySize, ptr, size, valueBuffer, bufferSize);
+//      if (vsize == Utils.SIZEOF_LONG) {
+//        long card = UnsafeAccess.toLong(valueBuffer); 
+//        return card; 
+//      } else if (vsize > 0){
+//        //TODO - collision detected
+//        //PANIC
+//        System.err.println("ZCARD collision detected");
+//        Thread.dumpStack();
+//        System.exit(-1);
+//      }
       // else 
       return Sets.SCARD(map, keyPtr, keySize);
     } finally {
@@ -439,16 +457,20 @@ public class ZSets {
 //  }
 
   private static long ZSETCARD(BigSortedMap map, long keyPtr, int keySize, long card) {
-    checkKeyArena(CARD_MEMBER_SIZE);
-    // Build CARDINALITY member
-    long ptr  = keyArena.get();
-    int size = CARD_MEMBER_SIZE;
-    Utils.random16(keyPtr, keySize, ptr);
-    
-    long valueBuffer = valueArena.get();
-    UnsafeAccess.putLong(valueBuffer, card);
-    int res = Hashes.HSET(map, keyPtr, keySize, ptr, size, valueBuffer, Utils.SIZEOF_LONG);
-    assert(res == 1);
+    /*DEBUG*/
+//    if (card > 1000) {
+//      System.err.println("ZSETCARD="+ card);
+//    }
+//    //checkKeyArena(CARD_MEMBER_SIZE);
+//    // Build CARDINALITY member
+//    long ptr  = cardArena.get();
+//    int size = CARD_MEMBER_SIZE;
+//    //Utils.random16(keyPtr, keySize, ptr);
+//    
+//    long valueBuffer = cardValueArena.get();
+//    UnsafeAccess.putLong(valueBuffer, card);
+//    int res = Hashes.HSET(map, keyPtr, keySize, ptr, size, valueBuffer, Utils.SIZEOF_LONG);
+//    assert(res == 1);
     return card;
   }
   

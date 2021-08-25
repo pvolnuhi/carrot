@@ -18,7 +18,7 @@
 package org.bigbase.carrot.redis.util;
 /**
  * Bit operations enum
- * @author Vladimir Rodionov
+ * 
  *
  */
 public enum BitOp {

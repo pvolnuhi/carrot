@@ -30,7 +30,7 @@ import org.bigbase.carrot.util.Utils;
  * sure it can hold a bit at offset. The offset argument is required to be greater than or 
  * equal to 0, and smaller than 232 (this limits bitmaps to 512MB). When the string at key 
  * is grown, added bits are set to 0.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class SparseSetBit extends Operation {

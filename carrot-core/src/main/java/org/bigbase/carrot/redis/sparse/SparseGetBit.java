@@ -29,7 +29,7 @@ import org.bigbase.carrot.util.Utils;
  * contiguous space with 0 bits. When key does not exist it is assumed to be 
  * an empty string, so offset is always out of range and the value is also assumed 
  * to be a contiguous space with 0 bits.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class SparseGetBit extends Operation {

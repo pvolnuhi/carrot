@@ -36,7 +36,7 @@ import org.bigbase.carrot.util.Utils;
 /**
  * This read-modify-write mutation is executed atomically and isolated
  * It deletes field from a given Hash, defined by a Key
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class HashDelete extends Operation{

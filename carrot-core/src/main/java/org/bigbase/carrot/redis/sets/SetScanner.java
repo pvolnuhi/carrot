@@ -30,7 +30,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * Scanner to iterate through set members
- * @author Vladimir Rodionov
+ * 
  */
 public class SetScanner extends Scanner {
 

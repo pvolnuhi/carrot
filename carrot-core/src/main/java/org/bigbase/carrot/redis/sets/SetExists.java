@@ -31,7 +31,7 @@ import org.bigbase.carrot.util.Utils;
  * Although not a mutation this operation is executed as a mutation
  * to avoid copy - on -read. It checks if element exists in a set defined by a
  * Key in place w/o copying Value data.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class SetExists extends Operation{

@@ -23,7 +23,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * This example of specific Update - atomic counter 
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class IncrementLong extends Operation {

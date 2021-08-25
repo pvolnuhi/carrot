@@ -40,7 +40,7 @@ public class IndexBlockScannerTest {
   Logger LOG = LoggerFactory.getLogger(IndexBlockScannerTest.class);
   
   static {
-    UnsafeAccess.debug = true;
+    //UnsafeAccess.debug = true;
   }
   
   @Test

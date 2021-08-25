@@ -1512,19 +1512,24 @@ public class Sets {
         map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
           map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
     if (scanner == null) {
-      UnsafeAccess.free(endPtr);
-      UnsafeAccess.free(kPtr);
-      return null;
+        UnsafeAccess.free(endPtr);
+        UnsafeAccess.free(kPtr);
+        return null;
     }
     try {
       SetScanner sc = new SetScanner(scanner, reverse);
       sc.setDisposeKeysOnClose(true);
       return sc;
     } catch (IOException e) {
-      //e.printStackTrace();
       try {
         scanner.close();
       } catch (IOException e1) {
+      }
+      if (endPtr > 0) {
+        UnsafeAccess.free(endPtr);
+      }
+      if (kPtr > 0) {
+        UnsafeAccess.free(kPtr);
       }
       return null;
     }

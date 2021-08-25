@@ -28,7 +28,7 @@ import org.bigbase.carrot.util.Utils;
  * Although not a mutation this operation is executed as a mutation
  * to avoid copy - on -read. It checks if field exists in a hash defined by a
  * Key in place, w/o copying Value data.
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class HashExists extends Operation {

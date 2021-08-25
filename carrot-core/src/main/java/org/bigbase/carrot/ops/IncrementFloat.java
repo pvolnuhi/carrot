@@ -26,7 +26,7 @@ import org.bigbase.carrot.util.Utils;
  * Implementation is not safe for regular scanners
  * 
  * Should introduce scanner with write locks?
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class IncrementFloat extends Operation {

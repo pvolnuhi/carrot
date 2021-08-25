@@ -27,7 +27,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * Atomically gets key value and deletes key. 
  * Returns an error when key exists but does not hold a string value.
  * 
- * @author Vladimir Rodionov
+ * 
  *
  */
 public class StringGetDelete extends Operation {

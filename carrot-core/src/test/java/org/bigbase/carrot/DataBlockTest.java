@@ -158,8 +158,6 @@ public class DataBlockTest extends DataBlockTestBase {
     IndexBlock ib = new IndexBlock(4096);
     bb.register(ib, 0);
     
-    assertEquals(0, (int)bb.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     
     assertEquals(totalKVs +1, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
     assertEquals(totalDataSize, (int)b.getDataInBlockSize() + bb.getDataInBlockSize());
@@ -191,9 +189,6 @@ public class DataBlockTest extends DataBlockTestBase {
     IndexBlock ib = new IndexBlock(4096);
     bb.register(ib, 0);
     
-    assertEquals(0, (int)bb.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-    
     // +1 is system key in a first block
     assertEquals(totalKVs +1, (int)bb.getNumberOfRecords() + b.getNumberOfRecords());
     assertEquals(totalDataSize, (int)b.getDataInBlockSize() + bb.getDataInBlockSize());
@@ -204,8 +199,7 @@ public class DataBlockTest extends DataBlockTestBase {
     assertTrue (Utils.compareTo(f1, 0, f1.length, f2, 0, f2.length) < 0);
     b.merge(bb, true);
     
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-    assertEquals(totalKVs +1, (int)b.getNumberOfRecords());
+    assertEquals(totalKVs + 1, (int)b.getNumberOfRecords());
     assertEquals(totalDataSize, (int)b.getDataInBlockSize());
     
     scanAndVerify(b);
@@ -247,7 +241,6 @@ public class DataBlockTest extends DataBlockTestBase {
     b.compact(false);
     
     assertEquals( 1, (int)b.getNumberOfRecords());
-    assertEquals( 0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     // First key is a system key
     assertTrue (Bytes.compareTo(new byte[] {0}, b.getFirstKey()) == 0);  
     //b.free();
@@ -283,7 +276,6 @@ public class DataBlockTest extends DataBlockTestBase {
     b.compact(true);
     
     assertEquals( keys.size() - deletedKeys.size() +1, (int)b.getNumberOfRecords());
-    assertEquals( 0, (int)b.getNumberOfDeletedAndUpdatedRecords());
     //b.free();
     System.out.println("testCompactionPartial DONE");
 
@@ -425,10 +417,7 @@ public class DataBlockTest extends DataBlockTestBase {
       UnsafeAccess.free(valuePtr);
       UnsafeAccess.free(bufPtr);
     }
-    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-
-   
+    assertEquals(keys.size() + 1, (int) b.getNumberOfRecords());   
     scanAndVerify(b, keys);    
   }
   
@@ -451,12 +440,8 @@ public class DataBlockTest extends DataBlockTestBase {
       UnsafeAccess.free(valuePtr);
       UnsafeAccess.free(bufPtr);
     }
-    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-
-   
+    assertEquals(keys.size() + 1, (int)b.getNumberOfRecords());   
     scanAndVerify(b, keys);    
-
   }
   
   @Test
@@ -485,11 +470,8 @@ public class DataBlockTest extends DataBlockTestBase {
       assertEquals(value.length, (int)size);
       assertTrue(Utils.compareTo(bufPtr, value.length, valuePtr, value.length) == 0);
     }
-    assertEquals(keys.size()+1, (int)b.getNumberOfRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
-   
+    assertEquals(keys.size() + 1, (int)b.getNumberOfRecords());   
     scanAndVerify(b, keys);    
-
   }
   
   @Test
@@ -503,8 +485,7 @@ public class DataBlockTest extends DataBlockTestBase {
       assertTrue(res);
     }
     //Again system record +1
-    assertEquals(keys.size() +1, (int)b.getNumberOfRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(keys.size() + 1, (int)b.getNumberOfRecords());
     
     int toDelete = keys.size()/2;
     
@@ -534,8 +515,7 @@ public class DataBlockTest extends DataBlockTestBase {
     }
     verifyGets(b, keys);
     scanAndVerify(b, keys);
-    assertEquals(keys.size() +1, (int)b.getNumberOfRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(keys.size() + 1, (int)b.getNumberOfRecords());
     // Now insert existing keys with original value
     for (Key key: keys) {
       long addr = b.get(key.address, key.length, Long.MAX_VALUE);
@@ -551,11 +531,8 @@ public class DataBlockTest extends DataBlockTestBase {
       }
       assertTrue(res);
     }    
-    assertEquals(keys.size() +1, (int)b.getNumberOfRecords());
-    assertEquals(0, (int)b.getNumberOfDeletedAndUpdatedRecords());
+    assertEquals(keys.size() + 1, (int)b.getNumberOfRecords());
     scanAndVerify(b, keys);
-    //b.free();
-
   }
     
   protected ArrayList<Key> fillDataBlock (DataBlock b) throws RetryOperationException {
