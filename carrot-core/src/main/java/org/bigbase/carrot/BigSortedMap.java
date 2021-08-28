@@ -1159,15 +1159,15 @@ public class BigSortedMap {
   }
   
   /**
-   * 
-   * @param key
-   * @param off
-   * @param len
-   * @param value
-   * @param valoff
-   * @param vallen
-   * @param expire
-   * @return
+   * Put key-value (for testing only)
+   * @param key key byte array
+   * @param off key offset in a byte array
+   * @param len key's length
+   * @param value value byte array
+   * @param valoff value offset
+   * @param vallen value length
+   * @param expire expire
+   * @return true - success, false - otherwise (OOM)
    */
   public boolean put(byte[] key, int off, int len, byte[] value, int valoff, int vallen, long expire) {
     long keyPtr = UnsafeAccess.allocAndCopy(key, off, len);
