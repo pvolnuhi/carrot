@@ -114,7 +114,7 @@ public class ZSetsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -127,7 +127,7 @@ public class ZSetsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -140,7 +140,7 @@ public class ZSetsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -178,12 +178,12 @@ public class ZSetsTest {
       }
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (2 * (fieldSize + Utils.SIZEOF_DOUBLE) + 3) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (2 * (fieldSize + Utils.SIZEOF_DOUBLE) + 3)) +
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - (2 * (fieldSize + Utils.SIZEOF_DOUBLE) + 3)) +
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     
     assertEquals(n, ZSets.ZCARD(map, key.address, key.length));
@@ -197,7 +197,7 @@ public class ZSetsTest {
     }
     end = System.currentTimeMillis();
     System.out.println(" Time for " + n+ " ZSCORE="+(end -start)+"ms");
-    BigSortedMap.memoryStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     ZSets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)ZSets.ZCARD(map, key.address, key.length));
  
@@ -223,12 +223,12 @@ public class ZSetsTest {
       }
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
       + " for "+ n + " " + (2 * (fieldSize + Utils.SIZEOF_DOUBLE) + 3) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (2 * (fieldSize + Utils.SIZEOF_DOUBLE)+ 3)) 
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - (2 * (fieldSize + Utils.SIZEOF_DOUBLE)+ 3)) 
       + " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     assertEquals(n, ZSets.ZCARD(map, key.address, key.length));
     start = System.currentTimeMillis();
@@ -243,10 +243,10 @@ public class ZSetsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time for " + n + " ZREM="+(end -start)+"ms");
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)ZSets.ZCARD(map, key.address, key.length));
     ZSets.DELETE(map, key.address, key.length);
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)ZSets.ZCARD(map, key.address, key.length));
 
   }
@@ -273,12 +273,12 @@ public class ZSetsTest {
         6/*4 + 1 + 1 - additional key overhead */ + Utils.SIZEOF_DOUBLE + fieldSize + 3;
         
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + setSize + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - setSize) +
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - setSize) +
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     start = System.currentTimeMillis();
     for (int i =0; i < n; i++) {
@@ -292,7 +292,7 @@ public class ZSetsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time for " + n + " DELETE="+(end -start)+"ms");
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
 
   }
   
@@ -308,6 +308,6 @@ public class ZSetsTest {
     }
     UnsafeAccess.free(buffer);
     UnsafeAccess.mallocStats.printStats();
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
   }
 }

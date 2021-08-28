@@ -45,7 +45,7 @@ public class IndexBlockScannerTest {
   
   @Test
   public void testAll() throws IOException{
-    for (int i=0; i < 100; i++) {
+    for (int i=0; i < 1; i++) {
       System.out.println("\nRUN "+ i+"\n");
       testFullScan();
       testFullScanWithCompressionLZ4();
@@ -73,7 +73,7 @@ public class IndexBlockScannerTest {
       testSubScanReverseWithCompressionLZ4HC();
     }
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats();
     
   }
@@ -492,7 +492,7 @@ public class IndexBlockScannerTest {
   }
   
   private IndexBlock getIndexBlock(int size) {
-    IndexBlock ib = new IndexBlock(size);
+    IndexBlock ib = new IndexBlock(null, size);
     ib.setFirstIndexBlock();
     return ib;
   }

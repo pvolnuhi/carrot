@@ -64,9 +64,9 @@ public class OperationsTest {
     long end = System.currentTimeMillis();
     map.dumpStats();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
-    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-    System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println("Total memory="+BigSortedMap.getGlobalAllocatedMemory());
+    System.out.println("Total   data="+BigSortedMap.getGlobalBlockDataSize());
+    System.out.println("Total  index=" + BigSortedMap.getGlobalBlockIndexSize());
   }
     
   @Test
@@ -186,9 +186,9 @@ public class OperationsTest {
     long end = System.currentTimeMillis();
     map.dumpStats();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
-    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-    System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println("Total memory="+BigSortedMap.getGlobalAllocatedMemory());
+    System.out.println("Total   data="+BigSortedMap.getGlobalBlockDataSize());
+    System.out.println("Total  index=" + BigSortedMap.getGlobalBlockIndexSize());
   }
   private int getKey (long ptr, int n) {
     //System.out.print(n);

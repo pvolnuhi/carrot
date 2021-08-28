@@ -85,7 +85,7 @@ public class TestCarrotAdServerAdsPerf {
     BigSortedMap map = new BigSortedMap(10000000000L);
     doAdsSitePerf(map);
     doAdsSiteRank(map);
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     System.out.println("Total memory=" + memory);
     map.dispose();
   }  

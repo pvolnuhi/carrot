@@ -73,9 +73,9 @@ public class BigSortedMapScannerLargeKVsTest {
     long scanned = verifyScanner(scanner, keys);
     scanner.close();
     System.out.println("Scanned="+ scanned);
-    System.out.println("\nTotal memory      ="+BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data      ="+BigSortedMap.getTotalDataSize());
-    System.out.println("Compression ratio =" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println("\nTotal memory      ="+BigSortedMap.getGlobalAllocatedMemory());
+    System.out.println("Total   data      ="+BigSortedMap.getGlobalDataSize());
+    System.out.println("Compression ratio =" + BigSortedMap.getGlobalBlockIndexSize());
     System.out.println();
     assertEquals(totalLoaded, scanned);
   }
@@ -121,7 +121,7 @@ public class BigSortedMapScannerLargeKVsTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -134,7 +134,7 @@ public class BigSortedMapScannerLargeKVsTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -147,7 +147,7 @@ public class BigSortedMapScannerLargeKVsTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -520,7 +520,7 @@ public class BigSortedMapScannerLargeKVsTest {
       boolean res = map.put(key.address, key.length, key.address, key.length, 0);
       if (res == false) {
         System.out.println("Count = "+count+" total="+ keys.size()+" memory ="+ 
-      BigSortedMap.getTotalAllocatedMemory());
+      BigSortedMap.getGlobalAllocatedMemory());
       }
       assertTrue(res);
     }

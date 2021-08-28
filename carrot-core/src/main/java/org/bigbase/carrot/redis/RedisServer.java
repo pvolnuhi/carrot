@@ -177,7 +177,7 @@ public class RedisServer {
   private static void initStore(String confFilePath) {
     RedisConf conf = RedisConf.getInstance(confFilePath);
     long limit = conf.getDataStoreMaxSize();
-    store = BigSortedMap.loadStore();
+    store = BigSortedMap.loadStore(0);
     if (store == null) {
       store = new BigSortedMap(limit);
     }

@@ -183,7 +183,7 @@ public class SparseBitmapsComparison {
     System.out.println("Time for " + N + " population dencity="+ dencity + 
      " bitmap size=" + (MAX) +  " new SetBit=" + (end - start) + "ms");
     System.out.println("COMPRESSION ratio ="+( ((double)MAX) / (8 * memory)));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
   }
   

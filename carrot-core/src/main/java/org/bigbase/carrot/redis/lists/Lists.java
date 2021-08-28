@@ -19,18 +19,6 @@ package org.bigbase.carrot.redis.lists;
 
 
 
-import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.DataBlock;
-import org.bigbase.carrot.DataBlock.AllocType;
-import org.bigbase.carrot.DataBlock.SerDe;
-import org.bigbase.carrot.redis.util.Commons;
-import org.bigbase.carrot.redis.util.DataType;
-import org.bigbase.carrot.util.IOUtils;
-import org.bigbase.carrot.util.Key;
-import org.bigbase.carrot.util.KeysLocker;
-import org.bigbase.carrot.util.UnsafeAccess;
-import org.bigbase.carrot.util.Utils;
-
 import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 
 import java.io.IOException;
@@ -38,6 +26,16 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.List;
+
+import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.DataBlock;
+import org.bigbase.carrot.redis.util.Commons;
+import org.bigbase.carrot.redis.util.DataType;
+import org.bigbase.carrot.util.IOUtils;
+import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeysLocker;
+import org.bigbase.carrot.util.UnsafeAccess;
+import org.bigbase.carrot.util.Utils;
 
 /**
  * Lists: collections of string elements sorted according to the order of insertion. 
@@ -61,8 +59,8 @@ public class Lists {
   static class DeAllocator implements DataBlock.DeAllocator {
 
     @Override
-    public boolean free(long recordAddress) {
-      return Lists.dispose(recordAddress);
+    public boolean free(BigSortedMap map, long recordAddress) {
+      return Lists.dispose(map, recordAddress);
     }
 
     /**
@@ -126,7 +124,8 @@ public class Lists {
       long address = UnsafeAccess.toLong(valuePtr + Utils.SIZEOF_INT);
       
       Segment s = segment.get();
-      s.setDataPointer(address);
+      //TODO: is it safe?
+      s.setDataPointerAndParentMap(null, address);
       do {
         s.serialize(fc, workBuf);
       } while (s.next(s) != null);
@@ -236,16 +235,41 @@ public class Lists {
     }
   };
   
-  static long allocMemory(long size) {
-    return BigSortedMap.totalAllocatedMemory.addAndGet(size);
+  /**
+   * Update statistics
+   * @param map instance
+   * @param size size
+   * @return global allocated memory
+   */
+  static long allocMemory(BigSortedMap map, long size) {
+    map.incrInstanceAllocatedMemory(size);
+    map.incrInstanceExternalDataSize(size);
+    return BigSortedMap.getGlobalAllocatedMemory();
   }
   
-  static long freeMemory(long size) {
-    return BigSortedMap.totalAllocatedMemory.addAndGet(-size);
+  /**
+   * Update statistics
+   * @param map instance
+   * @param size size
+   * @return global allocated memory
+   */
+  static long freeMemory(BigSortedMap map, long size) {
+    if (map != null) {
+      map.incrInstanceAllocatedMemory(-size);
+      map.incrInstanceExternalDataSize(-size);
+    } else {
+      BigSortedMap.incrGlobalAllocatedMemory(-size);
+      BigSortedMap.incrGlobalExternalDataSize(-size);
+    }
+    return BigSortedMap.getGlobalAllocatedMemory();
   }
   
+  /**
+   * Get total allocated memory
+   * @return
+   */
   static long getTotalAllocatedMemory() {
-    return BigSortedMap.totalAllocatedMemory.get();
+    return BigSortedMap.getGlobalAllocatedMemory();
   }
   
   /**
@@ -347,7 +371,7 @@ public class Lists {
         do {
           nextPtr = s.getNextAddress();
           s.free();
-          s.setDataPointer(nextPtr);
+          s.setDataPointerAndParentMap(map, nextPtr);
         } while(nextPtr > 0);
       }
       // Delete key
@@ -365,7 +389,7 @@ public class Lists {
    * @param keySize key size
    * @return true if it was List data type, false - otherwise
    */
-  public static boolean dispose(long recordAddress) {
+  public static boolean dispose(BigSortedMap map, long recordAddress) {
     long addr = DataBlock.keyAddress(recordAddress);
     
     if (DataType.getDataType(addr) != DataType.LIST) {
@@ -386,13 +410,13 @@ public class Lists {
         return true;
       }
       Segment s = segment.get();
-      s.setDataPointer(firstSegmentAddress);
+      s.setDataPointerAndParentMap(map, firstSegmentAddress);
       if (s != null) {
         long nextPtr = 0;
         do {
           nextPtr = s.getNextAddress();
           s.free();
-          s.setDataPointer(nextPtr);
+          s.setDataPointerAndParentMap(map, nextPtr);
         } while(nextPtr > 0);
       }
       // We do not delete K-V
@@ -902,7 +926,7 @@ public class Lists {
         return -1;
       }
       Segment s = segment.get();
-      s.setDataPointer(ptr);
+      s.setDataPointerAndParentMap(map, ptr);
       do {
         long dataPtr = s.insert(pivotPtr, pivotSize, elemPtr, elemSize, after);
         if (dataPtr > 0) {
@@ -1010,7 +1034,7 @@ public class Lists {
         return -1;
       }
       Segment s = segment.get();
-      s.setDataPointer(ptr);
+      s.setDataPointerAndParentMap(map, ptr);
       int elSize = (int) s.popLeft(buffer, bufferSize);
       if (elSize > bufferSize) {
         return elSize;
@@ -1171,11 +1195,11 @@ public class Lists {
       boolean exists = true;
       if (size < 0) {
         exists = false;
-        s = Segment.allocateNew(s, 0);
+        s = Segment.allocateNew(map, s, 0);
       } else {
         // Get first segment
         long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
-        s.setDataPointer(dataPtr);
+        s.setDataPointerAndParentMap(map, dataPtr);
       }
       boolean singleSegment = s.getNextAddress() == 0;
       // Add to the first segment
@@ -1253,7 +1277,7 @@ public class Lists {
       } else {
         // Get first segment
         long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT);
-        s.setDataPointer(dataPtr);
+        s.setDataPointerAndParentMap(map, dataPtr);
       }
       boolean singleSegment = s.getNextAddress() == 0;
       // Add to the first segment
@@ -1294,7 +1318,7 @@ public class Lists {
       if (dataPtr == 0) {
         return null;
       }
-      s.setDataPointer(dataPtr);
+      s.setDataPointerAndParentMap(map, dataPtr);
     }
     return s;
   }
@@ -1310,7 +1334,7 @@ public class Lists {
       if (dataPtr == 0) {
         return null;
       }
-      s.setDataPointer(dataPtr);
+      s.setDataPointerAndParentMap(map, dataPtr);
     }
     return s;
   }
@@ -1502,7 +1526,7 @@ public class Lists {
           }
         }
         // Update segment and get next (or previous)
-        s = reverse? updateSegmentInChainReverse(s, valueBuf): updateSegmentInChain(s, valueBuf);
+        s = reverse? updateSegmentInChainReverse(map, s, valueBuf): updateSegmentInChain(map, s, valueBuf);
       }
       
       long total = incrementNumberOfElements(valueBuf, -deleted);
@@ -1531,14 +1555,14 @@ public class Lists {
    * @param s segment
    * @param buffer buffer
    */
-  private static Segment updateSegmentInChain(Segment s, long buffer) {
+  private static Segment updateSegmentInChain(BigSortedMap map, Segment s, long buffer) {
     if (s.isFirst() && s.isEmpty()) {
         long nextPtr = s.getNextAddress();
         s.free();
         // Update first segment (can be 0)
         UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT, nextPtr);
         if (nextPtr > 0) {
-          s =  s.setDataPointer(nextPtr);
+          s =  s.setDataPointerAndParentMap(map, nextPtr);
         } else {
           // Empty list
           s = null;
@@ -1558,7 +1582,7 @@ public class Lists {
       Segment.setNextSegmentAddress(prev, next);
       Segment.setPreviousSegmentAddress(next, prev);
       s.free();
-      s = s.setDataPointer(next);
+      s = s.setDataPointerAndParentMap(map, next);
       return s;
     } else {
       return s.next(s);
@@ -1571,7 +1595,7 @@ public class Lists {
    * @param s segment
    * @param buffer buffer
    */
-  private static Segment updateSegmentInChainReverse(Segment s, long buffer) {
+  private static Segment updateSegmentInChainReverse(BigSortedMap map, Segment s, long buffer) {
     if (s.isFirst() && s.isEmpty()) {
         long nextPtr = s.getNextAddress();
         // Update first segment (can be 0)
@@ -1583,7 +1607,7 @@ public class Lists {
       // prevPtr can not be null - otherwise s is a first segment
       UnsafeAccess.putLong(buffer + Utils.SIZEOF_INT + Utils.SIZEOF_LONG, prevPtr);
       s.free();
-      s = s.setDataPointer(prevPtr);
+      s = s.setDataPointerAndParentMap(map, prevPtr);
       return s;
     } else if (s.isEmpty()) {
       // Empty segment, not first, not last
@@ -1593,7 +1617,7 @@ public class Lists {
       Segment.setNextSegmentAddress(prev, next);
       Segment.setPreviousSegmentAddress(next, prev);
       s.free();
-      s = s.setDataPointer(prev);
+      s = s.setDataPointerAndParentMap(map, prev);
       return s;
     } else {
       return s.previous(s);
@@ -1754,7 +1778,7 @@ public class Lists {
         return -1;
       }
       Segment s = segment.get();
-      s.setDataPointer(ptr);
+      s.setDataPointerAndParentMap(map, ptr);
       int elSize = (int) s.popRight(buffer, bufferSize);
       if (elSize > bufferSize) {
         return elSize;
@@ -1827,13 +1851,13 @@ public class Lists {
       boolean exists = true;
       if (size < 0) {
         exists = false;
-        s = Segment.allocateNew(s, 0);
+        s = Segment.allocateNew(map, s, 0);
         // Set first segment now - its a last as well
         UnsafeAccess.putLong(valueBuf + Utils.SIZEOF_INT, s.getDataPtr());
       } else {
         long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG);
         // Set the last segment
-        s.setDataPointer(dataPtr);
+        s.setDataPointerAndParentMap(map, dataPtr);
       }
       // Add to the last segment
       for(int i = 0; i < elemPtrs.length; i++) {
@@ -1903,7 +1927,7 @@ public class Lists {
       } else {
         long dataPtr = UnsafeAccess.toLong(valueBuf + Utils.SIZEOF_INT + Utils.SIZEOF_LONG);
         // Set the last segment
-        s.setDataPointer(dataPtr);
+        s.setDataPointerAndParentMap(map, dataPtr);
       }
       // Add to the last segment
       for(int i = 0; i < elemPtrs.length; i++) {

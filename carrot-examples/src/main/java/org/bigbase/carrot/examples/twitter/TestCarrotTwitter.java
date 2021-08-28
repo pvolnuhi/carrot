@@ -195,7 +195,7 @@ public class TestCarrotTwitter {
         System.out.println("Verified " + (count)+ " users");
       }
     }
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     avg_user_size = (double) memory / numUsers;
     map.dispose();
     System.out.println("avg_user_size="+ avg_user_size + " bytes");
@@ -264,7 +264,7 @@ public class TestCarrotTwitter {
         System.out.println("Verified " + count+ " users");
       }
     }
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     avg_user_status_size = (double) memory / numUsers;
     map.dispose();
     System.out.println("avg_user_status_size="+ avg_user_status_size + " bytes");
@@ -302,7 +302,7 @@ public class TestCarrotTwitter {
       }
     }
     
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     avg_user_timeline_size = (double) memory / numUsers;
     map.dispose();
     System.out.println("avg_user_timeline_size="+ avg_user_timeline_size + " bytes");
@@ -342,7 +342,7 @@ public class TestCarrotTwitter {
       }
     }
     
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     avg_user_followers_size = (double) memory / numUsers;
     map.dispose();
     System.out.println("avg_user_followers_size="+ avg_user_followers_size + " bytes. Avg #folowers=" + (total/numUsers));
@@ -382,7 +382,7 @@ public class TestCarrotTwitter {
       }
     }
     
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     avg_user_following_size = (double) memory / numUsers;
     map.dispose();
     System.out.println("avg_user_following_size="+ avg_user_following_size + " bytes. Avg #folowing=" + (total/numUsers));

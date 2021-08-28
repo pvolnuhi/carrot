@@ -43,7 +43,7 @@ public class IndexBlockTest {
   @Test
   public void testAll() throws RetryOperationException, IOException {
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("\nRun " + (i+1)+"\n");
       testPutGet();
       testPutGetWithCompressionLZ4();
@@ -67,7 +67,7 @@ public class IndexBlockTest {
       testOverwriteLargerValueSizeWithCompressionLZ4();
       testOverwriteLargerValueSizeWithCompressionLZ4HC();
     }
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats();
   }
   
@@ -487,7 +487,7 @@ public class IndexBlockTest {
   }
   
   protected IndexBlock getIndexBlock(int size) {
-    IndexBlock ib = new IndexBlock(size);
+    IndexBlock ib = new IndexBlock(null, size);
     ib.setFirstIndexBlock();
     return ib;
   }

@@ -80,7 +80,7 @@ public class StringsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -93,7 +93,7 @@ public class StringsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -106,7 +106,7 @@ public class StringsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -581,9 +581,9 @@ public class StringsTest {
       }
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (totalSize) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory() - totalSize)/n +
+        ((double)BigSortedMap.getGlobalAllocatedMemory() - totalSize)/n +
     " bytes per key-value. Time to load: "+(end -start)+"ms");
     start = System.currentTimeMillis();
     for (int i =0; i < n; i++) {
@@ -594,7 +594,7 @@ public class StringsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time GET ="+(end -start)+"ms");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
    
  
   }
@@ -617,12 +617,12 @@ public class StringsTest {
       }
     }
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (totalSize) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory() - totalSize)/n +
+        ((double)BigSortedMap.getGlobalAllocatedMemory() - totalSize)/n +
     " bytes per key-value. Time to load: "+(end -start)+"ms");
     start = System.currentTimeMillis();
     for (int i =0; i < n; i++) {
@@ -1254,7 +1254,7 @@ public class StringsTest {
       UnsafeAccess.free(k.valuePtr);
     }
     UnsafeAccess.free(buffer);
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
   }
 }

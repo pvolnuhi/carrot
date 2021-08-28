@@ -140,7 +140,7 @@ public class TestCarrotAdServerAdIndexing {
     doAdBase(map);
     doWordAds(map);
     doAdWords(map);
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     System.out.println("Total memory=" + memory);
     map.dispose();
   }  

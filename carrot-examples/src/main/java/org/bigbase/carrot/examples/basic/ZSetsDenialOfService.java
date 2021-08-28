@@ -193,7 +193,7 @@ public class ZSetsDenialOfService {
       + " RAM per record=" +((double)UnsafeAccess.getAllocatedMemory()/num))  
       + " COMPRESSION=" + (((double)totalDataSize))/ UnsafeAccess.getAllocatedMemory());
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     map.dispose();
     
   }

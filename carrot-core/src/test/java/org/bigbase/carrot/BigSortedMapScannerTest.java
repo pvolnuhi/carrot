@@ -44,7 +44,7 @@ public class BigSortedMapScannerTest {
   
   private void setUp() throws IOException {
     BigSortedMap.setMaxBlockSize(4096);
-    map = new BigSortedMap(100000000);
+    map = new BigSortedMap(1000000000);
     totalLoaded = 0;
     long start = System.currentTimeMillis();
     while(totalLoaded < MAX_ROWS) {
@@ -53,12 +53,14 @@ public class BigSortedMapScannerTest {
     }
     long end = System.currentTimeMillis();
     System.out.println("Time to load= "+ totalLoaded+" ="+(end -start)+"ms");
+    start = System.currentTimeMillis();
     long scanned = countRecords();
-    System.out.println("Scanned="+ countRecords());
-    System.out.println("\nTotal memory      =" + BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data      =" + BigSortedMap.getTotalDataSize());
-    System.out.println("Compression ratio =" + ((float)BigSortedMap.getTotalDataSize())/
-      BigSortedMap.getTotalAllocatedMemory()+"\n");
+    end = System.currentTimeMillis();
+    System.out.println("Scanned="+ countRecords() + " in "+(end - start) + "ms");
+    System.out.println("\nTotal memory      =" + BigSortedMap.getGlobalAllocatedMemory());
+    System.out.println("Total   data      =" + BigSortedMap.getGlobalDataSize());
+    System.out.println("Compression ratio =" + ((float)BigSortedMap.getGlobalDataSize())/
+      BigSortedMap.getGlobalAllocatedMemory()+"\n");
     assertEquals(totalLoaded, scanned);
   }
   
@@ -111,7 +113,7 @@ public class BigSortedMapScannerTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -124,7 +126,7 @@ public class BigSortedMapScannerTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -137,7 +139,7 @@ public class BigSortedMapScannerTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }

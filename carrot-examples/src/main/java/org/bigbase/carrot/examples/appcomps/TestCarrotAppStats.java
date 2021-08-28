@@ -110,7 +110,7 @@ public class TestCarrotAppStats {
       st.saveToCarrotNative(map);
     }
     long end = System.currentTimeMillis();
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     System.out.println("Loaded " + hoursToKeep + " in " + (end - start)+ "ms. RAM usage="+ memory+" bytes");
     map.dispose();
   }

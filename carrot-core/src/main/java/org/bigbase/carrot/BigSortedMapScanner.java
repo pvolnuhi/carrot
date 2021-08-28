@@ -55,7 +55,8 @@ public class BigSortedMapScanner extends Scanner{
   static ThreadLocal<IndexBlock> tlKey = new ThreadLocal<IndexBlock>() {
     @Override
     protected IndexBlock initialValue() {
-      return new IndexBlock(IndexBlock.MAX_BLOCK_SIZE);
+      //TODO: is it safe?
+      return new IndexBlock(null, IndexBlock.MAX_BLOCK_SIZE);
     }
   };
   

@@ -131,7 +131,7 @@ public class TestCarrotGeoIP {
     end = System.currentTimeMillis();
     
     System.out.println("Loaded "+ locList.size() +" locations in "+ (end-start)+"ms");
-    System.out.println("Total memory used="+ BigSortedMap.getTotalAllocatedMemory());
+    System.out.println("Total memory used="+ BigSortedMap.getGlobalAllocatedMemory());
     
     map.dispose();
   }

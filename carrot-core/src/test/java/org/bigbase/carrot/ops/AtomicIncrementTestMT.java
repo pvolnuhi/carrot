@@ -18,7 +18,6 @@
 package org.bigbase.carrot.ops;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,13 +28,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.BigSortedMapScanner;
-import org.bigbase.carrot.DataBlock;
-import org.bigbase.carrot.ops.IncrementLong;
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import org.junit.After;
 import org.junit.Test;
 
 /**
@@ -93,7 +88,7 @@ public class AtomicIncrementTestMT {
           }
           if (totalLoaded.get() % 1000000 == 0) {
             System.out.println(getName() + " loaded = " + totalLoaded+" increments="+ totalIncrements + " mem="+
-          BigSortedMap.getTotalAllocatedMemory() + " max="+ map.getMaxMemory());
+          BigSortedMap.getGlobalAllocatedMemory() + " max="+ BigSortedMap.getGlobalMemoryLimit());
           }
         }
       }// end while
@@ -152,9 +147,9 @@ public class AtomicIncrementTestMT {
         assertEquals(keys.size(), (int) count);
         System.out.println("Time to load= "+ totalLoaded+" and to increment =" 
             + totalIncrements+"="+(end -start)+"ms");
-        System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-        System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-        System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+        System.out.println("Total memory="+BigSortedMap.getGlobalAllocatedMemory());
+        System.out.println("Total   data="+BigSortedMap.getGlobalBlockDataSize());
+        System.out.println("Total  index=" + BigSortedMap.getGlobalBlockIndexSize());
       } finally {
         if (map != null) {
           map.dispose();

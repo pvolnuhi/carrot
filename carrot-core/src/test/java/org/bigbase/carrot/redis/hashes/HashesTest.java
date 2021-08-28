@@ -93,7 +93,7 @@ public class HashesTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -106,7 +106,7 @@ public class HashesTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -119,7 +119,7 @@ public class HashesTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -143,7 +143,7 @@ public class HashesTest {
   }
   
   long countRecords(BigSortedMap map) throws IOException {
-    return BigSortedMap.countRecords(map);
+    return map.countRecords();
   }
   
   @Ignore
@@ -161,9 +161,9 @@ public class HashesTest {
       assertEquals(1, num);
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (keySize + valSize)+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - keySize - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - keySize - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
 
     assertEquals(n, Hashes.HLEN(map, key.address, key.length));
@@ -248,9 +248,9 @@ public class HashesTest {
       assertEquals(1, num);
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (keySize + valSize)+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (keySize + valSize))+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - (keySize + valSize))+
     " bytes per value. Time to load: "+(end - start)+"ms");
     
     assertEquals(n, Hashes.HLEN(map, key.address, key.length));
@@ -268,7 +268,7 @@ public class HashesTest {
     end = System.currentTimeMillis();
     System.out.println("Time get="+(end -start)+"ms");
 
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     Hashes.DELETE(map, key.address, key.length);
     assertEquals(0, (int)countRecords(map));
@@ -291,13 +291,13 @@ public class HashesTest {
       assertEquals(1, num);
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (keySize + valSize) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (keySize + valSize))+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - (keySize + valSize))+
     " bytes per value. Time to load: "+(end -start)+"ms");
     assertEquals(n, Hashes.HLEN(map, key.address, key.length));
 
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
         
     start = System.currentTimeMillis();
     for (int i = 0; i < n; i++) {
@@ -307,7 +307,7 @@ public class HashesTest {
     end = System.currentTimeMillis();
     System.out.println("Time to delete="+(end -start)+"ms");
     assertEquals(0, (int)Hashes.HLEN(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     long recc = countRecords(map);
     assertEquals(0, (int)recc);
 
@@ -328,12 +328,12 @@ public class HashesTest {
       assertEquals(1, num);
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (keySize + valSize) + " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - (keySize + valSize))+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - (keySize + valSize))+
     " bytes per value. Time to load: "+(end -start)+"ms");
 
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     start = System.currentTimeMillis();
     

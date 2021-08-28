@@ -88,7 +88,7 @@ public class SetScannerTest {
     for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -101,7 +101,7 @@ public class SetScannerTest {
     for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -114,7 +114,7 @@ public class SetScannerTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -188,12 +188,12 @@ public class SetScannerTest {
     loadData(key, values);
     
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -223,11 +223,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -265,9 +265,9 @@ public class SetScannerTest {
 
     Utils.sortKeys(values);
 
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
         
     // Direct
@@ -359,7 +359,7 @@ public class SetScannerTest {
 
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -378,12 +378,12 @@ public class SetScannerTest {
     
     loadData(key, values);
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -415,11 +415,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -440,12 +440,12 @@ public class SetScannerTest {
     Utils.sortKeys(values);
     List<Value> copy = copy(values);    
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -485,11 +485,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -509,12 +509,12 @@ public class SetScannerTest {
     Utils.sortKeys(values);
     List<Value> copy = copy(values);    
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -554,11 +554,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -578,12 +578,12 @@ public class SetScannerTest {
     Utils.sortKeys(values);
     List<Value> copy = copy(values);    
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -623,11 +623,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -647,12 +647,12 @@ public class SetScannerTest {
     Utils.sortKeys(values);
     List<Value> copy = copy(values);    
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -692,11 +692,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -716,12 +716,12 @@ public class SetScannerTest {
     Utils.sortKeys(values);
     List<Value> copy = copy(values);    
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -761,11 +761,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -785,12 +785,12 @@ public class SetScannerTest {
     Utils.sortKeys(values);
     List<Value> copy = copy(values);    
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     
@@ -830,11 +830,11 @@ public class SetScannerTest {
       assertEquals(expected, cc);
     }
 
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Free memory
     UnsafeAccess.free(key.address);
     values.stream().forEach(x -> UnsafeAccess.free(x.address));
@@ -852,9 +852,9 @@ public class SetScannerTest {
     loadData(key, values);
     long end = System.currentTimeMillis();
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end - start)+"ms");
     
     SetScanner scanner = Sets.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, false);
@@ -885,9 +885,9 @@ public class SetScannerTest {
     loadData(key, values);
     long end = System.currentTimeMillis();
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
     SetScanner scanner = Sets.getScanner(map, key.address, key.length, 0, 0, 0, 0, false, true);

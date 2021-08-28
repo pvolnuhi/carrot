@@ -86,9 +86,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * to a particular CPU cores - this value can be very low. The lower value is the better
 	 * performance is for put/delete operations.
 	 */
-	private static long SAFE_UNSAFE_THRESHOLD = 10000;// in ms
+	private static long SAFE_UNSAFE_THRESHOLD = 100;// in ms
 
-	 private static long SAFE_UNSAFE_THRESHOLD_A = 10000;// in ms
+	 private static long SAFE_UNSAFE_THRESHOLD_A = 100;// in ms
 
 	// bytes
 
@@ -123,7 +123,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  protected Long initialValue() {
 	    int size = 4 * 1024;
 	    long ptr = UnsafeAccess.malloc(4 * 1024);
-      BigSortedMap.totalAllocatedMemory.addAndGet(size);	    
+      BigSortedMap.incrGlobalAllocatedMemory(size);	    
 	    return ptr;
 	  }
 	};
@@ -187,6 +187,12 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	static boolean mustAllocateExternally(int len) {
 	  return len + DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH >= MAX_BLOCK_SIZE/2;
 	}
+	
+	/**
+	 * Parent map
+	 */
+	private BigSortedMap map;
+	
 	/*
 	 * Index block address (current)
 	 */
@@ -245,20 +251,34 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * 
 	 * @param initial size
 	 */
-	IndexBlock(int size) {
+	IndexBlock(BigSortedMap map, int size) {
+	  this.map = map;
 		this.dataPtr = UnsafeAccess.mallocZeroed(size);
 		if (dataPtr == 0) {
 			// TODO: OOM handling
 			throw new RuntimeException("Failed to allocate " + size + " bytes");
 		}
 		// This is not accurate
-		BigSortedMap.totalAllocatedMemory.addAndGet(size);
-    BigSortedMap.totalBlockIndexSize.addAndGet(size);
+		if (map != null) {
+		  map.incrInstanceAllocatedMemory(size);
+		  map.incrInstanceBlockIndexSize(size);
+		} else {
+		  BigSortedMap.incrGlobalAllocatedMemory(size);
+		  BigSortedMap.incrGlobalBlockIndexSize(size);
+		}
 
     this.blockSize = (short) size;
 		updateUnsafeModificationTime();
 	}
-
+  
+	/**
+	 * Get parent map (store)
+	 * @return map
+	 */
+	BigSortedMap getMap() {
+	  return map;
+	}
+	
 	void updateUnsafeModificationTime() {
 	  this.lastUnsafeModTime = System.currentTimeMillis();
 	}
@@ -301,7 +321,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       long ptr = UnsafeAccess.malloc(required);
       keyBuffer.set(ptr);
       keyBufferSize.set(required);
-      BigSortedMap.totalAllocatedMemory.addAndGet(required - oldSize);
+      BigSortedMap.incrGlobalAllocatedMemory(required - oldSize);
     }
   }
   
@@ -314,14 +334,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * @param version version
 	 */
 	void putForSearch(long keyPtr, int len, long version) {
-		this.threadSafe = true;
+	  this.threadSafe = true;
 		long address = this.dataPtr + DATA_BLOCK_STATIC_PREFIX;
 		checkKeyBuffer(len);
 		putInternal(address, keyPtr, len, version, Op.DELETE);
 	}
 
   private long allocateKeyExternally(long keyPtr, int len) {
-    
     checkKeyBufferThreadSafe(len + INT_SIZE);
     long extAddress = isThreadSafe()? keyBuffer.get():UnsafeAccess.malloc(len + INT_SIZE);
     if (extAddress <= 0) {
@@ -331,8 +350,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
  
     if (!isThreadSafe()) {
       largeKVs.incrementAndGet();
-      BigSortedMap.totalAllocatedMemory.addAndGet(len + INT_SIZE);
-      BigSortedMap.totalIndexSize.addAndGet(len + INT_SIZE);
+      if (map == null) {
+        BigSortedMap.incrGlobalAllocatedMemory(len + INT_SIZE);
+        BigSortedMap.incrGlobalExternalDataSize(len + INT_SIZE);
+      } else {
+        map.incrInstanceAllocatedMemory(len + INT_SIZE);
+        map.incrInstanceExternalDataSize(len + INT_SIZE);
+      }
     }
     UnsafeAccess.putInt(extAddress, len);
     UnsafeAccess.copy(keyPtr, extAddress + INT_SIZE, len);
@@ -358,10 +382,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       UnsafeAccess.copy(keyPtr, address, len);
       address += len;
     }
-    //UnsafeAccess.putLong(address, version);
-    //address += VERSION_SIZE;
     UnsafeAccess.putByte(address, (byte) op.ordinal());
-
     return true;
   }
 
@@ -445,11 +466,12 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		this.blockDataSize = 0;
 		this.compressed = false;
 		this.firstKey = null;
-		//this.version = 0;
 		this.type = 0;
 		this.isFirst = false;
 		this.threadSafe = false;
 		this.valid = true;
+		// Map can be null if we use instance only for search in BSM
+		this.map = null;
 	}
 
 	public void invalidate() {
@@ -552,9 +574,16 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		bb.register(this, pos - dataPtr);
 
 		this.blockDataSize += required;
-		BigSortedMap.totalDataInIndexBlocksSize.addAndGet(required);
-    BigSortedMap.totalIndexSize.addAndGet(required);
-		this.numDataBlocks += 1;
+		
+		if (map == null) {
+		  BigSortedMap.incrGlobalDataInIndexBlocksSize(required);
+		  BigSortedMap.incrGlobalIndexSize(required);
+		} else {
+		  map.incrInstanceDataInIndexBlocksSize(required);
+      map.incrInstanceIndexSize(required);
+		}
+		
+    this.numDataBlocks += 1;
 		setFirstKey(bb);
 		return true;
 	}
@@ -580,8 +609,14 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     }
     bb.register(this, pos - dataPtr);
     this.blockDataSize += required;
-    BigSortedMap.totalDataInIndexBlocksSize.addAndGet(required);
-    BigSortedMap.totalIndexSize.addAndGet(required);
+    
+    if (map == null) {
+      BigSortedMap.incrGlobalDataInIndexBlocksSize(required);
+      BigSortedMap.incrGlobalIndexSize(required);
+    } else {
+      map.incrInstanceDataInIndexBlocksSize(required);
+      map.incrInstanceIndexSize(required);
+    }
 
     this.numDataBlocks += 1;
     // set first key
@@ -718,8 +753,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       // TODO: separate method for deallocation
       long size = UnsafeAccess.toInt(address) + INT_SIZE;
       UnsafeAccess.free(address);
-      BigSortedMap.totalAllocatedMemory.addAndGet(-size);
-      BigSortedMap.totalIndexSize.addAndGet(-size);
+      if (map == null) {
+        BigSortedMap.incrGlobalAllocatedMemory(-size);
+        BigSortedMap.incrGlobalExternalDataSize(-size);
+      } else {
+        map.incrInstanceAllocatedMemory(-size);
+        map.incrInstanceExternalDataSize(-size);
+      }
       largeKVs.decrementAndGet();
     }
     int toMove = required; 
@@ -744,9 +784,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
         (byte) type.ordinal());
     this.firstKey = null;
     this.blockDataSize += toMove;
-    BigSortedMap.totalDataInIndexBlocksSize.addAndGet(toMove);
-    BigSortedMap.totalIndexSize.addAndGet(toMove);
-
+    if (map == null) {
+      BigSortedMap.incrGlobalDataInIndexBlocksSize(toMove);
+      //BigSortedMap.incrGlobalIndexSize(toMove);
+    } else {
+      map.incrInstanceDataInIndexBlocksSize(toMove);
+      //map.incrInstanceIndexSize(toMove);
+    }
     return true;
   }
 	
@@ -1139,7 +1183,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
             dataBlock.compressDataBlockIfNeeded();
 
             // new block insert after
-            dataBlock = new DataBlock(MAX_BLOCK_SIZE);
+            dataBlock = new DataBlock(this, MAX_BLOCK_SIZE);
             insertNewBlock(dataBlock, keyPtr, keyLength, version, Op.PUT);
             // we do not check result - it should be OK (empty block)
             dataBlock.put(keyPtr, keyLength, valuePtr, valueLength, version, expire, reuseValue);
@@ -1161,7 +1205,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
   private boolean putEmpty(long keyPtr, int keyLength, long valuePtr, int valueLength, long version,
       long expire) {
-    DataBlock dataBlock = new DataBlock(MAX_BLOCK_SIZE);
+    DataBlock dataBlock = new DataBlock(this, MAX_BLOCK_SIZE);
     dataBlock.register(this, 0);
     try {
       if (mustAllocateExternally(keyLength)) {
@@ -1191,8 +1235,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
       this.numDataBlocks++;
       int required = DATA_BLOCK_STATIC_OVERHEAD + KEY_SIZE_LENGTH + keyLength;
       this.blockDataSize += required;
-      BigSortedMap.totalDataInIndexBlocksSize.addAndGet(required);
-      BigSortedMap.totalIndexSize.addAndGet(required);
+      if (map == null) {
+        BigSortedMap.incrGlobalDataInIndexBlocksSize(required);
+        BigSortedMap.incrGlobalIndexSize(required);
+      } else {
+        map.incrInstanceDataInIndexBlocksSize(required);
+        map.incrInstanceIndexSize(required);
+      }
       return dataBlock.put(keyPtr, keyLength, valuePtr, valueLength, version, expire);
     } finally {
       dataBlock.compressDataBlockIfNeeded();
@@ -1794,7 +1843,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
             return OpResult.SPLIT_REQUIRED;
           }
           // new block insert after
-          DataBlock bb = new DataBlock(MAX_BLOCK_SIZE);
+          DataBlock bb = new DataBlock(this, MAX_BLOCK_SIZE);
           insertNewBlock(bb, keyPtr, keyLength, version, Op.DELETE);
           // we do not check result - it should be OK (empty block)
           bb.addDelete(keyPtr, keyLength, version);
@@ -1859,9 +1908,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     if (mustAllocateExternally(keyLength)) {
       long addr = getExternalAllocationAddress(indexPtr);
       long size = UnsafeAccess.toInt(addr);
-      BigSortedMap.totalAllocatedMemory.addAndGet(-size - INT_SIZE);
-      //???
-      BigSortedMap.totalIndexSize.addAndGet(-size - INT_SIZE);
+      if (map == null) {
+        BigSortedMap.incrGlobalAllocatedMemory(-size - INT_SIZE);
+        BigSortedMap.incrGlobalExternalDataSize(-size - INT_SIZE);
+      } else {
+        map.incrInstanceAllocatedMemory(-size - INT_SIZE);
+        map.incrInstanceExternalDataSize(-size - INT_SIZE);
+      }
       UnsafeAccess.free(addr);
       largeKVs.decrementAndGet();
     }
@@ -1870,8 +1923,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 
     UnsafeAccess.copy(indexPtr + toMove, indexPtr, blockDataSize - indexPtr + dataPtr - toMove);
     this.blockDataSize -= toMove;
-    BigSortedMap.totalDataInIndexBlocksSize.addAndGet(-toMove);
-    BigSortedMap.totalIndexSize.addAndGet(-toMove);
+    if (map == null) {
+      BigSortedMap.incrGlobalDataInIndexBlocksSize(-toMove);
+      BigSortedMap.incrGlobalIndexSize(-toMove);
+    } else {
+      map.incrInstanceDataInIndexBlocksSize(-toMove);
+      map.incrInstanceIndexSize(-toMove);
+    }
     
     this.numDataBlocks -= 1;
     boolean firstBlockInIndex = this.dataPtr == b.getIndexPtr();
@@ -2283,7 +2341,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 			this.blockDataSize = (short) (ptr - dataPtr);
 			this.numDataBlocks = (short) recCount;
 			int rightBlockSize = this.blockSize;//getMinSizeGreaterThan(getBlockSize(), leftDataSize);
-			IndexBlock right = new IndexBlock(rightBlockSize);
+			IndexBlock right = new IndexBlock(map, rightBlockSize);
 
 			right.numDataBlocks = (short) (oldNumRecords - this.numDataBlocks);
 			right.blockDataSize = (short) (oldDataSize - this.blockDataSize);
@@ -2358,10 +2416,17 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	  // deallocate large keys
 	  deallocateLargeKeys();
 		UnsafeAccess.free(dataPtr);
-		BigSortedMap.totalDataInIndexBlocksSize.addAndGet(-blockDataSize);
-    BigSortedMap.totalIndexSize.addAndGet(-blockDataSize);
-    BigSortedMap.totalBlockIndexSize.addAndGet(-blockSize);
-    BigSortedMap.totalAllocatedMemory.addAndGet(-blockSize);
+		if (map == null) {
+		  BigSortedMap.incrGlobalDataInIndexBlocksSize(-blockDataSize);
+		  BigSortedMap.incrGlobalIndexSize(-blockDataSize);
+		  BigSortedMap.incrGlobalBlockIndexSize(-blockSize);
+		  BigSortedMap.incrGlobalAllocatedMemory(-blockSize);
+		} else {
+      map.incrInstanceDataInIndexBlocksSize(-blockDataSize);
+      map.incrInstanceIndexSize(-blockDataSize);
+      map.incrInstanceBlockIndexSize(-blockSize);
+      map.incrInstanceAllocatedMemory(-blockSize);
+		}
 		valid = false;
 	}
 	
@@ -2379,8 +2444,13 @@ public final class IndexBlock implements Comparable<IndexBlock> {
           long size = UnsafeAccess.toInt(recAddress) + INT_SIZE;
           UnsafeAccess.free(recAddress);
           largeKVs.decrementAndGet();
-          BigSortedMap.totalAllocatedMemory.addAndGet(-size);
-          BigSortedMap.totalIndexSize.addAndGet(-size);
+          if (map == null) {
+            BigSortedMap.incrGlobalAllocatedMemory(-size);
+            BigSortedMap.incrGlobalExternalDataSize(-size);
+          } else {
+            map.incrInstanceAllocatedMemory(-size);
+            map.incrInstanceExternalDataSize(-size);
+          }
           keylen = ADDRESS_SIZE;
         }
         ptr += keylen + KEY_SIZE_LENGTH + DATA_BLOCK_STATIC_OVERHEAD;
@@ -2457,12 +2527,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	    DataBlock next = DataBlock.loadData(fc, buf);
 	    if (next == null) {
 	      return null;
-	    }
-	    // Prepare buffer for next block load operation
-	    //buf.compact();
-	    // set pos = 0 and limit = old pos
-	    //buf.flip();
-	    
+	    }	    
 	    next.decompressDataBlockIfNeeded();
 	    
 	    if (insertBlock(next) == false) {

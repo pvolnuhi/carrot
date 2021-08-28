@@ -85,7 +85,7 @@ public class TestCarrotAdServerUserTarget {
     doUserActionWords(map);
     doUserViewAds(map);
     doUserActionAds(map);
-    long memory = BigSortedMap.getTotalAllocatedMemory();
+    long memory = BigSortedMap.getGlobalAllocatedMemory();
     System.out.println("Total memory=" + memory);
     map.dispose();
   }  

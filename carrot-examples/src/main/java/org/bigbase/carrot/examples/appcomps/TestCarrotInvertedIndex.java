@@ -136,7 +136,7 @@ public class TestCarrotInvertedIndex {
       //System.exit(-1);
     }
     
-    long allocced = BigSortedMap.getTotalAllocatedMemory();
+    long allocced = BigSortedMap.getGlobalAllocatedMemory();
     System.out.println("Memory usage per (4-bytes) doc ID: " + ((double)allocced)/totalSize);
     System.out.println("Memory usage: " + allocced);
 

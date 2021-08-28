@@ -84,11 +84,11 @@ public class BigSortedMapTest {
     System.out.println("Time to load= " + totalLoaded + " =" + (end - start) + "ms");
     long scanned = countRecords();
     System.out.println("Scanned=" + countRecords());
-    System.out.println("\nTotal memory     =" + BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data       =" + BigSortedMap.getTotalDataSize());
-    System.out.println("Compressed size    =" + BigSortedMap.getTotalCompressedDataSize());
+    System.out.println("\nTotal memory     =" + BigSortedMap.getGlobalAllocatedMemory());
+    System.out.println("Total   data       =" + BigSortedMap.getGlobalDataSize());
+    System.out.println("Compressed size    =" + BigSortedMap.getGlobalCompressedDataSize());
     System.out.println("Compression  ratio ="
-        + ((float) BigSortedMap.getTotalDataSize()) / BigSortedMap.getTotalAllocatedMemory());
+        + ((float) BigSortedMap.getGlobalDataSize()) / BigSortedMap.getGlobalAllocatedMemory());
     System.out.println();
     assertEquals(totalLoaded, scanned);
   }
@@ -114,7 +114,7 @@ public class BigSortedMapTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -127,7 +127,7 @@ public class BigSortedMapTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -140,7 +140,7 @@ public class BigSortedMapTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }

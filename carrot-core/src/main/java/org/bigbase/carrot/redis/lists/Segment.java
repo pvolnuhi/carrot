@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
+import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.IOUtils;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -105,38 +106,39 @@ public final class Segment {
    */
   private long dataPtr;
   
+  /**
+   * Not a cool thing
+   */
+  private BigSortedMap map;
+  
   Segment() {
   }
   
-  private Segment(long ptr, int size) {
+  private Segment(BigSortedMap map, long ptr, int size) {
     this.dataPtr = ptr;
+    this.map = map;
     setSize (size);
-    Lists.allocMemory(size);
+    Lists.allocMemory(this.map, size);
   }
   
-  public static Segment allocateNew() {
+  public static Segment allocateNew(BigSortedMap map) {
     int size = BASE_SIZES[0] * BASE_MULTIPLIERS[0];
-    return allocateNew(size);
+    return allocateNew(map, size);
   }
-  
-  public static Segment allocateNew(Segment s) {
-    int size = BASE_SIZES[0] * BASE_MULTIPLIERS[0];
-    return allocateNew(s, size);
-  }
-  
-  public static Segment allocateNew(int sizeRequired) {
+    
+  public static Segment allocateNew(BigSortedMap map, int sizeRequired) {
     int size = getMinSizeGreaterOrEqualsThan(sizeRequired);
     if (size < 0) return null;
     long ptr = UnsafeAccess.mallocZeroed(size);
-    return new Segment(ptr, size);
+    return new Segment(map, ptr, size);
   }
   
-  public static Segment allocateNew(Segment s, int sizeRequired) {
+  public static Segment allocateNew(BigSortedMap map, Segment s, int sizeRequired) {
     int size = getMinSizeGreaterOrEqualsThan(sizeRequired);
     if (size < 0) return null;
-    Lists.allocMemory(size);
+    Lists.allocMemory(map, size);
     long ptr = UnsafeAccess.mallocZeroed(size);
-    s.setDataPointer(ptr);
+    s.setDataPointerAndParentMap(map, ptr);
     s.setSize(size);
     return s;
   }
@@ -146,13 +148,15 @@ public final class Segment {
    */
   public void reset() {
     this.dataPtr = 0;
+    this.map = null;
   }
   /**
    * Sets data pointer
    * @param ptr
    */
-  public Segment setDataPointer(long ptr) {
+  public Segment setDataPointerAndParentMap(BigSortedMap map, long ptr) {
     this.dataPtr = ptr;
+    this.map = map;
     return this;
   }
   
@@ -407,9 +411,9 @@ public final class Segment {
     UnsafeAccess.copy(this.dataPtr, ptr, SEGMENT_OVERHEAD + dataSize);
     UnsafeAccess.free(this.dataPtr);
 
-    Lists.allocMemory(newSize - segmentSize);
+    Lists.allocMemory(map, newSize - segmentSize);
 
-    setDataPointer(ptr);
+    setDataPointerAndParentMap(map, ptr);
     setSegmentSize(ptr, newSize);
     updateNextPrevious();
   }
@@ -428,9 +432,9 @@ public final class Segment {
     long ptr = UnsafeAccess.mallocZeroed(newSize);
     UnsafeAccess.copy(this.dataPtr, ptr, SEGMENT_OVERHEAD + dataSize);
     UnsafeAccess.free(this.dataPtr);
-    Lists.allocMemory(newSize - segmentSize);
+    Lists.allocMemory(map, newSize - segmentSize);
 
-    setDataPointer(ptr);
+    setDataPointerAndParentMap(map, ptr);
     setSegmentSize(ptr, newSize);
     updateNextPrevious();
     return true;
@@ -523,7 +527,7 @@ public final class Segment {
         long ptr = UnsafeAccess.allocAndCopy(elemPtr, elemSize);
    
         // Memory housekeeping call
-        Lists.allocMemory(elemSize);
+        Lists.allocMemory(map, elemSize);
         
         int zeroSize = Utils.sizeUVInt(0);
         Utils.writeUVInt(this.dataPtr + offset, 0);
@@ -550,7 +554,7 @@ public final class Segment {
       long nextPtr = getNextAddress();
       // Make sure that we do not do recursive calls anymore
       Segment s = segment.get();
-      s.setDataPointer(nextPtr);
+      s.setDataPointerAndParentMap(map, nextPtr);
       s.insert(offset - dataSize, elemPtr, elemSize);
       // Even if we insert into next segment, we return address of a current
       // segment
@@ -610,7 +614,7 @@ public final class Segment {
     UnsafeAccess.copy(addr, buffer, size);
     if (isExternalAllocation(this.dataPtr + SEGMENT_OVERHEAD)) {
       UnsafeAccess.free(addr);
-      Lists.freeMemory(size);
+      Lists.freeMemory(map, size);
     }
     int bSize = elementBlockFullSize(this.dataPtr + SEGMENT_OVERHEAD);
     int dataSize = getDataSize();
@@ -658,7 +662,7 @@ public final class Segment {
     UnsafeAccess.copy(addr, buffer, size);
     if (isExternalAllocation(ptr)) {
       UnsafeAccess.free(addr);
-      Lists.freeMemory(size);
+      Lists.freeMemory(map, size);
     }
     int bSize = elementBlockFullSize(ptr);
     incrementDataSize(-bSize);
@@ -737,7 +741,7 @@ public final class Segment {
     int newSize = getMinSizeGreaterOrEqualsThan(rightDataSize + SEGMENT_OVERHEAD);
     
     long ptr = UnsafeAccess.mallocZeroed(newSize);
-    Lists.allocMemory(newSize);
+    Lists.allocMemory(map, newSize);
     
     UnsafeAccess.copy(this.dataPtr + off + SEGMENT_OVERHEAD, ptr + SEGMENT_OVERHEAD, rightDataSize);
     // Update new segment next address
@@ -838,11 +842,11 @@ public final class Segment {
         long addr = elementAddress(ptr);
         int size = elementSize(ptr);
         UnsafeAccess.free(addr);
-        Lists.freeMemory(size);
+        Lists.freeMemory(map, size);
       }
       ptr += bSize + Utils.sizeUVInt(bSize);
     }
-    Lists.freeMemory(getSize());
+    Lists.freeMemory(map, getSize());
     UnsafeAccess.free(this.dataPtr);
   }
   
@@ -870,7 +874,7 @@ public final class Segment {
   public Segment next(Segment s) {
     long ptr = getNextAddress();
     if (ptr <= 0) return null;
-    s.setDataPointer(ptr);
+    s.setDataPointerAndParentMap(map, ptr);
     return s;
   }
   
@@ -882,7 +886,7 @@ public final class Segment {
   public Segment previous(Segment s) {
     long ptr = getPreviousAddress();
     if (ptr <= 0) return null;
-    s.setDataPointer(ptr);
+    s.setDataPointerAndParentMap(map, ptr);
     return s;
   }
   
@@ -915,7 +919,7 @@ public final class Segment {
       if (eSize == elSize && Utils.compareTo(elPtr, elSize, ePtr, eSize) == 0) {
         if (isExternalAllocation(ptr)) {
           UnsafeAccess.free(ePtr);
-          Lists.freeMemory(eSize);
+          Lists.freeMemory(map, eSize);
         }
         UnsafeAccess.copy(ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
         incrementDataSize(-bSize - bSizeSize);
@@ -948,7 +952,7 @@ public final class Segment {
       if (eSize == elSize && Utils.compareTo(elPtr, elSize, ePtr, eSize) == 0) {
         if (isExternalAllocation(ptr)) {
           UnsafeAccess.free(ePtr);
-          Lists.freeMemory(eSize);
+          Lists.freeMemory(map, eSize);
         }
         UnsafeAccess.copy(ptr + bSize + bSizeSize, ptr, max - ptr - bSize - bSizeSize);
         incrementDataSize(-bSize - bSizeSize);
@@ -995,7 +999,7 @@ public final class Segment {
       if (isExternalAllocation(lastPtr)) {
         UnsafeAccess.free(ePtr);
         int eSize = elementSize(lastPtr);
-        Lists.freeMemory(eSize);
+        Lists.freeMemory(map, eSize);
       }
       UnsafeAccess.copy(lastPtr + bSize + bSizeSize, lastPtr, max - lastPtr - bSize - bSizeSize);
       incrementDataSize(-bSize - bSizeSize);
@@ -1027,7 +1031,7 @@ public final class Segment {
     
     if (isExternalAllocation(ptr)) {
       UnsafeAccess.free(elementAddress(ptr));
-      Lists.freeMemory(elementSize(ptr));
+      Lists.freeMemory(map, elementSize(ptr));
     }
     
     int bSize = elementBlockSize(ptr);
@@ -1221,7 +1225,9 @@ public final class Segment {
       throw new IOException("Unexpected end-of-stream");
     }
     // Update statistics
-    Lists.allocMemory(size);
+    //Lists.allocMemory(size);
+    BigSortedMap.incrGlobalAllocatedMemory(size);
+    BigSortedMap.incrGlobalExternalDataSize(size);
     // Copy segment data
     UnsafeAccess.copy(buf,  ptr,  size);
     
@@ -1247,7 +1253,9 @@ public final class Segment {
         long addr = UnsafeAccess.malloc(extSize);
         UnsafeAccess.copy(buf,  addr, extSize);
         // Memory housekeeping
-        Lists.allocMemory(extSize);
+        //Lists.allocMemory(map, extSize);
+        BigSortedMap.incrGlobalAllocatedMemory(extSize);
+        BigSortedMap.incrGlobalExternalDataSize(extSize);
         // Update external address
         UnsafeAccess.putLong(ptr + eSizeSize + Utils.SIZEOF_INT, addr);
         // Advance pointer

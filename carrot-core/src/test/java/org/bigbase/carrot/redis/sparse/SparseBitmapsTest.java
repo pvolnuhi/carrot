@@ -72,8 +72,8 @@ public class SparseBitmapsTest {
       key2 = null;
     }
     UnsafeAccess.free(buffer);
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
-    BigSortedMap.memoryStats();
   }
 
   //@Ignore
@@ -84,7 +84,7 @@ public class SparseBitmapsTest {
     for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -97,7 +97,7 @@ public class SparseBitmapsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -110,7 +110,7 @@ public class SparseBitmapsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -187,7 +187,7 @@ public class SparseBitmapsTest {
     /*DEBUG*/ System.out.println("totalCount=" + totalCount+ " N="+ N);
     /*DEBUG*/ System.out.println("Total RAM=" + UnsafeAccess.getAllocatedMemory());
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     long end  = System.currentTimeMillis();
     
@@ -251,7 +251,7 @@ public class SparseBitmapsTest {
     
     System.out.println("Time for " + N + " new SetBit=" + (end - start) + "ms");
     System.out.println("Compression ratio="+( ((double) max) / (8 * memory)));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     r.setSeed(seed);
     start = System.currentTimeMillis();
@@ -279,7 +279,7 @@ public class SparseBitmapsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time for " + N + " SetBit erase=" + (end - start) + "ms");
-    assertEquals(0, (int) BigSortedMap.countRecords(map));
+    assertEquals(0, (int) map.countRecords());
     
   }
   
@@ -315,7 +315,7 @@ public class SparseBitmapsTest {
     assertTrue(SparseBitmaps.EXISTS(map, key.address, key.length));
     SparseBitmaps.DELETE(map, key.address, key.length);
     assertFalse(SparseBitmaps.EXISTS(map, key.address, key.length));
-    assertEquals(0, (int) BigSortedMap.countRecords(map));
+    assertEquals(0, (int) map.countRecords());
   }
   
   @Ignore
@@ -409,7 +409,7 @@ public class SparseBitmapsTest {
     
     SparseBitmaps.DELETE(map, key.address, key.length);
     assertFalse(SparseBitmaps.EXISTS(map, key.address, key.length));
-    assertEquals(0, (int) BigSortedMap.countRecords(map));
+    assertEquals(0, (int) map.countRecords());
   }
   
   @Ignore
@@ -548,7 +548,7 @@ public class SparseBitmapsTest {
     
     SparseBitmaps.DELETE(map, key.address, key.length);
     assertFalse(SparseBitmaps.EXISTS(map, key.address, key.length));
-    assertEquals(0, (int) BigSortedMap.countRecords(map));
+    assertEquals(0, (int) map.countRecords());
   }
 
   
@@ -592,7 +592,7 @@ public class SparseBitmapsTest {
     System.out.println("SBITCOUNT for bitmap="+ strlen+" long ="+ ((double) 1000 * 1000)/(endTime - startTime)+" RPS");
     SparseBitmaps.DELETE(map, key.address, key.length);
     assertFalse(SparseBitmaps.EXISTS(map, key.address, key.length));
-    assertEquals(0, (int) BigSortedMap.countRecords(map));
+    assertEquals(0, (int) map.countRecords());
   }
   
   /**
@@ -896,7 +896,7 @@ public class SparseBitmapsTest {
    
    SparseBitmaps.DELETE(map, key.address, key.length);
    assertFalse(SparseBitmaps.EXISTS(map, key.address, key.length));
-   assertEquals(0, (int) BigSortedMap.countRecords(map));
+   assertEquals(0, (int) map.countRecords());
    
  } 
  
@@ -937,7 +937,7 @@ public class SparseBitmapsTest {
     long end  = System.currentTimeMillis();
 
     System.out.println("\nTotal RAM=" + UnsafeAccess.getAllocatedMemory()+"\n");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     long count = SparseBitmaps.SBITCOUNT(map, key.address, key.length, Commons.NULL_LONG, Commons.NULL_LONG);
     assertEquals(totalCount, count);
@@ -1118,7 +1118,7 @@ public class SparseBitmapsTest {
     assertFalse(SparseBitmaps.EXISTS(map, key.address, key.length));
     SparseBitmaps.DELETE(map, key2.address, key2.length);
     assertFalse(SparseBitmaps.EXISTS(map, key2.address, key2.length));
-    assertEquals(0, (int) BigSortedMap.countRecords(map));
+    assertEquals(0, (int) map.countRecords());
   }
   
   public static void main(String[] args) {

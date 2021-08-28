@@ -41,8 +41,8 @@ import org.bigbase.carrot.ops.IncrementLong;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.ops.OperationFailedException;
 import org.bigbase.carrot.redis.RedisConf;
-import org.bigbase.carrot.redis.server.Server;
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.IOUtils;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -50,9 +50,15 @@ import org.bigbase.carrot.util.Utils;
 
 public class BigSortedMap {
 
-  Log LOG = LogFactory.getLog(BigSortedMap.class);
+
+  /**************** STATIC SECTION *******************************/
   
-//TODO: configurable compression - default codec
+  
+  static Log LOG = LogFactory.getLog(BigSortedMap.class);
+  
+  /**
+   * Compression codec
+   */
   static Codec codec = CodecFactory.getInstance().getCodec(CodecType.NONE);
   
   /**
@@ -64,11 +70,18 @@ public class BigSortedMap {
     return codec != null && codec.getType() != CodecType.NONE;
   }
   
-  
+  /**
+   * Sets compression codec
+   * @param codec compression codec
+   */
   public static void setCompressionCodec(Codec codec) {
     BigSortedMap.codec = codec;
   }
   
+  /**
+   * Get compression codec
+   * @return compression codec
+   */
   public static Codec getCompressionCodec() {
     return codec;
   }
@@ -78,69 +91,91 @@ public class BigSortedMap {
    * Map<IndexBlock,IndexBlock> operations
    */
   private static ThreadLocal<IndexBlock> keyBlock = new ThreadLocal<IndexBlock>(); 
+    
   
-  public final static String MAX_MEMORY_KEY = "map.max.memory";
-  private ConcurrentSkipListMap<IndexBlock, IndexBlock> map = 
-		  new ConcurrentSkipListMap<IndexBlock, IndexBlock>();
-  
+  /**
+   * Maximum data block size - default is 4096, should support at least 8K and 16K
+   */
   static int maxBlockSize = DataBlock.MAX_BLOCK_SIZE;
+  
+  /**
+   * Maximum index block size - default is 4096, should support at least 8K and 16K
+   */
+  
   static int maxIndexBlockSize = IndexBlock.MAX_BLOCK_SIZE;
   
-  public static AtomicLong totalAllocatedMemory = new AtomicLong(0);
-  /*
-   * This tracks total data blocks size (memory allocated for data blocks)
+  /**
+   * This tracks globally allocated memory (overall)
    */
-  static AtomicLong totalBlockDataSize = new AtomicLong(0);
+  private static AtomicLong globalAllocatedMemory = new AtomicLong(0);
+  
   /*
-   * This tracks total data size in data blocks (data can be allocated outside
+   * This tracks global data blocks size (memory allocated for data blocks)
+   */
+  private static AtomicLong globalBlockDataSize = new AtomicLong(0);
+  
+  /*
+   * This tracks global data size in data blocks (data can be allocated outside
    * data blocks)
    */
-  static AtomicLong totalDataInDataBlocksSize = new AtomicLong(0);
+  private static AtomicLong globalDataInDataBlocksSize = new AtomicLong(0);
 
   /*
-   * This tracks total compressed data size in data blocks (data can be allocated outside
+   * This tracks global compressed data size in data blocks (data can be allocated outside
    * data blocks)
    */
-  static AtomicLong totalCompressedDataInDataBlocksSize = new AtomicLong(0);
-  /*
-   * This tracks total data size  allocated externally (not in data blocks)
-   */
-  static AtomicLong totalExternalDataSize = new AtomicLong(0);
+  
+  private static AtomicLong globalCompressedDataInDataBlocksSize = new AtomicLong(0);
   
   /*
-   * This tracks total index blocks size (memory allocated for index blocks) 
+   * This tracks global data size  allocated externally (not in data blocks)
    */
-  static AtomicLong totalBlockIndexSize = new AtomicLong(0);
+  private static AtomicLong globalExternalDataSize = new AtomicLong(0);
   
   /*
-   * This tracks total data size in index blocks (data can be allocated outside
+   * This tracks global index blocks size (memory allocated for index blocks) 
+   */
+  private static AtomicLong globalBlockIndexSize = new AtomicLong(0);
+  
+  /*
+   * This tracks global data size in index blocks (data can be allocated outside
    * index blocks)
    */
-  static AtomicLong totalDataInIndexBlocksSize = new AtomicLong(0);
+  private static AtomicLong globalDataInIndexBlocksSize = new AtomicLong(0);
+  
   /*
-   * This tracks total index size (total index size >= total data in index blocks  size)
+   * This tracks global index size (total index size >= total data in index blocks  size)
    */
+  private static AtomicLong globalIndexSize = new AtomicLong(0);
   
-  static AtomicLong totalIndexSize = new AtomicLong(0);
-  
-  // For k-v versioning
-  static AtomicLong sequenceID = new AtomicLong(0);
+  /**
+   *  For system logging versioning
+   */
+  private static AtomicLong sequenceID = new AtomicLong(0);
 
-  //private ReentrantLock[] locks = new ReentrantLock[11113];
+  /**
+   * Global memory limit (Long.MAX_VALUE - no limit is default)
+   */
+  private static long globalMemoryLimit = Long.MAX_VALUE;
+  
+  
+  /**
+   * When true - no updates to a global and instance statistics is disabled
+   * This is necessary during application startup when data is loading 
+   * from a snapshot
+   */
+  private static boolean statsUpdateDisabled = false;
+  
   /*
    * Read-Write Lock TODO: StampedLock (Java 8)
    */
   static ReentrantReadWriteLock[] locks = new ReentrantReadWriteLock[11113];
+  
   static {
     for (int i = 0; i < locks.length; i++) {
       locks[i] = new ReentrantReadWriteLock();
     }
   }
-  private long maxMemory; 
-  /*
-   * Keeps ordered list of active snapshots (future Tx)
-   */
-  static private ConcurrentSkipListMap<Long, Long> activeSnapshots = new ConcurrentSkipListMap<>();
   
   /*
    * We need this buffer to keep keys during execute update
@@ -180,62 +215,27 @@ public class BigSortedMap {
     }
   };
   
-  public static long countRecords(BigSortedMap map) {
-    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
-    long count = 0;
-    if (scanner == null) {
-      return 0;
-    }
-    try {
-      while (scanner.hasNext()) {
-        count++;
-        scanner.next();
-      }
-    } catch (IOException e) {
-      return -1;
-    } finally {
-      try {
-        scanner.close();
-      } catch (IOException e) {
-      }
-    }
-    return count;
-  }
-
-  public static long dumpRecords(BigSortedMap map) {
-    BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
-    long count = 0;
-    if (scanner == null) {
-      return 0;
-    }
-    try {
-      while (scanner.hasNext()) {
-        count++;
-        long ptr = scanner.keyAddress();
-        int size = scanner.keySize();
-        System.out.println(Bytes.toHex(ptr, size));
-        scanner.next();
-      }
-    } catch (IOException e) {
-      return -1;
-    } finally {
-      try {
-        scanner.close();
-      } catch (IOException e) {
-      }
-    }
-    return count;
+  /**
+   * Set global memory limit
+   * @param limit memory limit
+   */
+  static void setGlobalMemoryLimit(long limit) {
+    globalMemoryLimit = limit;
   }
   
-  public static void memoryStats() {
-    System.out.println("            Total : " + getTotalAllocatedMemory());
-    System.out.println(" Data Blocks Size : " + getTotalBlockDataSize());
-    System.out.println("Index Blocks Size : " + getTotalBlockIndexSize());
-    System.out.println("       Index Size : " + getTotalIndexSize());
-    System.out.println("        Data Size : " + getTotalDataSize());
-
+  /**
+   * Get global memory limit
+   */
+  public static long getGlobalMemoryLimit() {
+    return globalMemoryLimit;
   }
   
+  /**
+   * Checks that key buffer is not less than 'require'
+   * @param key key
+   * @param size key size
+   * @param required required size
+   */
   static void checkKeyBuffer(ThreadLocal<Long> key, ThreadLocal<Integer> size, int required) {
     if (required <= size.get()) return;
     long ptr = UnsafeAccess.realloc(key.get(), required);
@@ -244,51 +244,23 @@ public class BigSortedMap {
   }
   
   /**
+   * TODO: remove this code
    * To support Tx and snapshots
    * @return earliest active Tx/snapshot sequenceId or -1
    */
   public static long getMostRecentActiveTxSeqId() {
-	  if(activeSnapshots.isEmpty()) {
-	    return -1;
-	  }
-    Long id = activeSnapshots.lastKey();
-	  if (id == null) {
-	    return -1;
-	  }
-	  return id;
+	  return -1;
   }
+  
   /**
+   * TODO: remove this code
    * To support Tx and snapshot based scanners
    * @return oldest active tx/snapshot id
    */
   public static long getMostOldestActiveTxSeqId() {
-    if(activeSnapshots.isEmpty()) {
-      return -1;
-    }    
-    Long id = activeSnapshots.firstKey();
-    if (id == null) {
-      return -1;
-    }
-    return id;
+    return -1;
   }
-  
-  /**
-   * Creates new snapshots and returns its id
-   * @return id of a snapshot
-   */
-  public static long createSnapshot() {
-    long id = sequenceID.incrementAndGet();
-    activeSnapshots.put(id,  id);
-    return id;
-  }
-  /**
-   * Release snapshot by Id
-   * @param id
-   */
-  public static void releaseSnapshot(long id) {
-    activeSnapshots.remove(id);
-  }
-  
+    
   /**
    * Gets max block size (data)
    * @return size
@@ -312,9 +284,287 @@ public class BigSortedMap {
   public static int getMaxIndexBlockSize() {
 	  return maxIndexBlockSize;
   }
+
+  /**
+   * Get global allocated memory
+   * @return total allocated memory
+   */
+  public static long getGlobalAllocatedMemory() {
+    return globalAllocatedMemory.get();
+  }
+  
+  /**
+   * Increment global allocated memory
+   * @return global allocated memory after increment
+   */
+  public static long incrGlobalAllocatedMemory(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    return globalAllocatedMemory.addAndGet(incr);
+  }
+  
+  /**
+   * Get global memory allocated for data blocks
+   * @return global memory allocated for data blocks
+   */
+  public static long getGlobalBlockDataSize() {
+    return globalBlockDataSize.get();
+  }
+  
+  /**
+   * Increment global block data size - memory allocated for data blocks
+   * @return global block data size after increment
+   */
+  public static long incrGlobalBlockDataSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    return globalBlockDataSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get global memory which data occupies in data blocks
+   * @return memory
+   */
+  public static long getGlobalDataInDataBlockSize() {
+    return globalDataInDataBlocksSize.get();
+  }
+  
+  /**
+   * Increment global data in data block size 
+   * @return global data in data block size after increment
+   */
+  public static long incrGlobalDataInDataBlockSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    return globalDataInDataBlocksSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get global memory allocated for index blocks
+   * @return memory
+   */
+  public static long getGlobalBlockIndexSize() {
+    return globalBlockIndexSize.get();
+  }
+  
+  /**
+   * Increment global memory allocated for index blocks
+   * @param incr increment value
+   * @return memory after increment
+   */
+  public static long incrGlobalBlockIndexSize(long incr) {
+    // We need updates to index during data loading
+    // b/c index size will be lesser
+    //if (isStatsUpdatesDisabled()) return 0;
+    return globalBlockIndexSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get global data size (uncompressed)
+   * @return global data size
+   */
+  public static long getGlobalDataSize() {
+    return globalExternalDataSize.get() + globalDataInDataBlocksSize.get();
+  }
+  
+  /**
+   * Get global compressed data size
+   * @return global size of a compressed data
+   */
+  public static long getGlobalCompressedDataSize() {
+    return  globalCompressedDataInDataBlocksSize.get();
+  }
+  
+  /**
+   * Increment global compressed data size
+   * @param incr increment value
+   * @return global size of a compressed data after an increment
+   */
+  public static long incrGlobalCompressedDataSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    return  globalCompressedDataInDataBlocksSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get global external data size
+   * @return global size of a compressed data
+   */
+  public static long getGlobalExternalDataSize() {
+    return  globalExternalDataSize.get();
+  }
+  
+  /**
+   * Increment global external data size. This is external data + 
+   * external index data
+   * @param incr increment value
+   * @return global size of a compressed data after an increment
+   */
+  public static long incrGlobalExternalDataSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    return  globalExternalDataSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get global index size, which is globalBlockIndexSize + external index allocations (for large keys)
+   * @return global index size
+   */
+  public static long getGlobalIndexSize() {
+    return globalIndexSize.get();
+  }
+  
+  /**
+   * Increment global index size
+   * @param incr increment value
+   * @return global index size after an increment
+   */
+  public static long incrGlobalIndexSize(long incr) {
+    //if (isStatsUpdatesDisabled()) return 0;
+    return globalIndexSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get global memory which index occupies in index blocks
+   * @return global index size
+   */
+  public static long getGlobalDataInIndexBlocksSize() {
+    return globalDataInIndexBlocksSize.get();
+  }
+  
+  /**
+   * Increment global memory which index occupies in index blocks
+   * @param incr increment value
+   * @return global index size after an increment
+   */
+  
+  public static long incrGlobalDataInIndexBlocksSize(long incr) {
+    //if (isStatsUpdatesDisabled()) return 0;
+    return globalDataInIndexBlocksSize.addAndGet(incr);
+  }
+  
+  /**
+   * Prints global memory statistics
+   */
+  public static void printGlobalMemoryAllocationStats() {
+    System.out.println("\nGLOBAL Carrot memory allocation statistics:");
+    System.out.println("-------------- TOTAL -------------------------");
+    System.out.println("Total memory               :" + getGlobalAllocatedMemory());
+    System.out.println("-------------- DATA --------------------------");
+    System.out.println("Total data blocks          :" + getGlobalBlockDataSize());
+    System.out.println("Total data size            :" + getGlobalDataSize());
+    System.out.println("Total data block usage     :" + ((double)getGlobalDataSize())
+      /getGlobalBlockDataSize());
+    System.out.println("-------------- INDEX ------------------------");
+    System.out.println("Total block index size     :" + getGlobalBlockIndexSize());
+    System.out.println("Total data index size      :" + getGlobalDataInIndexBlocksSize());
+    System.out.println("Total index size           :" + getGlobalIndexSize());
+    System.out.println("----- COMPRESSED and EXTERNAL ---------------");
+    System.out.println("Total compressed data size :" + getGlobalCompressedDataSize());
+    System.out.println("Total external data size   :" + getGlobalExternalDataSize());   
+    System.out.println("Copmpression ratio         :" + ((double)getGlobalDataSize()/ 
+        getGlobalAllocatedMemory())+"\n");
+  }
+  
+  /**
+   * Disable/ enable memory statistics updates
+   * @param b
+   */
+  public static void setStatsUpdatesDisabled(boolean b) {
+    statsUpdateDisabled = b;
+    if (statsUpdateDisabled) {
+      // Clear all counters;
+      resetStats();
+    }
+  }
+  
+  /**
+   * Reset all counters
+   */
+  public static void resetStats() {
+    // Clear all counters;
+    globalAllocatedMemory.set(0);
+    globalBlockDataSize.set(0);
+    globalBlockIndexSize.set(0);
+    globalCompressedDataInDataBlocksSize.set(0);
+    globalDataInDataBlocksSize.set(0);
+    globalDataInIndexBlocksSize.set(0);
+    globalExternalDataSize.set(0);
+    globalIndexSize.set(0);
+  }
+  /**
+   * Checks if stats updates disabled
+   * @return true if - yes, false - otherwise
+   */
+  public static boolean isStatsUpdatesDisabled() {
+    return statsUpdateDisabled;
+  }
+  
+  /*****************************************************************/
+
+  /**************** INSTANCE SECTION *******************************/
     
   /**
-   * Constructor of a big sorted map
+   * Major store data structure
+   */
+  private ConcurrentSkipListMap<IndexBlock, IndexBlock> map = 
+      new ConcurrentSkipListMap<IndexBlock, IndexBlock>();
+
+  /**
+   * This tracks instance allocated memory 
+   */
+  AtomicLong allocatedMemory = new AtomicLong(0);
+  
+  /*
+   * This tracks instance data blocks size (memory allocated for data blocks)
+   */
+  AtomicLong blockDataSize = new AtomicLong(0);
+  
+  /*
+   * This tracks instance data size in data blocks (data can be allocated outside
+   * data blocks)
+   */
+  AtomicLong dataInDataBlocksSize = new AtomicLong(0);
+
+  /*
+   * This tracks instance compressed data size in data blocks (data can be allocated outside
+   * data blocks)
+   */
+  
+  AtomicLong compressedDataInDataBlocksSize = new AtomicLong(0);
+  
+  /*
+   * This tracks instance data size allocated externally (not in data blocks)
+   */
+  AtomicLong externalDataSize = new AtomicLong(0);
+  
+  /*
+   * This tracks instance index blocks size (memory allocated for index blocks) 
+   */
+  AtomicLong blockIndexSize = new AtomicLong(0);
+  
+  /*
+   * This tracks instance data size in index blocks (data can be allocated outside
+   * index blocks)
+   */
+  AtomicLong dataInIndexBlocksSize = new AtomicLong(0);
+  
+  /*
+   * This tracks instance index size (total index size >= total data in index blocks  size)
+   */
+  AtomicLong indexSize = new AtomicLong(0);
+  
+  /**
+   * Last snapshot time in ms
+   */
+  long lastSnapshotTimestamp;
+  
+  /**
+   * Store ID
+   */
+  int storeId;
+  
+  /**
+   * Little hack
+   */
+  private long indexBlockSizeBeforeSnapshot;
+  /**
+   * Legacy constructor of a big sorted map (single instance)
    * @param maxMemory - memory limit in bytes
    */
   public BigSortedMap(long maxMemory) {
@@ -322,98 +572,337 @@ public class BigSortedMap {
   }
   
   /**
-   * Constructor of a big sorted map
+   * Legacy constructor of a big sorted map (single instance)
    * @param maxMemory - memory limit in bytes
    * @param init - initialize
    */
   public BigSortedMap(long maxMemory, boolean init) {
-    this.maxMemory = maxMemory;
+    setGlobalMemoryLimit(maxMemory);
     if (init) initNodes();
   }
   
   /**
-   * Get total allocated memory
-   * @return total allocated memory
+   * Constructor of a big sorted map (multiple instances)
+   * @param init
    */
-  public static long getTotalAllocatedMemory() {
-    return totalAllocatedMemory.get();
-  }
-  /**
-   * Get total memory allocated for data blocks
-   * @return memory allocated for data blocks
-   */
-  public static long getTotalBlockDataSize() {
-    return totalBlockDataSize.get();
+  public BigSortedMap(boolean init) {
+    if (init) initNodes();
   }
   
   /**
-   * Get total memory which data occupies in data blocks
+   * Constructor of a big sorted map
+   */
+  public BigSortedMap() {
+    this(true);
+  }
+  
+  /**
+   * Part of snapshot loading procedure
+   */
+  public void syncStatsToGlobal() {
+    
+    incrGlobalAllocatedMemory(getInstanceAllocatedMemory());
+    incrGlobalBlockDataSize(getInstanceBlockDataSize());
+    //incrGlobalBlockIndexSize(getInstanceBlockIndexSize());
+    incrGlobalCompressedDataSize(getInstanceCompressedDataSize());
+    incrGlobalDataInDataBlockSize(getInstanceDataInDataBlockSize());
+    //incrGlobalDataInIndexBlocksSize(getInstanceDataInIndexBlocksSize());
+    incrGlobalExternalDataSize(getInstanceExternalDataSize());
+    //incrGlobalIndexSize(getInstanceIndexSize());
+  }
+  
+  /**
+   * Returns last snapshot time-stamp
+   * @return last snapshot time-stamp
+   */
+  public long getLastSnapshotTimestamp() {
+    return this.lastSnapshotTimestamp;
+  }
+  
+  /**
+   * Sets last snapshot time-stamp
+   * @param timestamp
+   */
+  public void setLastSnapshotTimestamp(long timestamp) {
+    this.lastSnapshotTimestamp = timestamp;
+  }
+  
+  /**
+   * Returns ID of this store
+   * @return
+   */
+  public int getStoreId() {
+    return storeId;
+  }
+  
+  /**
+   * Sets this store id (cluster mode)
+   * @param id
+   */
+  public void setStoreId(int id) {
+    this.storeId = id;
+  }
+  
+  /**
+   * Prints memory allocation statistics for the store
+   */
+  public  void printMemoryAllocationStats() {
+    System.out.println("\nCarrot memory allocation statistics [id=" + storeId +"]:");
+    System.out.println("--------------------- TOTAL -------------------");
+    System.out.println("Total allocated memory     :" + getInstanceAllocatedMemory());
+    System.out.println("--------------------- DATA --------------------");
+    System.out.println("Total data block size      :" + getInstanceBlockDataSize());
+    System.out.println("Total data size            :" + getInstanceDataSize());
+    System.out.println("Total data block usage     :" + ((double)getInstanceDataSize())
+      /getGlobalBlockDataSize());
+    System.out.println("--------------------- INDEX -------------------");
+    System.out.println("Total block index size     :" + getInstanceBlockIndexSize());
+    System.out.println("Total data index size      :" + getInstanceDataInIndexBlocksSize());
+    System.out.println("Total index size           :" + getInstanceIndexSize());
+    System.out.println("----------- COMPRESSION and EXTERNAL ----------");
+    System.out.println("Total compressed data size :" + getInstanceCompressedDataSize());
+    System.out.println("Total external data size   :" + getInstanceExternalDataSize());   
+    System.out.println("Copmpression ratio         :" + ((double)getInstanceDataSize()/ 
+        getGlobalAllocatedMemory())+"\n");
+  }
+  
+  /**
+   * Get instance allocated memory
+   * @return instance allocated memory
+   */
+  public long getInstanceAllocatedMemory() {
+    return allocatedMemory.get();
+  }
+  
+  /**
+   * Increment instance allocated memory
+   * @return allocated memory after increment
+   */
+  public long incrInstanceAllocatedMemory(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    // Increment global 
+    incrGlobalAllocatedMemory(incr);
+    // Increment instance
+    return allocatedMemory.addAndGet(incr);
+  }
+  
+  /**
+   * Get instance memory allocated for data blocks
+   * @return  memory allocated for data blocks
+   */
+  public long getInstanceBlockDataSize() {
+    return blockDataSize.get();
+  }
+  
+  /**
+   * Increment instance block data size - memory allocated for data blocks
+   * @return  block data size after increment
+   */
+  public long incrInstanceBlockDataSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    // Increment global
+    incrGlobalBlockDataSize(incr);
+    // Increment instance
+    return blockDataSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get instance memory which data occupies in data blocks
    * @return memory
    */
-  public static long getDataInDataBlocksSize() {
-    return totalDataInDataBlocksSize.get();
+  public long getInstanceDataInDataBlockSize() {
+    return dataInDataBlocksSize.get();
   }
   
   /**
-   * Get memory allocated for index blocks
+   * Increment instance data in data block size 
+   * @return data size in data block size after increment
+   */
+  public long incrInstanceDataInDataBlockSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    // Increment global
+    incrGlobalDataInDataBlockSize(incr);
+    return dataInDataBlocksSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get instance memory allocated for index blocks
    * @return memory
    */
-  public static long getTotalBlockIndexSize() {
-	  return totalBlockIndexSize.get();
+  public long getInstanceBlockIndexSize() {
+    return blockIndexSize.get();
   }
   
   /**
-   * Get total data size (uncompressed)
-   * @return size
+   * Increment instance memory allocated for index blocks
+   * @param incr increment value
+   * @return memory after increment
    */
-  public static long getTotalDataSize() {
-    return totalExternalDataSize.get() + totalDataInDataBlocksSize.get();
+  public long incrInstanceBlockIndexSize(long incr) {
+    //if (isStatsUpdatesDisabled()) return 0;
+    // Increment global
+    incrGlobalBlockIndexSize(incr);
+    // Increment instance
+    return blockIndexSize.addAndGet(incr);
   }
   
   /**
-   * Get total compressed data size
-   * @return size
+   * Get instance data size (uncompressed)
+   * @return  data size
    */
-  public static long getTotalCompressedDataSize() {
-    return  totalCompressedDataInDataBlocksSize.get();
+  public long getInstanceDataSize() {
+    return externalDataSize.get() + dataInDataBlocksSize.get();
+  }
+  
+  /**
+   * Get instance compressed data size
+   * @return  size of a compressed data
+   */
+  public long getInstanceCompressedDataSize() {
+    return  compressedDataInDataBlocksSize.get();
+  }
+  
+  /**
+   * Increment instance compressed data size
+   * @param incr increment value
+   * @return size of a compressed data after an increment
+   */
+  public long incrInstanceCompressedDataSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    // Increment global
+    incrGlobalCompressedDataSize(incr);
+    // Increment instance
+    return  compressedDataInDataBlocksSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get instance external data size
+   * @return  size of a compressed data
+   */
+  public long getInstanceExternalDataSize() {
+    return  externalDataSize.get();
+  }
+  
+  /**
+   * Increment instance external data size
+   * @param incr increment value
+   * @return size of a external data after an increment
+   */
+  public long incrInstanceExternalDataSize(long incr) {
+    if (isStatsUpdatesDisabled()) return 0;
+    // Increment global
+    incrGlobalExternalDataSize(incr);
+    // Increment instance
+    return  externalDataSize.addAndGet(incr);
+  }
+  
+  
+  /**
+   * Get instance index size
+   * @return global index size
+   */
+  public long getInstanceIndexSize() {
+    return indexSize.get();
+  }
+  
+  /**
+   * Increment instance index size
+   * @param incr increment value
+   * @return index size after an increment
+   */
+  public long incrInstanceIndexSize(long incr) {
+    //if (isStatsUpdatesDisabled()) return 0;
+    // Increment global
+    incrGlobalIndexSize(incr);
+    // Increment instance
+    return indexSize.addAndGet(incr);
+  }
+  
+  /**
+   * Get  memory which index occupies in index blocks
+   * @return  real index size
+   */
+  public long getInstanceDataInIndexBlocksSize() {
+    return dataInIndexBlocksSize.get();
+  }
+  
+  /**
+   * Increment instance memory which index occupies in index blocks
+   * @param incr increment value
+   * @return index size after an increment
+   */
+  
+  public long incrInstanceDataInIndexBlocksSize(long incr) {
+    //if (isStatsUpdatesDisabled()) return 0;
+    // Increment global
+    incrGlobalDataInIndexBlocksSize(incr);
+    // Increment instance
+    return dataInIndexBlocksSize.addAndGet(incr);
+  }
+  
+  private void adjustCountersAfterLoad() {
+    long loaded = blockIndexSize.get();
+    long addj = indexBlockSizeBeforeSnapshot - loaded;
+    allocatedMemory.addAndGet(-addj);
   }
   /**
-   * Get total index size
-   * @return size
+   * For testing ONLY
+   * @return dumps records in a HEX form and returns number of records
    */
-  public static long getTotalIndexSize() {
-    return totalIndexSize.get();
+  public long dumpRecords() {
+    BigSortedMapScanner scanner = getScanner(0, 0, 0, 0);
+    long count = 0;
+    if (scanner == null) {
+      return 0;
+    }
+    try {
+      while (scanner.hasNext()) {
+        count++;
+        long ptr = scanner.keyAddress();
+        int size = scanner.keySize();
+        System.out.println(Bytes.toHex(ptr, size));
+        scanner.next();
+      }
+    } catch (IOException e) {
+      return -1;
+    } finally {
+      try {
+        scanner.close();
+      } catch (IOException e) {
+      }
+    }
+    return count;
   }
+  
   /**
-   * Get total memory which index occupies in index blocks
-   * @return size
+   * Counts number of K-V records in a store
+   * @return number of records
    */
-  public static long getDataInIndexBlocksSize() {
-    return totalDataInIndexBlocksSize.get();
+  public long countRecords() {
+    BigSortedMapScanner scanner = getScanner(0, 0, 0, 0);
+    long count = 0;
+    if (scanner == null) {
+      return 0;
+    }
+    try {
+      while (scanner.hasNext()) {
+        count++;
+        scanner.next();
+      }
+    } catch (IOException e) {
+      return -1;
+    } finally {
+      try {
+        scanner.close();
+      } catch (IOException e) {
+      }
+    }
+    return count;
   }
-  
-  public static void printMemoryAllocationStats() {
-    System.out.println("\nCarrot memory allocation statistics:");
-    System.out.println("Total memory               :" + getTotalAllocatedMemory());
-    System.out.println("Total data blocks          :" + getTotalBlockDataSize());
-    System.out.println("Total data size            :" + getTotalDataSize());
-    System.out.println("Total data block usage     :" + ((double)getTotalDataSize())
-      /getTotalBlockDataSize());
-    System.out.println("Total index size           :" + getTotalBlockIndexSize());
-    System.out.println("Total compressed data size :" + getTotalCompressedDataSize());
-    System.out.println("Total external data size   :" + totalExternalDataSize.get());   
-    System.out.println("Copmpression ratio         :" + ((double)getTotalDataSize()/ 
-        getTotalAllocatedMemory())+"\n");
-  }
-  
-  /** 
-   * Gets maximum memory limit
+    
+  /**
+   * Dumps some useful stats
    */
-  public long getMaxMemory() {
-    return maxMemory;
-  }
-  
-  
   public void dumpStats() {
     long totalRows = 0;
     for(IndexBlock b: map.keySet()) {
@@ -424,7 +913,7 @@ public class BigSortedMap {
   }
   
   private void initNodes() {
-    IndexBlock b = new IndexBlock(maxIndexBlockSize);
+    IndexBlock b = new IndexBlock(this, maxIndexBlockSize);
     b.setFirstIndexBlock();
     map.put(b, b);
   }
@@ -437,7 +926,7 @@ public class BigSortedMap {
         if (keyBlock.get() != null) {
           return;
         } else {
-          IndexBlock b = new IndexBlock(maxIndexBlockSize);
+          IndexBlock b = new IndexBlock(this, maxIndexBlockSize);
           b.setThreadSafe(true);
           keyBlock.set(b);
         }
@@ -634,7 +1123,7 @@ public class BigSortedMap {
         } else { // PUT
           // This call compress data block in b
           result = b.put(keyPtr, keyLength, valuePtr, valueLength, version, op.getExpire(), reuseValue);
-          if (!result && getTotalAllocatedMemory() < maxMemory) {
+          if (!result && getGlobalAllocatedMemory() < getGlobalMemoryLimit()) {
             result = put(keyPtr, keyLength, valuePtr, valueLength,  op.getExpire(), reuseValue);
           } else if (!result) {
             // MAP is FULL
@@ -746,7 +1235,7 @@ public class BigSortedMap {
         }
         boolean result =
             b.put(keyPtr, keyLength, valuePtr, valueLength, version, expire, reuseValue);
-        if (!result && getTotalAllocatedMemory() < maxMemory) {
+        if (!result && getGlobalAllocatedMemory() < getGlobalMemoryLimit()) {
           IndexBlock bb = null;
           bb = b.split();
           // block into
@@ -1652,15 +2141,7 @@ public class BigSortedMap {
       for(IndexBlock b: map.keySet()) {
         b.free();
       }
-      map.clear();
-      
-//      totalAllocatedMemory.set(0);
-//      totalBlockDataSize.set(0);
-//      totalBlockIndexSize.set(0);
-//      totalExternalDataSize.set(0);
-//      totalIndexSize.set(0);
-//      totalDataInDataBlocksSize.set(0);
-//      totalDataInIndexBlocksSize.set(0);
+      map.clear();      
     }
   }
   
@@ -1694,11 +2175,12 @@ public class BigSortedMap {
     }
   };
   
-  // WRITE DATA
   
+  // WRITE DATA  
   public void snapshot() {
     RedisConf conf = RedisConf.getInstance();
-    String snapshotDir = conf.getSnapshotDir();
+    // Get snapshot directory for a current store
+    String snapshotDir = conf.getSnapshotDir(getStoreId());
     // Check if dir exists
     File dir = new File(snapshotDir);
     if (dir.exists() == false) {
@@ -1772,10 +2254,13 @@ public class BigSortedMap {
     // Close file
     try {
       // Drain buffer
-      buf.flip();
-      while(buf.hasRemaining()) {
-        fc.write(buf);
-      }      
+      IOUtils.drainBuffer(buf, fc);      
+      // Save last snapshot time to a snapshot file
+      long timestamp = System.currentTimeMillis();
+      buf.putLong(timestamp);
+      IOUtils.drainBuffer(buf, fc); 
+      // Update store's last snapshot time
+      setLastSnapshotTimestamp(timestamp);
       raf.close();
     } catch (IOException e) {
       System.err.println("WARNING! " + e.getMessage());
@@ -1784,8 +2269,6 @@ public class BigSortedMap {
     }
     
     System.out.println("Snapshot file created: " + snapshotFile.getAbsolutePath());
-    // Update last snapshot time
-    Server.updateLastSnapshotTime(this);
     
     // Delete old snapshot
     File oldSnapshotFile = new File(dir, "snapshot.data");
@@ -1805,13 +2288,15 @@ public class BigSortedMap {
 
 
   private void saveStoreMeta(FileChannel channel) throws IOException {
-    ByteBuffer buf = ByteBuffer.allocate(Utils.SIZEOF_LONG * 4);
-    // 1. maxMemory
-    buf.putLong(maxMemory);
-    buf.putLong(totalDataInDataBlocksSize.get());
-    buf.putLong(totalCompressedDataInDataBlocksSize.get());
-    buf.putLong(totalExternalDataSize.get());
-
+    ByteBuffer buf = ByteBuffer.allocate(Utils.SIZEOF_LONG * 7);
+    // 1. maxMemory we load from configuration file
+    buf.putLong(getGlobalMemoryLimit());
+    buf.putLong(getInstanceAllocatedMemory());
+    buf.putLong(getInstanceBlockDataSize());
+    buf.putLong(getInstanceBlockIndexSize());
+    buf.putLong(getInstanceCompressedDataSize());
+    buf.putLong(getInstanceDataInDataBlockSize());
+    buf.putLong(getInstanceExternalDataSize());
     buf.flip();
     while(buf.hasRemaining()) {
       channel.write(buf);
@@ -1824,10 +2309,10 @@ public class BigSortedMap {
   }
   
   // READ DATA
-  public static BigSortedMap loadStore() {
+  public static BigSortedMap loadStore(int storeId) {
     BigSortedMap map = null;
     RedisConf conf = RedisConf.getInstance();
-    String snapshotDir = conf.getSnapshotDir();
+    String snapshotDir = conf.getSnapshotDir(storeId);
     // Check if dir exists
     File dir = new File(snapshotDir);
     if (dir.exists() == false) {
@@ -1862,7 +2347,7 @@ public class BigSortedMap {
       DataBlock block = null;
       boolean first = true;
       do {
-        IndexBlock ib = new IndexBlock(maxIndexBlockSize);
+        IndexBlock ib = new IndexBlock(map, maxIndexBlockSize);
         if (first) {
           ib.isFirst = true;
           first = false;
@@ -1879,6 +2364,15 @@ public class BigSortedMap {
       } while (block != null);
       System.out
           .println("Loaded store from: " + snapshotFile.getAbsolutePath() + " at " + new Date());
+      
+      // Last read timestamp, buffer MUST have correct position
+      if (buf.remaining() < Utils.SIZEOF_LONG) {
+        IOUtils.ensureAvailable(fc, buf, Utils.SIZEOF_LONG);
+      }
+      long timestamp = buf.getLong();
+      map.setLastSnapshotTimestamp(timestamp);
+      map.setStoreId(storeId);
+      map.adjustCountersAfterLoad();
       return map;
     } catch (IOException e) {
       System.err.println(
@@ -1898,27 +2392,31 @@ public class BigSortedMap {
 
   private static BigSortedMap loadStoreMeta(FileChannel fc) throws IOException {
     BigSortedMap map;
-    int toRead = Utils.SIZEOF_LONG * 4;
+    int toRead = Utils.SIZEOF_LONG * 7;
     ByteBuffer buf = ByteBuffer.allocate(toRead);
-    int read = 0;
-    while( (read += fc.read(buf)) < toRead);
+    while(buf.remaining() > 0) {
+      int n = fc.read(buf);
+    }
     buf.flip();
-    
-    // 1. read max memory and 3 other counters
+    map = new BigSortedMap(false);    
     long value = buf.getLong();
-    map = new BigSortedMap(value, false);
+    // Set global memory limit TODO: this is mostly for testing
+    BigSortedMap.setGlobalMemoryLimit(value);
+    
     value = buf.getLong();
-    totalDataInDataBlocksSize.set(value);
+    map.allocatedMemory.set(value);
     value = buf.getLong();
-    totalCompressedDataInDataBlocksSize.set(value);
+    map.blockDataSize.set(value);
     value = buf.getLong();
-    totalExternalDataSize.set(value);
-    // 2.
-    BigSortedMap.totalAllocatedMemory.set(0);
-    BigSortedMap.totalBlockDataSize.set(0);
-    BigSortedMap.totalBlockIndexSize.set(0);
-    BigSortedMap.totalDataInIndexBlocksSize.set(0);   
-    BigSortedMap.totalIndexSize.set(0);
+    map.indexBlockSizeBeforeSnapshot = value;
+    
+    value = buf.getLong();
+    map.compressedDataInDataBlocksSize.set(value);
+    value = buf.getLong();
+    map.dataInDataBlocksSize.set(value);
+    value = buf.getLong();
+    map.externalDataSize.set(value);
+    
     return map;
   }
 }

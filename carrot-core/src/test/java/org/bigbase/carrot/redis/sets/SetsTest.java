@@ -115,7 +115,7 @@ public class SetsTest {
     for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -128,7 +128,7 @@ public class SetsTest {
     for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -141,7 +141,7 @@ public class SetsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -272,12 +272,12 @@ public class SetsTest {
       }
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     start = System.currentTimeMillis();
@@ -291,7 +291,7 @@ public class SetsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time exist="+(end -start)+"ms");
-    BigSortedMap.memoryStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
  
@@ -315,9 +315,9 @@ public class SetsTest {
       }
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
     System.out.println("Deleting keys ...");
@@ -337,7 +337,7 @@ public class SetsTest {
     System.out.println("Deleted " + n + " in " + (end - start)+"ms. Count="+ recc);
     
     assertEquals(0, (int)recc);
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
   }
   
   @Ignore
@@ -359,12 +359,12 @@ public class SetsTest {
       }
     }
     long end = System.currentTimeMillis();
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + valSize+ " byte values. Overhead="+ 
-        ((double)BigSortedMap.getTotalAllocatedMemory()/n - valSize)+
+        ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valSize)+
     " bytes per value. Time to load: "+(end -start)+"ms");
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     assertEquals(n, Sets.SCARD(map, key.address, key.length));
     start = System.currentTimeMillis();
@@ -374,14 +374,14 @@ public class SetsTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Time exist="+(end -start)+"ms");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
-    assertEquals(0, (int)BigSortedMap.countRecords(map));
+    assertEquals(0, (int)map.countRecords());
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
     //TODO 
     Sets.DELETE(map, key.address, key.length);
     assertEquals(0, (int)Sets.SCARD(map, key.address, key.length));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
   }
   
@@ -408,9 +408,9 @@ public class SetsTest {
     }
     long end = System.currentTimeMillis();
     System.out.println("Loaded in " + (end - start)+"ms. Mem usage for 1 int="+ 
-       ((double)BigSortedMap.getTotalAllocatedMemory())/n+ " dups="+ duplicates);
+       ((double)BigSortedMap.getGlobalAllocatedMemory())/n+ " dups="+ duplicates);
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     map.dumpStats();
     assertEquals(n, (int)Sets.SCARD(map, keyPtr, keySize));
     map.dispose();

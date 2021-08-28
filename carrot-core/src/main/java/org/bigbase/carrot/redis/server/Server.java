@@ -255,17 +255,7 @@ public class Server {
    * @return UNIX time stamp
    */
   public static long LASTSAVE(BigSortedMap map) {
-    long ptr = LASTSAVE_KEY;
-    int size = LASTSAVE_LENGTH;
-    size = buildKey(ptr, size);
-    ptr = keyArena.get();
-    
-    long result = map.get(ptr, size, valueArena.get(), valueArenaSize.get(), 0);
-    if (result < 0) {
-      return -1;// not found
-    }
-    
-    return UnsafeAccess.toLong(valueArena.get());
+    return map.getLastSnapshotTimestamp();
   }
   
   /**

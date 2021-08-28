@@ -131,9 +131,9 @@ public class AtomicAppendTestMT {
         map.dumpStats();
         System.out.println("Time to load= "+ totalLoaded+" and to append =" 
             + totalAppends+"="+(end -start)+"ms");
-        System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-        System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-        System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+        System.out.println("Total memory="+BigSortedMap.getGlobalAllocatedMemory());
+        System.out.println("Total   data="+BigSortedMap.getGlobalBlockDataSize());
+        System.out.println("Total  index=" + BigSortedMap.getGlobalBlockIndexSize());
       } finally {
         if (map != null) {
           map.dispose();

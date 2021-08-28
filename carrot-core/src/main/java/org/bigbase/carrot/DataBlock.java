@@ -73,10 +73,11 @@ public final class DataBlock  {
   public static interface DeAllocator {  
     /**
      * Custom deallocator must deallocate ALL additional data (except key-value)
+     * @param store store to free, need this to report freed memory correctly
      * @param recordAddress address of a key-value record
      * @return true if it was processed, false - otherwise
      */
-    public boolean free(long recordAddress);
+    public boolean free(BigSortedMap store, long recordAddress);
     
     /**
      * Checks if this particular record must be processed by this allocator
@@ -300,7 +301,7 @@ public final class DataBlock  {
       int size  = type == AllocType.EXT_VALUE? toRead: 2 * Utils.SIZEOF_INT + toRead;
       long ptr = UnsafeAccess.malloc(size);
       // Update memory stats
-      BigSortedMap.totalAllocatedMemory.addAndGet(size);
+      BigSortedMap.incrGlobalAllocatedMemory(size);
       if (type == AllocType.EXT_KEY_VALUE) {
         UnsafeAccess.putInt(ptr, keySize);
         UnsafeAccess.putInt(ptr + Utils.SIZEOF_INT, valueSize);
@@ -706,13 +707,20 @@ public final class DataBlock  {
    * Create new block with a given size (memory allocation)
    * @param size of a block
    */
-  DataBlock(int size) {
+  DataBlock(IndexBlock indexBlock, int size) {
+    this.indexBlock = indexBlock;
     this.dataPtr = UnsafeAccess.malloc(size);
     if (dataPtr == 0) {
       throw new RuntimeException("Failed to allocate " + size + " bytes");
     }
-    BigSortedMap.totalAllocatedMemory.addAndGet(size);
-    BigSortedMap.totalBlockDataSize.addAndGet(size);
+    if (indexBlock == null || indexBlock.getMap() == null) {
+      BigSortedMap.incrGlobalAllocatedMemory(size);
+      BigSortedMap.incrGlobalBlockDataSize(size);
+    } else {
+      BigSortedMap map = indexBlock.getMap();
+      map.incrInstanceAllocatedMemory(size);
+      map.incrInstanceBlockDataSize(size);
+    }
     this.blockSize = (short) size;
   }
 
@@ -832,9 +840,17 @@ public final class DataBlock  {
       if (size + Utils.SIZEOF_INT < getDataInBlockSize()) {
         short newBlockSize = (short)getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, size + Utils.SIZEOF_INT);
         // Update memory stats
-        BigSortedMap.totalBlockDataSize.addAndGet(newBlockSize - blockSize);
-        BigSortedMap.totalAllocatedMemory.addAndGet(newBlockSize - blockSize);
-        BigSortedMap.totalCompressedDataInDataBlocksSize.addAndGet(size + Utils.SIZEOF_INT - this.compDataSize);
+        
+        BigSortedMap map = indexBlock.getMap();
+        if (map != null) {
+          map.incrInstanceAllocatedMemory(newBlockSize - blockSize);
+          map.incrInstanceBlockDataSize(newBlockSize - blockSize);
+          map.incrInstanceCompressedDataSize(size + Utils.SIZEOF_INT - this.compDataSize);
+        } else {
+          BigSortedMap.incrGlobalBlockDataSize(newBlockSize - blockSize);
+          BigSortedMap.incrGlobalAllocatedMemory(newBlockSize - blockSize); 
+          BigSortedMap.incrGlobalCompressedDataSize(size + Utils.SIZEOF_INT - this.compDataSize);
+        }
         if (wasCompressed && newBlockSize != blockSize) {
           blockSize = newBlockSize;
           ptr = UnsafeAccess.malloc(blockSize);    
@@ -866,9 +882,16 @@ public final class DataBlock  {
           UnsafeAccess.copy(this.dataPtr, ptr, size);
           UnsafeAccess.free(this.compressedDataPtr);
           // Update memory stats
-          BigSortedMap.totalBlockDataSize.addAndGet(newBlockSize - blockSize);
-          BigSortedMap.totalAllocatedMemory.addAndGet(newBlockSize - blockSize);
-          BigSortedMap.totalCompressedDataInDataBlocksSize.addAndGet(- this.compDataSize);
+          BigSortedMap map = indexBlock.getMap();
+          if (map != null) {
+            map.incrInstanceAllocatedMemory(newBlockSize - blockSize);
+            map.incrInstanceBlockDataSize(newBlockSize - blockSize);
+            map.incrInstanceCompressedDataSize(- this.compDataSize);
+          } else {
+            BigSortedMap.incrGlobalBlockDataSize(newBlockSize - blockSize);
+            BigSortedMap.incrGlobalAllocatedMemory(newBlockSize - blockSize);
+            BigSortedMap.incrGlobalCompressedDataSize(- this.compDataSize);
+          }
           blockSize = newBlockSize;
         }       
         // disable compression
@@ -1071,7 +1094,7 @@ public final class DataBlock  {
   }
 
   private boolean detached() {
-    return this.indexBlock == null;
+    return this.indexPtr == 0;
   }
   
   /**
@@ -1128,7 +1151,12 @@ public final class DataBlock  {
     short v = getDataInBlockSize();
     setDataInBlockSize((short) (v + val));
     if (!isThreadSafe()) {
-      BigSortedMap.totalDataInDataBlocksSize.addAndGet(val);
+      BigSortedMap map = this.indexBlock.getMap();
+      if (map == null) {
+        BigSortedMap.incrGlobalDataInDataBlockSize(val);
+      } else {
+        map.incrInstanceDataInDataBlockSize(val);
+      }
     }
   }
 
@@ -1384,8 +1412,15 @@ public final class DataBlock  {
     if (newPtr <= 0) {
       return false;
     }
-    BigSortedMap.totalAllocatedMemory.addAndGet(nextSize - blockSize);
-    BigSortedMap.totalBlockDataSize.addAndGet(nextSize - blockSize);
+    
+    BigSortedMap map = indexBlock.getMap();
+    if (map != null) {
+      map.incrInstanceAllocatedMemory(nextSize - blockSize);
+      map.incrInstanceBlockDataSize(nextSize - blockSize);
+    } else {
+      BigSortedMap.incrGlobalAllocatedMemory(nextSize - blockSize);
+      BigSortedMap.incrGlobalBlockDataSize(nextSize - blockSize);
+    }
     // Do copy
     UnsafeAccess.copy(dataPtr, newPtr, dataSize);
     // DO not free local thread buffer
@@ -1424,8 +1459,15 @@ public final class DataBlock  {
     if (newPtr <= 0) {
       return false;
     }
-    BigSortedMap.totalAllocatedMemory.addAndGet(nextSize - blockSize);
-    BigSortedMap.totalBlockDataSize.addAndGet(nextSize - blockSize);
+    
+    BigSortedMap map = indexBlock.getMap();
+    if (map != null) {
+      map.incrInstanceAllocatedMemory(nextSize - blockSize);
+      map.incrInstanceBlockDataSize(nextSize - blockSize);
+    } else {
+      BigSortedMap.incrGlobalAllocatedMemory(nextSize - blockSize);
+      BigSortedMap.incrGlobalBlockDataSize(nextSize - blockSize);
+    }
     // Do copy
     UnsafeAccess.copy(dataPtr, newPtr, dataSize);
     UnsafeAccess.free(dataPtr);
@@ -1483,8 +1525,16 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
-    BigSortedMap.totalExternalDataSize.addAndGet(keyLength + valueLength + 2 * INT_SIZE);
+    
+    BigSortedMap map = this.indexBlock.getMap();
+    if (map == null) {
+      BigSortedMap.incrGlobalAllocatedMemory(keyLength + valueLength + 2 * INT_SIZE);
+      BigSortedMap.incrGlobalExternalDataSize(keyLength + valueLength + 2 * INT_SIZE);
+    } else {
+      map.incrInstanceAllocatedMemory(keyLength + valueLength + 2 * INT_SIZE);
+      map.incrInstanceExternalDataSize(keyLength + valueLength + 2 * INT_SIZE);
+    }
+    
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
@@ -1517,8 +1567,16 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(keyLength + valueLength - vLen - kLen);
-    BigSortedMap.totalExternalDataSize.addAndGet(keyLength + valueLength  - vLen - kLen);
+    
+    BigSortedMap map = this.indexBlock.getMap();
+    if (map == null) {
+      BigSortedMap.incrGlobalAllocatedMemory(keyLength + valueLength - vLen - kLen);
+      BigSortedMap.incrGlobalExternalDataSize(keyLength + valueLength  - vLen - kLen);
+    } else {
+      map.incrInstanceAllocatedMemory(keyLength + valueLength - vLen - kLen);
+      map.incrInstanceExternalDataSize(keyLength + valueLength  - vLen - kLen);
+    }
+    
     UnsafeAccess.putInt(recAddress, keyLength);
     UnsafeAccess.putInt(recAddress + INT_SIZE, valueLength);
     UnsafeAccess.copy(keyPtr, recAddress + 2 * INT_SIZE, keyLength);
@@ -1533,9 +1591,14 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength /*+ INT_SIZE*/);
-    //TODO dataSize ?
-    BigSortedMap.totalExternalDataSize.addAndGet(valueLength /*+ INT_SIZE*/);
+    BigSortedMap map = this.indexBlock.getMap();
+    if (map == null) {
+      BigSortedMap.incrGlobalAllocatedMemory(valueLength /*+ INT_SIZE*/);
+      BigSortedMap.incrGlobalExternalDataSize(valueLength /*+ INT_SIZE*/);
+    } else {
+      map.incrInstanceAllocatedMemory(valueLength /*+ INT_SIZE*/);
+      map.incrInstanceExternalDataSize(valueLength /*+ INT_SIZE*/);
+    }
    // UnsafeAccess.putInt(recAddress , valueLength);
     UnsafeAccess.copy(valuePtr, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
@@ -1554,9 +1617,21 @@ public final class DataBlock  {
       return UnsafeAccess.MALLOC_FAILED;
     }
     largeKVs.incrementAndGet();
-    BigSortedMap.totalAllocatedMemory.addAndGet(valueLength -vLen/*+ INT_SIZE*/);
-    //TODO dataSize ?
-    BigSortedMap.totalExternalDataSize.addAndGet(valueLength -vLen/*+ INT_SIZE*/);
+    
+//    BigSortedMap.incrGlobalAllocatedMemory(valueLength -vLen/*+ INT_SIZE*/);
+//    //TODO dataSize ?
+//    BigSortedMap.globalExternalDataSize.addAndGet(valueLength -vLen/*+ INT_SIZE*/);
+    
+    
+    BigSortedMap map = this.indexBlock.getMap();
+    if (map == null) {
+      BigSortedMap.incrGlobalAllocatedMemory(valueLength -vLen/*+ INT_SIZE*/);
+      BigSortedMap.incrGlobalExternalDataSize(valueLength -vLen/*+ INT_SIZE*/);
+    } else {
+      map.incrInstanceAllocatedMemory(valueLength -vLen/*+ INT_SIZE*/);
+      map.incrInstanceExternalDataSize(valueLength -vLen/*+ INT_SIZE*/);
+    }
+    
     //UnsafeAccess.putInt(recAddress , valueLength);
     UnsafeAccess.copy(valuePtr, recAddress /*+ INT_SIZE*/, valueLength);
     return recAddress;
@@ -2877,8 +2952,17 @@ public final class DataBlock  {
         (2 * INT_SIZE): valueLength(ptr);
     UnsafeAccess.free(getExternalRecordAddress(ptr));
     largeKVs.decrementAndGet();
-    BigSortedMap.totalExternalDataSize.addAndGet(-size);
-    BigSortedMap.totalAllocatedMemory.addAndGet(-size);
+//    BigSortedMap.globalExternalDataSize.addAndGet(-size);
+//    BigSortedMap.incrGlobalAllocatedMemory(-size);
+    
+    BigSortedMap map = this.indexBlock.getMap();
+    if (map == null) {
+      BigSortedMap.incrGlobalAllocatedMemory(-size);
+      BigSortedMap.incrGlobalExternalDataSize(-size);
+    } else {
+      map.incrInstanceAllocatedMemory(-size);
+      map.incrInstanceExternalDataSize(-size);
+    }
     
   }
     
@@ -2933,7 +3017,7 @@ public final class DataBlock  {
       setNumberOfRecords((short)num);
       int rightDataSize = oldDataSize - off;
       int rightBlockSize = getMinSizeGreaterOrEqualsThan(getBlockSize(), rightDataSize);
-      DataBlock right = new DataBlock((short)rightBlockSize);
+      DataBlock right = new DataBlock(this.indexBlock, (short)rightBlockSize);
 
       right.numRecords = (short)(oldNumRecords - num);
       right.dataInBlockSize = (short)rightDataSize;
@@ -3136,6 +3220,7 @@ public final class DataBlock  {
     int count = 0;
     int blockSize = getBlockSize();
     int numRecords = getNumberOfRecords();
+    BigSortedMap map = this.indexBlock.getMap();
 
     decompressDataBlockIfNeeded();
 
@@ -3150,7 +3235,7 @@ public final class DataBlock  {
       int keylen = blockKeyLength(ptr);
       int vallen = blockValueLength(ptr);
       if (keylen > 1 && runCustomDeallocs) {
-        runCustomDeallocators(ptr);
+        runCustomDeallocators(map, ptr);
       }
       
       AllocType type = getRecordAllocationType(ptr);
@@ -3158,38 +3243,55 @@ public final class DataBlock  {
         long addr = getExternalRecordAddress(ptr);
         long size = getExternalAllocationSize(ptr, type);
         UnsafeAccess.free(addr);
-        BigSortedMap.totalAllocatedMemory.addAndGet(-size);
-        BigSortedMap.totalExternalDataSize.addAndGet(-size);
+        if (map == null) {
+          BigSortedMap.incrGlobalAllocatedMemory(-size);
+          BigSortedMap.incrGlobalExternalDataSize(-size);
+        } else {
+          map.incrInstanceAllocatedMemory(-size);
+          map.incrInstanceExternalDataSize(-size);
+        }
         largeKVs.decrementAndGet();
       }
       ptr += keylen + vallen + RECORD_TOTAL_OVERHEAD;
     }
 
-    BigSortedMap.totalDataInDataBlocksSize.addAndGet(-dataSize);
-
+    if (map == null) {
+      BigSortedMap.incrGlobalDataInDataBlockSize(-dataSize);
+    } else {
+      map.incrInstanceDataInDataBlockSize(-dataSize);
+    }
     valid = false;
 
     if (this.compressedDataPtr > 0) {
       UnsafeAccess.free(this.compressedDataPtr);
-      BigSortedMap.totalCompressedDataInDataBlocksSize.addAndGet(-this.compDataSize);
+      if (map == null) {
+        BigSortedMap.incrGlobalCompressedDataSize(-this.compDataSize);
+      } else {
+        map.incrInstanceCompressedDataSize(-this.compDataSize);
+      }
       blockSize = this.compDataBlockSize;
     } else if (dataPtr != decompBuffer1.get() && dataPtr != decompBuffer2.get()){
       UnsafeAccess.free(dataPtr);
     } else {
       return;
     }
-    BigSortedMap.totalAllocatedMemory.addAndGet(-blockSize);
-    BigSortedMap.totalBlockDataSize.addAndGet(-blockSize);
-
+    
+    if (map != null) {
+      map.incrInstanceAllocatedMemory(-blockSize);
+      map.incrInstanceBlockDataSize(-blockSize);
+    } else {
+      BigSortedMap.incrGlobalAllocatedMemory(-blockSize);
+      BigSortedMap.incrGlobalBlockDataSize(-blockSize);
+    }
   }
 
-  private void runCustomDeallocators(long ptr) {
+  private void runCustomDeallocators(BigSortedMap map, long ptr) {
     synchronized (customDeallocators) {
       int num = customDeallocators.size();
       for (int i = 0; i < num; i++) {
         DeAllocator cd = customDeallocators.get(i);
         if (cd.isCustomRecord(ptr)) {
-          boolean result = cd.free(ptr);
+          boolean result = cd.free(map, ptr);
           if (result) break;
         }
       }
@@ -3385,8 +3487,13 @@ public final class DataBlock  {
       while (true) {
         n = fc.read(buf);
         if (n == -1) {
-          if (read == 0) { return null; } // End-Of-Stream
-          else { throw new IOException("Unexpected End-Of-Stream"); }
+          if (read == Utils.SIZEOF_LONG /* last 8 bytes are timestamp*/) { 
+            buf.flip();
+            return null; 
+          } // End-Of-Stream
+          else { 
+            throw new IOException("Unexpected End-Of-Stream"); 
+          }
         }
         read += n;
         if (read >= meta_block_size) {
@@ -3405,7 +3512,7 @@ public final class DataBlock  {
 
     int blockSize = getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, dataSize);
 
-    DataBlock block = new DataBlock(blockSize);
+    DataBlock block = new DataBlock(null, blockSize);
     block.numRecords = numRecords;
     block.dataInBlockSize = dataSize;
     block.numExtAllocs = numExtAllocs;
@@ -3432,26 +3539,7 @@ public final class DataBlock  {
       } else {
         //TODO
         // THIS SHOULD NOT HAPPEN B/C our buffer is larger than typical data block ( < 4kb)
-        // Temporary buffer
-//        ByteBuffer bbuf = ByteBuffer.allocate(blockSize);
-//        buf.put(bbuf);
-//        // clear original
-//        buf.clear();
-//        buf.limit(0);
-//        int read = bbuf.position();
-//        int n = 0;
-//        while (true) {
-//          n = fc.read(bbuf);
-//          if (n == -1) throw new IOException("Unexpected End-Of-Stream");
-//          read += n;
-//          if (read >= dataSize) {
-//            // We will read from position 0
-//            bbuf.flip();
-//            // TODO: limit?
-//            buf = bbuf;
-//            break;
-//          }
-//        }
+        throw new IOException("Corrupted stream, data block size is "+ dataSize+ " which is greater than maximum of 8KB");
       }
     }
     // Load block data blob

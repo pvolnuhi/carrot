@@ -17,6 +17,7 @@
  */
 package org.bigbase.carrot.redis;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Properties;
@@ -177,11 +178,20 @@ public class RedisConf {
   }
   
   /**
-   * Get snapshot directory
+   * Get snapshot directory (global)
    * @return snapshot directory
    */
   public String getSnapshotDir() {
     return props.getProperty(CONF_SNAPSHOT_DIR_PATH, DEFAULT_SNAPSHOT_DIR_PATH);
+  }
+  
+  /**
+   * Get snapshot directory for the store ID 
+   * @param storeId store ID
+   * @return path as a string
+   */
+  public String getSnapshotDir(int storeId) {
+    return getSnapshotDir() + File.separator + storeId;
   }
   
   /**

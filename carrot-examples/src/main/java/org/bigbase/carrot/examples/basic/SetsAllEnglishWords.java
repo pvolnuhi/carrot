@@ -132,7 +132,7 @@ public class SetsAllEnglishWords {
     System.out.println("COMPRESSION="+ ((double) totalLength) / UnsafeAccess.getAllocatedMemory());
     dis.close();
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     for(Key key: keys) {
       Sets.DELETE(map, key.address, key.length);
     }

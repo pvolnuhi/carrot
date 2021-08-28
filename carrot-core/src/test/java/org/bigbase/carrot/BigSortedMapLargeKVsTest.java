@@ -50,6 +50,9 @@ public class BigSortedMapLargeKVsTest {
   private  void setUp() throws IOException {
     BigSortedMap.setMaxBlockSize(4096);
     map = new BigSortedMap(100000000);
+    System.out.println("After map creation:");
+    map.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     totalLoaded = 0;
     long start = System.currentTimeMillis();
     keys = fillMap(map);
@@ -71,16 +74,18 @@ public class BigSortedMapLargeKVsTest {
     long scanned = verifyScanner(scanner, keys);
     scanner.close();
     System.out.println("Scanned="+ scanned);
-    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data="+BigSortedMap.getTotalBlockDataSize());
-    System.out.println("Total  index=" + BigSortedMap.getTotalBlockIndexSize());
+    System.out.println("Total memory="+BigSortedMap.getGlobalAllocatedMemory());
+    System.out.println("Total   data="+BigSortedMap.getGlobalBlockDataSize());
+    System.out.println("Total  index=" + BigSortedMap.getGlobalBlockIndexSize());
     assertEquals(totalLoaded, scanned);
   }
   
   
   private void tearDown() {
+    map.printMemoryAllocationStats();
     map.dispose();
-    // Free keyes
+    map.printMemoryAllocationStats();
+    // Free keys
     deallocate(keys);
   }
   
@@ -94,16 +99,17 @@ public class BigSortedMapLargeKVsTest {
   @Test
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("\n********* " + i+" ********** Codec = NONE\n");
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
   
+  @Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
@@ -112,11 +118,12 @@ public class BigSortedMapLargeKVsTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
   
+  @Ignore
   @Test
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
@@ -125,7 +132,7 @@ public class BigSortedMapLargeKVsTest {
       setUp();
       allTests();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
   }
@@ -423,7 +430,7 @@ public class BigSortedMapLargeKVsTest {
       boolean res = map.put(key.address, key.length, key.address, key.length, 0);
       if (res == false) {
         System.out.println("Count = "+count+" total="+ keys.size()+" memory ="+ 
-      BigSortedMap.getTotalAllocatedMemory());
+      BigSortedMap.getGlobalAllocatedMemory());
       }
       assertTrue(res);
     }
@@ -502,6 +509,7 @@ public class BigSortedMapLargeKVsTest {
     System.out.println("FILL SEED="+seed);
     int maxSize = 2048;
     boolean result = true;
+    long total = 0;
     while(true) {
       int len = r.nextInt(maxSize-16) + 16;
       byte[] key = new byte[len];
@@ -511,13 +519,15 @@ public class BigSortedMapLargeKVsTest {
       long keyPtr = UnsafeAccess.malloc(len);
       UnsafeAccess.copy(key, 0, keyPtr, len);
       result = map.put(keyPtr, len, keyPtr, len,  0);
+      total += 2 * len;
       if(result) {
         keys.add(new Key(keyPtr, len));
       } else {
         UnsafeAccess.free(keyPtr);
         break;
       }
-    }   
+    }
+    System.out.println("Loaded " + keys.size() + " records, size=" + total + " limit="+ BigSortedMap.getGlobalMemoryLimit());
     return keys;
   }
   

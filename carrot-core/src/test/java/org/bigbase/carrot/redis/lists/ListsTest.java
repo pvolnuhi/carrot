@@ -33,7 +33,6 @@ import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.bigbase.carrot.util.Value;
-import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -107,7 +106,7 @@ public class ListsTest {
     UnsafeAccess.free(key.address);
     UnsafeAccess.free(buffer);
     values.stream().forEach( x -> UnsafeAccess.free(x.address));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
   }
   
@@ -119,7 +118,7 @@ public class ListsTest {
     for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -132,7 +131,7 @@ public class ListsTest {
     for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -145,7 +144,7 @@ public class ListsTest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -168,54 +167,54 @@ public class ListsTest {
     testDeallocator();
     tearDown();
     
-    setUp();
-    testLREM();
-    tearDown();
-    setUp();
-    testLRANGE();
-    tearDown();
-    setUp();
-    testLINSERT();
-    tearDown();
-    setUp();
-    testLSET();
-    tearDown();
-    setUp();
-    testRPOPLPUSH();
-    tearDown();
-    setUp();
-    testLMOVE();
-    tearDown();
-    setUp();
-    testLPUSHX();
-    tearDown();
-    setUp();
-    testRPUSHX();
-    tearDown();
-    setUp();
-    testLindexEdgeCases();
-    tearDown();
-    setUp();
-    testLPUSHLINDEX();
-    tearDown();
-    setUp();
-    testLPUSHLPOP();
-    tearDown();
-    setUp();
-    testLPUSHRPOP();
-    tearDown();
-    setUp();
-    testLRMIX();
-    tearDown();
-    setUp();
-    testRPUSHLINDEX();
-    tearDown();
-    setUp();
-    testRPUSHLPOP();
-    tearDown();
-    setUp();
-    testRPUSHRPOP(); 
-    tearDown();
+//    setUp();
+//    testLREM();
+//    tearDown();
+//    setUp();
+//    testLRANGE();
+//    tearDown();
+//    setUp();
+//    testLINSERT();
+//    tearDown();
+//    setUp();
+//    testLSET();
+//    tearDown();
+//    setUp();
+//    testRPOPLPUSH();
+//    tearDown();
+//    setUp();
+//    testLMOVE();
+//    tearDown();
+//    setUp();
+//    testLPUSHX();
+//    tearDown();
+//    setUp();
+//    testRPUSHX();
+//    tearDown();
+//    setUp();
+//    testLindexEdgeCases();
+//    tearDown();
+//    setUp();
+//    testLPUSHLINDEX();
+//    tearDown();
+//    setUp();
+//    testLPUSHLPOP();
+//    tearDown();
+//    setUp();
+//    testLPUSHRPOP();
+//    tearDown();
+//    setUp();
+//    testLRMIX();
+//    tearDown();
+//    setUp();
+//    testRPUSHLINDEX();
+//    tearDown();
+//    setUp();
+//    testRPUSHLPOP();
+//    tearDown();
+//    setUp();
+//    testRPUSHRPOP(); 
+//    tearDown();
   }
   
   
@@ -237,7 +236,7 @@ public class ListsTest {
       assertEquals(i + 1, (int) len);
     }
     System.out.println("Before BSM.dispose:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
     System.out.println("After BSM.dispose:");
     assertEquals(n, (int) Lists.LLEN(map, key.address, key.length));
@@ -271,7 +270,7 @@ public class ListsTest {
     }
        
     System.out.println("After loading large values:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
     
     for(int i = 0; i < n; i++) {
@@ -318,7 +317,8 @@ public class ListsTest {
     }
        
     System.out.println("Before BSM.dispose:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
     
     System.out.println("Taking snapshot");
@@ -326,12 +326,19 @@ public class ListsTest {
     map.dispose();
     
     System.out.println("After BSM.dispose:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
-    map = BigSortedMap.loadStore();
     
+    // Loading store from snapshot
+    BigSortedMap.setStatsUpdatesDisabled(true);
+    map = BigSortedMap.loadStore(0);
+    BigSortedMap.setStatsUpdatesDisabled(false);
+    map.syncStatsToGlobal();
+    // Data is ready
     System.out.println("Load snapshot");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
     // Verify data after load snapshot
     for(int i = 0; i < n; i++) {
@@ -342,6 +349,9 @@ public class ListsTest {
       assertEquals(largeSize, size);
       assertEquals( 0, Utils.compareTo(bufPtr, size, largePtr, largeSize));
     }
+    UnsafeAccess.free(bufPtr);
+    UnsafeAccess.free(largePtr);
+  
   }
   
   @Ignore
@@ -361,19 +371,28 @@ public class ListsTest {
     }
        
     System.out.println("Before BSM.dispose:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
+    
     UnsafeAccess.mallocStats.printStats();
     
     System.out.println("Taking snapshot");
     map.snapshot();
     map.dispose();
     System.out.println("After BSM.dispose:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats();
-    map = BigSortedMap.loadStore();
+    
+    BigSortedMap.setStatsUpdatesDisabled(true);
+    map = BigSortedMap.loadStore(0);
+    BigSortedMap.setStatsUpdatesDisabled(false);
+    map.syncStatsToGlobal();
     
     System.out.println("Load snapshot");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
+    
     UnsafeAccess.mallocStats.printStats();
     long buffer = UnsafeAccess.malloc(valueSize);
     for(int i = 0; i < n; i++) {
@@ -381,6 +400,7 @@ public class ListsTest {
       assertEquals(valueSize, size);
       assertEquals( 0, Utils.compareTo(buffer, valueSize, values.get(i).address, values.get(i).length));
     }
+    UnsafeAccess.free(buffer);
   }
   
   @Ignore
@@ -410,8 +430,8 @@ public class ListsTest {
       assertEquals(i + 1, (int) len);
     }
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + valueSize + " byte values. Overhead="+ ((double)BigSortedMap.getTotalAllocatedMemory()/n - valueSize)+
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
+    + " for "+ n + " " + valueSize + " byte values. Overhead="+ ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valueSize)+
     " bytes per value");
     assertEquals(n, (int) Lists.LLEN(map, key.address, key.length));
     
@@ -455,8 +475,8 @@ public class ListsTest {
       assertEquals(i + 1, (int) len);
     }
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + valueSize + " byte values. Overhead="+ ((double)BigSortedMap.getTotalAllocatedMemory()/n - valueSize)+
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
+    + " for "+ n + " " + valueSize + " byte values. Overhead="+ ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valueSize)+
     " bytes per value");
     assertEquals(n, (int) Lists.LLEN(map, key.address, key.length));
     
@@ -488,8 +508,8 @@ public class ListsTest {
       assertEquals(i + 1, (int) len);
     }
     
-    System.out.println("Total allocated memory ="+ BigSortedMap.getTotalAllocatedMemory() 
-    + " for "+ n + " " + valueSize + " byte values. Overhead="+ ((double)BigSortedMap.getTotalAllocatedMemory()/n - valueSize)+
+    System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
+    + " for "+ n + " " + valueSize + " byte values. Overhead="+ ((double)BigSortedMap.getGlobalAllocatedMemory()/n - valueSize)+
     " bytes per value");
     assertEquals(n, (int) Lists.LLEN(map, key.address, key.length));
     

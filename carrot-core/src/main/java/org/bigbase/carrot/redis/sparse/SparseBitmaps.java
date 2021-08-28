@@ -225,7 +225,7 @@ public class SparseBitmaps {
       UnsafeAccess.free(chunkAddress);
       // Update memory stats
       //TODO: make sure that 
-      BigSortedMap.totalAllocatedMemory.addAndGet(-CHUNK_SIZE);
+      BigSortedMap.incrGlobalAllocatedMemory(-CHUNK_SIZE);
     }
     return compSize;
   }

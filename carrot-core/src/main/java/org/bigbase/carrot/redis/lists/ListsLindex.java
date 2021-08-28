@@ -88,7 +88,8 @@ public class ListsLindex extends Operation {
       return false;
     }
     Segment s = segment.get();
-    s.setDataPointer(ptr);
+    //TODO: is it safe?
+    s.setDataPointerAndParentMap(null, ptr);
     int off = Lists.findSegmentForIndex(s, index);
     if (off < 0) {
       return false; // Index is too big

@@ -155,7 +155,7 @@ public class DataBlockTest extends DataBlockTestBase {
     int totalDataSize = b.getDataInBlockSize();
     DataBlock bb = b.split(true);
     
-    IndexBlock ib = new IndexBlock(4096);
+    IndexBlock ib = new IndexBlock(null, 4096);
     bb.register(ib, 0);
     
     
@@ -186,7 +186,7 @@ public class DataBlockTest extends DataBlockTestBase {
     int totalKVs = keys.size();
     int totalDataSize = b.getDataInBlockSize();
     DataBlock bb = b.split(true);
-    IndexBlock ib = new IndexBlock(4096);
+    IndexBlock ib = new IndexBlock(null, 4096);
     bb.register(ib, 0);
     
     // +1 is system key in a first block
@@ -550,7 +550,7 @@ public class DataBlockTest extends DataBlockTestBase {
         keys.add(new Key(ptr, keyLength));
       }
     }
-    System.out.println("M: "+ BigSortedMap.getTotalAllocatedMemory() +" D:"+BigSortedMap.getTotalDataSize());
+    System.out.println("M: "+ BigSortedMap.getGlobalAllocatedMemory() +" D:"+BigSortedMap.getGlobalDataSize());
     return keys;
   }
   

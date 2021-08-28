@@ -163,7 +163,7 @@ public class HashesAtomicCounters {
     System.out.println("Loaded " + keys.size() +" long counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
       + (endTime - startTime) + "ms.");
 
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats.printStats(false);
         
     count = 0;
@@ -194,7 +194,7 @@ public class HashesAtomicCounters {
     }
     
     map.dispose();
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
   }
 

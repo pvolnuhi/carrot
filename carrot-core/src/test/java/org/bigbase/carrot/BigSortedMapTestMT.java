@@ -101,7 +101,7 @@ public class BigSortedMapTestMT {
       for (int i = 0; i < num; i++) {
         double d = r.nextDouble();
         boolean result = false;
-        if (BigSortedMap.getTotalAllocatedMemory() < 0.99 * map.getMaxMemory()) {
+        if (BigSortedMap.getGlobalAllocatedMemory() < 0.99 * BigSortedMap.getGlobalMemoryLimit()) {
           if (d < 0.30) {
             result = put();
             if (!result) {
@@ -170,8 +170,8 @@ public class BigSortedMapTestMT {
         }
         if(i % 1000000 == 0) {
             System.out.println(Thread.currentThread().getName()+ "- " + i + " allocated=" +
-            BigSortedMap.getTotalAllocatedMemory() + " data=" + BigSortedMap.getTotalDataSize() + 
-            " index=" + BigSortedMap.getTotalIndexSize() + " max=" + map.getMaxMemory()); 
+            BigSortedMap.getGlobalAllocatedMemory() + " data=" + BigSortedMap.getGlobalDataSize() + 
+            " index=" + BigSortedMap.getGlobalIndexSize() + " max=" + BigSortedMap.getGlobalMemoryLimit()); 
         }
       }
 
@@ -232,7 +232,7 @@ public class BigSortedMapTestMT {
       long start = System.currentTimeMillis();
       long totalSize=0;
       while (true) {    
-        if (BigSortedMap.getTotalAllocatedMemory() > 0.90 * map.getMaxMemory()) {
+        if (BigSortedMap.getGlobalAllocatedMemory() > 0.90 * BigSortedMap.getGlobalMemoryLimit()) {
           break;
         }
         long n = totalLoaded.incrementAndGet();
@@ -382,8 +382,8 @@ public class BigSortedMapTestMT {
         }
       }
 
-      System.out.println("MEM=" + BigSortedMap.getTotalAllocatedMemory() + "\nDATA=" + BigSortedMap.getTotalDataSize()
-          + "\nUTILIZATION=" + (((double) BigSortedMap.getTotalDataSize()) / BigSortedMap.getTotalAllocatedMemory()));
+      System.out.println("MEM=" + BigSortedMap.getGlobalAllocatedMemory() + "\nDATA=" + BigSortedMap.getGlobalDataSize()
+          + "\nUTILIZATION=" + (((double) BigSortedMap.getGlobalDataSize()) / BigSortedMap.getGlobalAllocatedMemory()));
       System.out.println("num threads=" + totalThreads + " PUT=" + putsPs.get() + " GET=" + comboPs.get() + " SCAN="
           + scanPs.get());
       map.dispose();

@@ -82,7 +82,7 @@ public class SetsMultithreadedTest {
       setUp();
       runTest();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -97,7 +97,7 @@ public class SetsMultithreadedTest {
       setUp();
       runTest();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -260,6 +260,6 @@ public class SetsMultithreadedTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Deleting of " + numThreads * keysNumber + " sets in " + (end - start)+"ms");
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
 }

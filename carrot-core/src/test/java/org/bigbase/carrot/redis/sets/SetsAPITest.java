@@ -66,7 +66,7 @@ public class SetsAPITest {
     for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -79,7 +79,7 @@ public class SetsAPITest {
     for (int i = 0; i < 100; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -92,7 +92,7 @@ public class SetsAPITest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }

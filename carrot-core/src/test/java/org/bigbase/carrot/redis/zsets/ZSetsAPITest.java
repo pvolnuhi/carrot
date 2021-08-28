@@ -161,7 +161,7 @@ public class ZSetsAPITest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) + " Compression=NULL");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -174,7 +174,7 @@ public class ZSetsAPITest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) + " Compression=LZ4");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -187,7 +187,7 @@ public class ZSetsAPITest {
     for (int i = 0; i < 10; i++) {
       System.out.println("*************** RUN = " + (i + 1) + " Compression=LZ4HC");
       allTests();
-      BigSortedMap.printMemoryAllocationStats();
+      BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -549,9 +549,9 @@ public class ZSetsAPITest {
       boolean res = ZSets.DELETE(map, key);
       assertTrue(res);
     }
-    long count = BigSortedMap.countRecords(map);
+    long count = map.countRecords();
     assertEquals(0, (int) count);
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
   }
 
   @Ignore
@@ -577,9 +577,9 @@ public class ZSetsAPITest {
         System.out.println(count);
       }
     }
-    long c = BigSortedMap.countRecords(map);
+    long c = map.countRecords();
     assertEquals(0, (int) c);
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
   }
 
   @Ignore
@@ -604,9 +604,9 @@ public class ZSetsAPITest {
     }
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    long c = BigSortedMap.countRecords(map);
+    long c = map.countRecords();
     assertEquals(0, (int) c);
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
   }
 
   @Ignore
@@ -656,7 +656,7 @@ public class ZSetsAPITest {
     // Delete set
     boolean result = ZSets.DELETE(map, key);
     assertTrue(result);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     
     // load again with ZADDNX
     int count = 0;
@@ -1509,7 +1509,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSameScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -1524,7 +1524,7 @@ public class ZSetsAPITest {
     testZREVRANGEBYLEX_core(data, key, false, true);    
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
 
   
@@ -1629,7 +1629,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSameScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -1644,7 +1644,7 @@ public class ZSetsAPITest {
     testZRANGEBYLEX_core(data, key, false, true);    
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   private boolean equals(List<Pair<String>> first, List<Pair<String>> second) {
@@ -1843,7 +1843,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSameScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -1864,7 +1864,7 @@ public class ZSetsAPITest {
     }
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   @Ignore
@@ -2145,7 +2145,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSameScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -2166,7 +2166,7 @@ public class ZSetsAPITest {
     }
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   @Ignore
@@ -2336,7 +2336,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSortByScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -2351,7 +2351,7 @@ public class ZSetsAPITest {
     testZRANGEBYSCORE_core(data, key, false, true);    
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   @Ignore
@@ -2546,7 +2546,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSortByScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -2567,7 +2567,7 @@ public class ZSetsAPITest {
     }
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   @Ignore
@@ -2687,7 +2687,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSortByScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -2702,7 +2702,7 @@ public class ZSetsAPITest {
     testZREVRANGEBYSCORE_core(data, key, false, true);    
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   @Ignore
@@ -2897,7 +2897,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     boolean res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     data = loadDataSortByScore(key, numMembers);
     card = ZSets.ZCARD(map, key);
@@ -2918,7 +2918,7 @@ public class ZSetsAPITest {
     }
     res = ZSets.DELETE(map, key);
     assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
 
   @Ignore
@@ -3050,7 +3050,7 @@ public class ZSetsAPITest {
     // 2. CARDINALITY < compact size (512)
     //boolean res = ZSets.DELETE(map, key);
     //assertTrue(res);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
    
     // Test with normal ranges startInclusive = false, endInclusive = false
@@ -3062,7 +3062,7 @@ public class ZSetsAPITest {
     // Test with normal ranges startInclusive = false, endInclusive = true
     testZREMRANGEBYSCORE_core(key, numMembers, false, true);    
     ZSets.DELETE(map, key);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   @Ignore
@@ -3156,12 +3156,12 @@ public class ZSetsAPITest {
     int numMembers = 1000;    
     testZREMRANGEBYRANK_core(key, numMembers);
     // 2. CARDINALITY < compact size (512)
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
     // Test with normal ranges startInclusive = false, endInclusive = false
     testZREMRANGEBYRANK_core(key, numMembers);
     ZSets.DELETE(map, key);
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   @Ignore
@@ -3287,7 +3287,7 @@ public class ZSetsAPITest {
     
     // 2. CARDINALITY < compact size (512)
 
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
     numMembers = 500;
 
     // Test with normal ranges startInclusive = false, endInclusive = false
@@ -3299,7 +3299,7 @@ public class ZSetsAPITest {
     // Test with normal ranges startInclusive = false, endInclusive = true
     testZREMRANGEBYLEX_core(key, numMembers, false, true);    
 
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
   

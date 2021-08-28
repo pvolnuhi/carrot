@@ -40,7 +40,7 @@ public class DataBlockScannerTest {
   Logger LOG = LoggerFactory.getLogger(DataBlockScannerTest.class);
   
   protected DataBlock getDataBlock() {
-    IndexBlock ib = new IndexBlock(4096);
+    IndexBlock ib = new IndexBlock(null, 4096);
     ib.setFirstIndexBlock();
     ib.firstBlock();
     return ib.firstBlock();

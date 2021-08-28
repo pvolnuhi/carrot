@@ -34,7 +34,7 @@ public class BigSortedMapSnapshotTest {
 
   BigSortedMap map;
   long totalLoaded;
-  long MAX_ROWS = 100000;
+  long MAX_ROWS = 1000000;
   int EXT_VALUE_SIZE = 4096;
   int EXT_KEY_SIZE = 4096;
   int KEY_SIZE = 10;
@@ -202,11 +202,11 @@ public class BigSortedMapSnapshotTest {
     long scanned = countRecords();
     start = System.currentTimeMillis();
     System.out.println("Scanned=" + scanned + " in "+ (start - end) + "ms");
-    System.out.println("\nTotal memory       =" + BigSortedMap.getTotalAllocatedMemory());
-    System.out.println("Total   data       =" + BigSortedMap.getTotalDataSize());
-    System.out.println("Compressed size    =" + BigSortedMap.getTotalCompressedDataSize());
+    System.out.println("\nTotal memory       =" + BigSortedMap.getGlobalAllocatedMemory());
+    System.out.println("Total   data       =" + BigSortedMap.getGlobalDataSize());
+    System.out.println("Compressed size    =" + BigSortedMap.getGlobalCompressedDataSize());
     System.out.println("Compression  ratio ="
-        + ((float) BigSortedMap.getTotalDataSize()) / BigSortedMap.getTotalAllocatedMemory());
+        + ((float) BigSortedMap.getGlobalDataSize()) / BigSortedMap.getGlobalAllocatedMemory());
     System.out.println();
     assertEquals(totalLoaded, scanned);
   }
@@ -214,7 +214,7 @@ public class BigSortedMapSnapshotTest {
   private void tearDown() {
     map.dispose();
     System.out.println("Memory stat after teardown:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     UnsafeAccess.mallocStats();
   }
 
@@ -269,18 +269,31 @@ public class BigSortedMapSnapshotTest {
     long end = System.currentTimeMillis();
     System.out.println("snapshot create="+ (end -start)+"ms");
     /*DEBUG*/ System.out.println("\nAfter snapshot:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     map.dispose();
     /*DEBUG*/ System.out.println("\nAfter dispose:");
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     start = System.currentTimeMillis();
-    map = BigSortedMap.loadStore();
+    
+    // This is how we load data from a snapshot
+    // 1. Disable global stats updates
+    // 2. Load local store
+    // 3. enable global stats update
+    // sync stats from local to global
+
+    BigSortedMap.setStatsUpdatesDisabled(true);    
+    map = BigSortedMap.loadStore(0);
+    
+    BigSortedMap.setStatsUpdatesDisabled(false);
+    map.syncStatsToGlobal();
+
     end = System.currentTimeMillis();
     System.out.println("snapshot load="+ (end -start)+"ms");
     /*DEBUG*/ System.out.println("\nAfter load:");
-    BigSortedMap.printMemoryAllocationStats();
+    map.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     
     start = System.currentTimeMillis();
     long records = countRecords();
@@ -311,19 +324,31 @@ public class BigSortedMapSnapshotTest {
     long end = System.currentTimeMillis();
     System.out.println("snapshot create="+ (end -start)+"ms");
     /*DEBUG*/ System.out.println("\nAfter snapshot:");
-    BigSortedMap.printMemoryAllocationStats();
-
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
+    
     map.dispose();
     /*DEBUG*/ System.out.println("\nAfter dispose:");
-    BigSortedMap.printMemoryAllocationStats();
-
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
+    
     start = System.currentTimeMillis();
-    map = BigSortedMap.loadStore();
+    // This is how we load data from a snapshot
+    // 1. Disable global stats updates
+    // 2. Load local store
+    // 3. enable global stats update
+    // sync stats from local to global
+
+    BigSortedMap.setStatsUpdatesDisabled(true);    
+    map = BigSortedMap.loadStore(0);
+    BigSortedMap.setStatsUpdatesDisabled(false);
+    map.syncStatsToGlobal();
+    
     end = System.currentTimeMillis();
     System.out.println("snapshot load="+ (end -start)+"ms");
     /*DEBUG*/ System.out.println("\nAfter load:");
-    BigSortedMap.printMemoryAllocationStats();
-    
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    map.printMemoryAllocationStats();
     start = System.currentTimeMillis();
     long records = countRecords();
     end = System.currentTimeMillis();

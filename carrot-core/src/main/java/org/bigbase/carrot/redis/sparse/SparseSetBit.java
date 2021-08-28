@@ -101,7 +101,7 @@ public class SparseSetBit extends Operation {
       this.updatesCount = 1; 
       newChunk = true;
       // Update memory statistics
-      BigSortedMap.totalAllocatedMemory.addAndGet(SparseBitmaps.CHUNK_SIZE);
+      BigSortedMap.incrGlobalAllocatedMemory(SparseBitmaps.CHUNK_SIZE);
     }
     this.oldBit = getsetbit(valuePtr, valueSize);
     int bitCount = existKey? SparseBitmaps.getBitCount(valuePtr): 1;

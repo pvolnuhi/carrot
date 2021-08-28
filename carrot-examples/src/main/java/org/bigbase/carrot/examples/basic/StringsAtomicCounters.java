@@ -126,7 +126,7 @@ public class StringsAtomicCounters {
     System.out.println("Loaded " + keys.size() +" long counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
       + (endTime - startTime) + "ms. RAM usage="+ (UnsafeAccess.getAllocatedMemory() - keyTotalSize));
     
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
     // Delete all
     for (Key key: keys) {
       Strings.DELETE(map, key.address, key.length);
@@ -148,7 +148,7 @@ public class StringsAtomicCounters {
 //    
 //    System.out.println("Loaded " + keys.size() +" double counters of avg size=" +(keyTotalSize/N + 8)+ " each in "
 //        + (endTime - startTime) + "ms. RAM usage="+ (UnsafeAccess.getAllocatedMemory() - keyTotalSize));
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     map.dispose();
     

@@ -102,7 +102,7 @@ public class ZSetsMultithreadedTest {
       runTest();
       tearDown();
 
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -117,7 +117,7 @@ public class ZSetsMultithreadedTest {
       setUp();
       runTest();
       tearDown();
-      BigSortedMap.printMemoryAllocationStats();      
+      BigSortedMap.printGlobalMemoryAllocationStats();      
       UnsafeAccess.mallocStats.printStats();
     }
   }
@@ -254,7 +254,7 @@ public class ZSetsMultithreadedTest {
     }
 
     long end = System.currentTimeMillis();
-    BigSortedMap.printMemoryAllocationStats();
+    BigSortedMap.printGlobalMemoryAllocationStats();
 
     System.out.println("Loading " + (numThreads * keysNumber * setSize) + " elements os done in "
         + (end - start) + "ms");
@@ -295,7 +295,7 @@ public class ZSetsMultithreadedTest {
     }
     end = System.currentTimeMillis();
     System.out.println("Deleting of " + numThreads * keysNumber + " sets in " + (end - start)+"ms");
-    assertEquals(0L, BigSortedMap.countRecords(map));
+    assertEquals(0L, map.countRecords());
   }
   
 }

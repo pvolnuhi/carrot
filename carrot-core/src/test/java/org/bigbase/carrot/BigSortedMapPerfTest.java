@@ -50,12 +50,12 @@ public class BigSortedMapPerfTest {
       }
       totalLoaded++; 
       if (totalLoaded % 100000 == 0) {
-        System.out.println("Loaded " + totalLoaded + " RAM alocated=" + BigSortedMap.getTotalAllocatedMemory());
+        System.out.println("Loaded " + totalLoaded + " RAM alocated=" + BigSortedMap.getGlobalAllocatedMemory());
       }
     }
     long end = System.currentTimeMillis();
     System.out.println("Time to load="+ totalLoaded+" ="+(end -start)+"ms");
-    System.out.println("Total memory="+BigSortedMap.getTotalAllocatedMemory());
+    System.out.println("Total memory="+BigSortedMap.getGlobalAllocatedMemory());
   }
   
   @Test
