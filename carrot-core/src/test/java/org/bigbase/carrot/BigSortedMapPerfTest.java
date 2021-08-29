@@ -17,6 +17,8 @@
  */
 package org.bigbase.carrot;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 
 import org.bigbase.carrot.compression.CodecFactory;
@@ -37,7 +39,7 @@ public class BigSortedMapPerfTest {
     //BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     
     BigSortedMap.setMaxBlockSize(4096);
-    map = new BigSortedMap(1000000000L);
+    map = new BigSortedMap(100000000L);
     totalLoaded = 1;
     long start = System.currentTimeMillis();
     while(true) {
@@ -54,7 +56,7 @@ public class BigSortedMapPerfTest {
       }
     }
     long end = System.currentTimeMillis();
-    System.out.println("Time to load="+ totalLoaded+" ="+(end -start)+"ms");
+    System.out.println("Time to load="+ totalLoaded+" ="+(end -start)+"ms" + " RPS=" + (totalLoaded * 1000)/(end-start));
     System.out.println("Total memory="+BigSortedMap.getGlobalAllocatedMemory());
   }
   
@@ -63,7 +65,7 @@ public class BigSortedMapPerfTest {
     System.out.println("testCountRecords");
     int n = 10;
     long start = System.currentTimeMillis();
-    for (int i=0; i < n; i++) {
+    for (int i = 0; i < n; i++) {
       System.out.println("Scan Run started "+ i);
       totalScanned += countRecords();
       System.out.println("Scan Run finished "+ i);
@@ -71,6 +73,7 @@ public class BigSortedMapPerfTest {
     long end = System.currentTimeMillis();
     
     System.out.println( totalScanned * 1000 / (end -start) + " RPS");
+    assertEquals(n * totalLoaded, totalScanned);
   }
   
   long countRecords() throws IOException {
