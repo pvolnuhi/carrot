@@ -219,7 +219,7 @@ public class BigSortedMap {
    * Set global memory limit
    * @param limit memory limit
    */
-  static void setGlobalMemoryLimit(long limit) {
+  public static void setGlobalMemoryLimit(long limit) {
     globalMemoryLimit = limit;
   }
   
@@ -555,9 +555,9 @@ public class BigSortedMap {
   long lastSnapshotTimestamp;
   
   /**
-   * Store ID
+   * Snapshot directory
    */
-  int storeId;
+  String snapshotDir;
   
   /**
    * Little hack
@@ -603,12 +603,9 @@ public class BigSortedMap {
     
     incrGlobalAllocatedMemory(getInstanceAllocatedMemory());
     incrGlobalBlockDataSize(getInstanceBlockDataSize());
-    //incrGlobalBlockIndexSize(getInstanceBlockIndexSize());
     incrGlobalCompressedDataSize(getInstanceCompressedDataSize());
     incrGlobalDataInDataBlockSize(getInstanceDataInDataBlockSize());
-    //incrGlobalDataInIndexBlocksSize(getInstanceDataInIndexBlocksSize());
     incrGlobalExternalDataSize(getInstanceExternalDataSize());
-    //incrGlobalIndexSize(getInstanceIndexSize());
   }
   
   /**
@@ -626,28 +623,28 @@ public class BigSortedMap {
   public void setLastSnapshotTimestamp(long timestamp) {
     this.lastSnapshotTimestamp = timestamp;
   }
-  
+    
   /**
-   * Returns ID of this store
-   * @return
+   * Get snapshot directory for this store
+   * @return directory
    */
-  public int getStoreId() {
-    return storeId;
+  public String getSnapshotDir() {
+    return this.snapshotDir;
   }
   
   /**
-   * Sets this store id (cluster mode)
-   * @param id
+   * Set snapshot directory for the store
+   * @param dir snapshot dierctory path
    */
-  public void setStoreId(int id) {
-    this.storeId = id;
+  public void setSnapshotDir(String dir) {
+    this.snapshotDir = dir;
   }
   
   /**
    * Prints memory allocation statistics for the store
    */
   public  void printMemoryAllocationStats() {
-    System.out.println("\nCarrot memory allocation statistics [id=" + storeId +"]:");
+    System.out.println("\nCarrot memory allocation statistics [id=" + Thread.currentThread().getName() +"]:");
     System.out.println("--------------------- TOTAL -------------------");
     System.out.println("Total allocated memory     :" + getInstanceAllocatedMemory());
     System.out.println("--------------------- DATA --------------------");
@@ -2150,8 +2147,7 @@ public class BigSortedMap {
     dispose();
     initNodes();
     long end = System.currentTimeMillis();
-    /*DEBUG*/
-    System.out.println("flush all took:"+ (end - start) + "ms");
+    System.out.println("["+ Thread.currentThread().getName()+"] flushall took:"+ (end - start) + "ms");
   }
   
   public void flush (int db) {
@@ -2165,22 +2161,11 @@ public class BigSortedMap {
    * 
    */
   
-  /**
-   * I/O buffer - thread local
-   */
-  static ThreadLocal<ByteBuffer> bb = new ThreadLocal<ByteBuffer>() {
-    @Override
-    protected ByteBuffer initialValue() {
-      return ByteBuffer.allocateDirect(256 * 1024);
-    }
-  };
   
+  private static int BUFFER_SIZE = 256 * 1024;
   
   // WRITE DATA  
   public void snapshot() {
-    RedisConf conf = RedisConf.getInstance();
-    // Get snapshot directory for a current store
-    String snapshotDir = conf.getSnapshotDir(getStoreId());
     // Check if dir exists
     File dir = new File(snapshotDir);
     if (dir.exists() == false) {
@@ -2210,7 +2195,7 @@ public class BigSortedMap {
     // main loop over all index blocks
     IndexBlock ib = null, cur = null;
     int version = -1;
-    ByteBuffer buf = bb.get();
+    ByteBuffer buf = ByteBuffer.allocateDirect(BUFFER_SIZE);//bb.get();
     buf.clear();
     while (true) {
       try {
@@ -2267,9 +2252,7 @@ public class BigSortedMap {
       e.printStackTrace();
       //TODO: what to do?
     }
-    
-    System.out.println("Snapshot file created: " + snapshotFile.getAbsolutePath());
-    
+        
     // Delete old snapshot
     File oldSnapshotFile = new File(dir, "snapshot.data");
     if (oldSnapshotFile.exists()) {
@@ -2283,9 +2266,10 @@ public class BigSortedMap {
     if (!result) {
       System.err.println("ERROR! Can not rename new snapshot file: "+ snapshotFile.getAbsolutePath() + 
         " to "+ oldSnapshotFile.getAbsolutePath());
+    } else {
+      System.out.println("Snapshot file created: " + oldSnapshotFile.getAbsolutePath());
     }
   }
-
 
   private void saveStoreMeta(FileChannel channel) throws IOException {
     ByteBuffer buf = ByteBuffer.allocate(Utils.SIZEOF_LONG * 7);
@@ -2303,24 +2287,39 @@ public class BigSortedMap {
     }
   }
 
-
   final IndexBlock nextIndexBlock(IndexBlock ib) {
     return ib == null? map.firstKey(): map.higherKey(ib);
   }
   
-  // READ DATA
-  public static BigSortedMap loadStore(int storeId) {
-    BigSortedMap map = null;
+  public static BigSortedMap loadStore(String server, int port) {
     RedisConf conf = RedisConf.getInstance();
-    String snapshotDir = conf.getSnapshotDir(storeId);
+    String snapshotDir = conf.getDataDirForNode(server, port);
+    return loadStoreFromSnapshot(snapshotDir);
+  }
+  
+  public static BigSortedMap loadStore(int storeId) {
+    RedisConf conf = RedisConf.getInstance();
+    String snapshotDir = conf.getDataDir(storeId);
+    return loadStoreFromSnapshot(snapshotDir);
+  }
+  
+  // READ DATA
+  private static BigSortedMap loadStoreFromSnapshot(String snapshotDir) {
+    BigSortedMap map = null;
     // Check if dir exists
     File dir = new File(snapshotDir);
     if (dir.exists() == false) {
+      dir.mkdirs();
       System.err.println("Snapshot directory does not exists: " + dir.getAbsolutePath());
-      return null;
+      return new BigSortedMap();
     }
 
     File snapshotFile = new File(dir, "snapshot.data");
+    if (!snapshotFile.exists()) {
+      System.err.println("Snapshot file does not exists: " + snapshotFile.getAbsolutePath());
+      return new BigSortedMap();
+    }
+    
     RandomAccessFile raf = null;
     FileChannel fc = null;
     System.out.println(
@@ -2337,7 +2336,7 @@ public class BigSortedMap {
       return null;
     }
 
-    ByteBuffer buf = bb.get();
+    ByteBuffer buf = ByteBuffer.allocateDirect(BUFFER_SIZE);//bb.get();
     buf.clear();
 
     try {
@@ -2371,7 +2370,7 @@ public class BigSortedMap {
       }
       long timestamp = buf.getLong();
       map.setLastSnapshotTimestamp(timestamp);
-      map.setStoreId(storeId);
+      map.setSnapshotDir(snapshotDir);
       map.adjustCountersAfterLoad();
       return map;
     } catch (IOException e) {
@@ -2395,13 +2394,15 @@ public class BigSortedMap {
     int toRead = Utils.SIZEOF_LONG * 7;
     ByteBuffer buf = ByteBuffer.allocate(toRead);
     while(buf.remaining() > 0) {
-      int n = fc.read(buf);
+      fc.read(buf);
     }
     buf.flip();
     map = new BigSortedMap(false);    
     long value = buf.getLong();
     // Set global memory limit TODO: this is mostly for testing
-    BigSortedMap.setGlobalMemoryLimit(value);
+    if (BigSortedMap.getGlobalMemoryLimit() == 0) {
+      BigSortedMap.setGlobalMemoryLimit(value);
+    }
     
     value = buf.getLong();
     map.allocatedMemory.set(value);

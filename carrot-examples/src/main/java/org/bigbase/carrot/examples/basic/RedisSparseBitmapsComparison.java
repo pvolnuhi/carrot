@@ -48,7 +48,7 @@ import redis.clients.jedis.Jedis;
  * sizeUncompressedBitmap - size of an uncompressed bitmap, which can hold all the bits
  * Test_consumed_RAM - RAM consumed by test.
  * 
- * @author vrodionov
+ * 
  *
  */
 

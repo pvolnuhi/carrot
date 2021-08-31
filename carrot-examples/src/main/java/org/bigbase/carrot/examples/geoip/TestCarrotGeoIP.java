@@ -65,7 +65,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * No compression  388.5/69 = 5.63
  * LZ4             388.5/35.43 = 10.97
  * LZ4HC           388.5/34.86 = 11.14
- * @author vrodionov
+ * 
  *
  */
 public class TestCarrotGeoIP {

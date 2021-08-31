@@ -85,7 +85,7 @@ import redis.clients.jedis.Jedis;
  * 
  *  
  *  
- * @author vrodionov
+ * 
  *
  */
 public class RedisHashesSpamFilter {

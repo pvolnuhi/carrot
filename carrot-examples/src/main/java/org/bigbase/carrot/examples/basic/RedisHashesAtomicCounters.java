@@ -75,7 +75,7 @@ import redis.clients.jedis.Jedis;
  * 
  * Overall we still see 20-25% RAM efficiency over Redis with Carrot LZ4/LZ4HC
  * 
- * @author vrodionov
+ * 
  *
  */
 public class RedisHashesAtomicCounters {

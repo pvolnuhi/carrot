@@ -23,7 +23,7 @@ import java.util.Date;
 
 /**
  * Class Following - represents list of users, given user is following to
- * @author vrodionov
+ * 
  *
  */
 public class Following extends Users {

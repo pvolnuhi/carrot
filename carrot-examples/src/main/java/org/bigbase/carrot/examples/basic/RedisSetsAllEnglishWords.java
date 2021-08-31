@@ -50,7 +50,7 @@ import redis.clients.jedis.Jedis;
  * 3) LZ4HC compression 24.3M/2.6M ~ 9.0x 
  * 
  * 
- * @author vrodionov
+ * 
  *
  */
 public class RedisSetsAllEnglishWords {

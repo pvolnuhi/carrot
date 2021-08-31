@@ -78,7 +78,7 @@ import org.bigbase.carrot.util.Utils;
  * LZ4  - 3.22/1.17 = 2.75x (to no compression)
  * LZ4HC - 3.33/1.17 = 2.85x (to no compression)
  * 
- * @author vrodionov
+ * 
  *
  */
 public class HashesUserSessions {

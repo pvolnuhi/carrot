@@ -71,7 +71,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * LZ4  - 53/34 ~ 1.6x (to no compression)
  * LZ4HC - 53/30 ~ 1.8x (to no compression)
  * 
- * @author vrodionov
+ * 
  *
  */
 public class ZSetsDenialOfService {

@@ -75,7 +75,7 @@ import org.bigbase.carrot.util.Utils;
  * LZ4  - 1.3/0.7 = 1.86x (to no compression)
  * LZ4HC - 1.35/0.7 = 1.93x (to no compression)
  * 
- * @author vrodionov
+ * 
  *
  */
 public class HashesAddresses {

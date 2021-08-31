@@ -71,7 +71,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * 
  * LZ4  - 2.37/0.8 = 2.96    (to no compression)
  * LZ4HC - 2.5/0.8 = 3.13  (to no compression)
- * @author vrodionov
+ * 
  *
  */
 public class StringsUserSessions {

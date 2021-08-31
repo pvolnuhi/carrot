@@ -22,17 +22,10 @@ import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.RedisConf;
 import org.bigbase.carrot.redis.util.DataType;
-import org.bigbase.carrot.storage.SnapshotManager;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 public class Server {
-
-  static final long LASTSAVE_KEY = UnsafeAccess.allocAndCopy("persistence.lastsave.time", 0, 
-    "persistence.lastsave.time".length());
-  static final int LASTSAVE_LENGTH =  "persistence.lastsave.time".length();
-  
-
   
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
@@ -100,6 +93,7 @@ public class Server {
    */
     
    
+  @SuppressWarnings("unused")
   private static int buildKey( long keyPtr, int keySize) {
     checkKeyArena(keySize + KEY_SIZE + Utils.SIZEOF_BYTE);
     long arena = keyArena.get();
@@ -198,29 +192,12 @@ public class Server {
    * @return true on success, false -otherwise
    */
   public static boolean SAVE(BigSortedMap map) {
-    //TODO
-    
-    SnapshotManager manager = SnapshotManager.getInstance();
-    return manager.takeSnapshot(map, true);
+    //SnapshotManager manager = SnapshotManager.getInstance();
+    //return manager.takeSnapshot(map, true);
+    map.snapshot();
+    return true;
   }
 
-  /**
-   * Save last snapshot time
-   * @param map sorted map storage
-   */
-  public static void updateLastSnapshotTime(BigSortedMap map) {
-    // save last save
-    long saveTime = System.currentTimeMillis();
-    long ptr = LASTSAVE_KEY;
-    int size = LASTSAVE_LENGTH;
-    size = buildKey(ptr, size);
-    ptr = keyArena.get();
-    long valPtr = valueArena.get();
-    int valueSize = Utils.SIZEOF_LONG;
-    // Set time
-    UnsafeAccess.putLong(valPtr, saveTime);
-    map.put(ptr, size, valPtr, valueSize, 0);    
-  }
   
   /**
    * Save the DB in background.
@@ -240,8 +217,10 @@ public class Server {
    * @param map sorted map storage
    */
   public static void BGSAVE(BigSortedMap map) {
-    SnapshotManager manager = SnapshotManager.getInstance();
-    manager.takeSnapshot(map, false);    
+    //SnapshotManager manager = SnapshotManager.getInstance();
+    //manager.takeSnapshot(map, false);   
+    Runnable r = () -> map.snapshot();
+    new Thread(r).start();
   }
   
   /**

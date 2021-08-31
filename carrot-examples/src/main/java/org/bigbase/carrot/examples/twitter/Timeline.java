@@ -35,7 +35,7 @@ import redis.clients.jedis.Jedis;
  * Timeline class - represents user's timeline - 
  * all messages posted by a user in a reverse chronological
  * order
- * @author vrodionov
+ * 
  *
  */
 public class Timeline {

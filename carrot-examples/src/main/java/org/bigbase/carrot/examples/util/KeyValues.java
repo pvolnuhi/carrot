@@ -34,7 +34,7 @@ import redis.clients.jedis.Jedis;
 /**
  * Simple utility class, which can convert 
  * properties to a list of KeyValue objects for testing
- * @author vrodionov
+ * 
  *
  */
 public abstract class KeyValues {

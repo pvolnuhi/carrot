@@ -64,7 +64,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * (1010,1)0    - decodes to 00000000001      (10 0's followed by 1)  Compression 11/6 = 1.83
  * (1111,0)     - decoded to 000000000000000  (15 0's)   Compression 15 / 5 = 3
  * (1111,1)0    - decoded to 0000000000000001 (15 0's followed by one 1) Compression 15/6 = 2.5
- * @author vrodionov
+ * 
  *
  */
 

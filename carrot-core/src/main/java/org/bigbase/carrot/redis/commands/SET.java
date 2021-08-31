@@ -25,7 +25,7 @@ import org.bigbase.carrot.util.Utils;
 
 /**
  * SET key value [EX seconds|PX milliseconds|EXAT timestamp|PXAT milliseconds-timestamp|KEEPTTL] [NX|XX] [GET]
- * @author vrodionov
+ * 
  *
  */
 

@@ -33,14 +33,16 @@ import org.bigbase.carrot.compression.CodecType;
  */
 public class RedisConf {
 
+  public final static String CONF_REDIS_NODES = "redis.nodes";
+
   public final static String CONF_COMMAND_COUNT = "command.count";
   public final static String CONF_COMPRESSION_CODEC = "compression.codec";
-  public final static String CONF_DATASTORE_MAX_SIZE = "datastore.maxsize";
+  public final static String CONF_MAX_MEMORY_LIMIT = "max.memory.limit";
   public final static String CONF_ZSET_MAX_COMPACT_SIZE = "zset.compact.maxsize";
   public final static String CONF_SERVER_PORT = "server.port";
   public final static String CONF_THREAD_POOL_SIZE = "thread.pool.size";
   
-  public final static String CONF_SNAPSHOT_DIR_PATH = "snapshot.dir.path";
+  public final static String CONF_DATA_DIR_PATH = "data.dir.path";
   public final static String CONF_SNAPSHOT_INTERVAL_SECS = "snapshot.interval.seconds";
   public final static String CONF_SERVER_LOG_DIR_PATH = "server.log.dir.path";
   public final static String CONF_SERVER_WAL_DIR_PATH = "server.wal.dir.path";
@@ -49,23 +51,21 @@ public class RedisConf {
   public final static int DEFAULT_SNAPSHOT_INTERVAL_SECS = 0;// no snapshots
   public final static String DEFAULT_SERVER_WAL_DIR_PATH = "./WALs";
   public final static String DEFAULT_SERVER_LOG_DIR_PATH = "./logs";
-  public final static String DEFAULT_SNAPSHOT_DIR_PATH = "./snapshots";
+  public final static String DEFAULT_DATA_DIR_PATH = "./snapshots";
 
   public final static int DEFAULT_SERVER_PORT = 6379; 
   // As of v. 0.1
   public final static int DEFAULT_COMMAND_COUNT = 104;
-  public final static long DEFAULT_DATASTORE_MAX_SIZE = 1024 * 1024 * 1024; // 1GB
+  public final static long DEFAULT_MAX_MEMORY_LIMIT = 1024 * 1024 * 1024; // 1GB
   public final static String DEFAULT_COMPRESSION_CODEC = "none";
   public final static int DEFAULT_THREAD_POOL_SIZE = 
       Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
   public final static int DEFAULT_ZSET_MAX_COMPACT_SIZE = 512;
 
-  
   private static RedisConf conf;
   private Properties props;
   
   public static RedisConf getInstance() {
-    //TODO - read from file
     return getInstance(null);
   }
   
@@ -83,7 +83,16 @@ public class RedisConf {
     }
   }
   
+  /**
+   * For testing
+   */
+  public RedisConf(Properties p) {
+    this.props = p;
+  }
   
+  /**
+   * Default constructor
+   */
   private RedisConf() {
     props = new Properties();
   }
@@ -121,6 +130,20 @@ public class RedisConf {
   }
   
   /**
+   * Get list of nodes: {address:port}
+   * @return list of nodes (and ports)
+   */
+  public String[] getNodes() {
+    String value = props.getProperty(CONF_REDIS_NODES);
+    if (value == null) {
+      // single  node on a default port
+      return new String[] {"127.0.0.1:" + DEFAULT_SERVER_PORT};
+    } else {
+      //TODO: improve possible errors handling
+      return value.split(",");
+    }
+  }
+  /**
    * Maximum size of ZSet in a compact representation
    * @return maximum size
    */
@@ -156,8 +179,8 @@ public class RedisConf {
    * Get maximum data store size
    * @return maximum data store size
    */
-  public long getDataStoreMaxSize() {
-    return getLongProperty(CONF_DATASTORE_MAX_SIZE, DEFAULT_DATASTORE_MAX_SIZE);
+  public long getMaxMemoryLimit() {
+    return getLongProperty(CONF_MAX_MEMORY_LIMIT, DEFAULT_MAX_MEMORY_LIMIT);
   }
   
   /**
@@ -181,8 +204,8 @@ public class RedisConf {
    * Get snapshot directory (global)
    * @return snapshot directory
    */
-  public String getSnapshotDir() {
-    return props.getProperty(CONF_SNAPSHOT_DIR_PATH, DEFAULT_SNAPSHOT_DIR_PATH);
+  public String getDataDir() {
+    return props.getProperty(CONF_DATA_DIR_PATH, DEFAULT_DATA_DIR_PATH);
   }
   
   /**
@@ -190,8 +213,21 @@ public class RedisConf {
    * @param storeId store ID
    * @return path as a string
    */
-  public String getSnapshotDir(int storeId) {
-    return getSnapshotDir() + File.separator + storeId;
+  public String getDataDir(int storeId) {
+    return getDataDir() + File.separator + storeId;
+  }
+  
+  /**
+   * Get data directory (for snapshots) for the node
+   * @param port node's server port
+   * @return
+   */
+  public String getDataDirForNode(String server, int port) {
+    String value = props.getProperty(CONF_DATA_DIR_PATH + "." + 
+      server + "." + port);
+    if (value != null) return value;
+    return getDataDir() + File.separator + server + File.separator+ port;
+
   }
   
   /**
@@ -215,10 +251,45 @@ public class RedisConf {
   }
   
   /**
-   * Get log directory
-   * @return log directory
+   * Get WAL directory
+   * @return WAL directory
    */
   public String getWALDir() {
     return props.getProperty(CONF_SERVER_WAL_DIR_PATH, DEFAULT_SERVER_WAL_DIR_PATH);
+  }
+  
+  /**
+   * Return cluster slots
+   * @return cluster slots
+   */
+  public Object[] getClusterSlots() {
+    
+    String[] nodes = getNodes();
+    int[] slotLimits = calculateSlotLimits(nodes.length);
+    Object[] ret = new Object[nodes.length];
+    int min = 0;
+    for (int i = 0; i < ret.length; i++) {
+      Object[] arr = new Object[3];
+      min = i == 0? 0: slotLimits[i - 1] + 1; 
+      arr[0] = Long.valueOf(min);
+      arr[1] = Long.valueOf(slotLimits[i]);
+      Object[] server = new Object[2];
+      String[] v = nodes[i].split(":");
+      server[0] = v[0];
+      server[1] = Long.valueOf(v[1]);
+      arr[2] = server;
+      ret[i] = arr;
+    }
+    return ret;
+  }
+
+  private int[] calculateSlotLimits(int n) {
+    int slotMax = 1 << 14; // 16384
+    int[] slots = new int[n];
+    slots[n - 1] = slotMax - 1;
+    for (int i = 0; i < n - 1; i++) {
+      slots[i] = ((i + 1) * slotMax) / n;
+    }
+    return slots;
   }
 }

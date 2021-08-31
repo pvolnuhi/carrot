@@ -62,7 +62,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * LZ4  - 1.22/0.81 = 1.5    (to no compression)
  * LZ4HC - 1.34/0.81 = 1.65  (to no compression)
  * 
- * @author vrodionov
+ * 
  *
  */
 public class SetsAllEnglishWords {

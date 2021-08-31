@@ -99,7 +99,7 @@ import org.bigbase.carrot.util.Utils;
  * 
  * -- Site performance
  * 
- * @author vrodionov
+ * 
  *
  */
 public class TestCarrotAdServerAdIndexing {

@@ -73,7 +73,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
  * sizeUncompressedBitmap - size of an uncompressed bitmap, which can hold all the bits
  * Test_consumed_RAM - RAM consumed by test.
  * 
- * @author vrodionov
+ * 
  *
  */
 

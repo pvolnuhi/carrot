@@ -17,11 +17,15 @@
 
 package org.bigbase.carrot.examples.basic;
 
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -31,6 +35,7 @@ import org.bigbase.carrot.ops.OperationFailedException;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCluster;
+import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
 /**
@@ -76,13 +81,14 @@ import redis.clients.jedis.JedisPoolConfig;
  * 
  *
  */
-public class RedisStringsUserSessions {
+public class RedisClusterTest {
   
 
   static long N = 1000000;
   static long totalDataSize = 0;
   static List<UserSession> userSessions = new ArrayList<UserSession>();
   static AtomicLong index = new AtomicLong(0);
+  static int NUM_THREADS = 8;
   static {
     for (int i = 0; i < N; i++) {
       userSessions.add(UserSession.newSession(i));
@@ -93,8 +99,54 @@ public class RedisStringsUserSessions {
   public static void main(String[] args) throws IOException, OperationFailedException {
 
     System.out.println("Run Redis Cluster");
-    //runTest();
-    runClusterTest();
+    JedisCluster client = getClusterClient();
+    flushAll(client);
+    Runnable r = () -> { try {runClusterLoad();} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ N + " sets in "+ (end - start) + "ms. RPS="+ 
+    (((long) N) * 1000) / (end - start));
+    
+    index.set(0);
+    
+    r = () -> { try {runClusterGet();} catch (Exception e) {e.printStackTrace();}};
+    workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+    }
+    start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ N + " gets in "+ (end - start) + "ms. RPS="+ 
+    (((long) N) * 1000) / (end - start));
+    
+    shutdownAll(client, true);
+  }
+  
+  private static void flushAll(JedisCluster client) {
+    Map<String, JedisPool> conns = client.getClusterNodes();
+    for(JedisPool pool: conns.values()) {
+      Jedis jedis = pool.getResource();
+      jedis.flushAll();
+    }
+  }
+
+  private static void shutdownAll(JedisCluster client, boolean save) {
+    Map<String, JedisPool> conns = client.getClusterNodes();
+    for(JedisPool pool: conns.values()) {
+      Jedis jedis = pool.getResource();
+      if (save) jedis.save();
+      //jedis.shutdown();
+    }
   }
   
   private static JedisCluster getClusterClient() {
@@ -107,88 +159,61 @@ public class RedisStringsUserSessions {
     return new JedisCluster(nodes, config);
   }
   
-  private static void runClusterTest() throws IOException, OperationFailedException {
+  private static void runClusterLoad() throws IOException, OperationFailedException {
     
     JedisCluster client = getClusterClient();    
     totalDataSize = 0;
     
     long startTime = System.currentTimeMillis();
     int count = 0;
-    for (UserSession us: userSessions) {
+    for (;;) {
+      int idx = (int) index.getAndIncrement();
+      if (idx >= N) break;
+      UserSession us = userSessions.get(idx);
       count++;
       String skey = us.getUserId();
       String svalue = us.toString();
       totalDataSize += skey.length() + svalue.length();    
       client.set(skey, svalue);
       if (count % 10000 == 0) {
-        System.out.println("set "+ count);
+        System.out.println(Thread.currentThread().getId() +": set "+ count);
       }
-      if (count == 10) break;
     }
     long endTime = System.currentTimeMillis();
         
-    System.out.println("Loaded " + userSessions.size() +" user sessions, total size="+totalDataSize
+    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" user sessions, total size="+totalDataSize
       + " in "+ (endTime - startTime) );
    
-    count = 0;
-    System.out.println("Press any button ...");
-    System.in.read();
-    startTime = System.currentTimeMillis();
-    for (UserSession us: userSessions) {
-      count++;
-      String skey = us.getUserId();
-      client.del(skey);
-      if (count % 10000 == 0) {
-        System.out.println("del "+ count);
-      }
-      if (count == 10) break;
-    }
-    endTime = System.currentTimeMillis();
-        
-    System.out.println("Deleted " + userSessions.size() +" user sessions, total size="+totalDataSize
-      + " in "+ (endTime - startTime) );
     client.close();
   }
   
-  private static void runTest() throws IOException, OperationFailedException {
+  private static void runClusterGet() throws IOException, OperationFailedException {
     
-    Jedis client = new Jedis("localhost");    
+    JedisCluster client = getClusterClient();    
     totalDataSize = 0;
     
     long startTime = System.currentTimeMillis();
-    int count =0;
-    for (UserSession us: userSessions) {
+    int count = 0;
+    for (;;) {
+      int idx = (int) index.getAndIncrement();
+      if (idx >= N) break;
+      UserSession us = userSessions.get(idx);
       count++;
       String skey = us.getUserId();
       String svalue = us.toString();
       totalDataSize += skey.length() + svalue.length();    
-      client.set(skey, svalue);
+      String v = client.get(skey);
+      assertTrue(v != null && v.length() == svalue.length());
       if (count % 10000 == 0) {
-        System.out.println("set "+ count);
+        System.out.println(Thread.currentThread().getId() +": get "+ count);
       }
     }
     long endTime = System.currentTimeMillis();
         
-    System.out.println("Loaded " + userSessions.size() +" user sessions, total size="+totalDataSize
-      + " in "+ (endTime - startTime) );
-   
-    count = 0;
-    System.out.println("Press any button ...");
-    System.in.read();
-    startTime = System.currentTimeMillis();
-    for (UserSession us: userSessions) {
-      count++;
-      String skey = us.getUserId();
-      client.del(skey);
-      if (count % 10000 == 0) {
-        System.out.println("del "+ count);
-      }
-    }
-    endTime = System.currentTimeMillis();
-        
-    System.out.println("Deleted " + userSessions.size() +" user sessions, total size="+totalDataSize
+    System.out.println(Thread.currentThread().getId() +": Read " + count +" user sessions"
       + " in "+ (endTime - startTime) );
     client.close();
   }
-
+ 
+  
 }

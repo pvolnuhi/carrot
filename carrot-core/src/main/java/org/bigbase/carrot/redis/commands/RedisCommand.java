@@ -17,6 +17,8 @@
  */
 package org.bigbase.carrot.redis.commands;
 
+import java.nio.ByteBuffer;
+
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -98,7 +100,7 @@ import org.bigbase.carrot.util.Utils;
  * ERROR:
  * [4] length
  * [blob] error message
- * @author vrodionov
+ * 
  *
  */
 public interface RedisCommand {
@@ -200,6 +202,11 @@ public interface RedisCommand {
   
   static final long ASYNC_FLAG = UnsafeAccess.allocAndCopy("ASYNC", 0, "SYNC".length());
   static final int ASYNC_LENGTH = "ASYNC".length();
+  
+  static final long SLOTS_FLAG = UnsafeAccess.allocAndCopy("SLOTS", 0, "SLOTS".length());
+  static final long SLOTS_LOWER_CASE_FLAG = UnsafeAccess.allocAndCopy("slots", 0, "slots".length());
+
+  static final int SLOTS_LENGTH = "SLOTS".length();
   
   default void NULL_STRING_REPLY (long ptr) {
     UnsafeAccess.putByte(ptr,  (byte) ReplyType.BULK_STRING.ordinal());
@@ -385,5 +392,18 @@ public interface RedisCommand {
     UnsafeAccess.putByte(ptr, (byte)ReplyType.BULK_STRING.ordinal());
     UnsafeAccess.putInt(ptr + Utils.SIZEOF_BYTE, size);
     
+  }
+  
+  /**
+   * Does command processor need to convert the result of execution
+   * to a Redis response format automatically
+   * @return true, false
+   */
+  public default boolean autoconvertToRedis() {
+    return true;
+  }
+  
+  public default void convertToRedis(ByteBuffer buf) {
+    // do nothing
   }
 }

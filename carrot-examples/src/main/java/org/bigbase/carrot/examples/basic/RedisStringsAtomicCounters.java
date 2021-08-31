@@ -50,7 +50,7 @@ import redis.clients.jedis.Jedis;
  * 3) LZ4HC compression 57.5/10.3 ~ 5.6x 
  *  
  * 
- * @author vrodionov
+ * 
  *
  */
 public class RedisStringsAtomicCounters {

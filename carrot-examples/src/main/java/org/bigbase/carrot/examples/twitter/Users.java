@@ -32,7 +32,7 @@ import redis.clients.jedis.Jedis;
  * Follower or Following base class - represents user's followers/following - 
  * all users who follows or whom this user is following in a reverse chronological
  * order
- * @author vrodionov
+ * 
  *
  */
 public abstract class Users {

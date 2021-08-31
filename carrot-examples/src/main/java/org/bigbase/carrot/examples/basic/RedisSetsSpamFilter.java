@@ -70,7 +70,7 @@ import redis.clients.jedis.Jedis;
  * Notes: Using Hash hack to store large set of objects has one downside - you can't use SET
  * specific API: union, intersect etc.
  *  
- * @author vrodionov
+ * 
  *
  */
 public class RedisSetsSpamFilter {

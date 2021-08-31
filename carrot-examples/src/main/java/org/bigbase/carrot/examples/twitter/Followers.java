@@ -23,7 +23,7 @@ import java.util.Date;
 
 /**
  * Class Followers - represents user's followers
- * @author vrodionov
+ * 
  *
  */
 public class Followers extends Users {

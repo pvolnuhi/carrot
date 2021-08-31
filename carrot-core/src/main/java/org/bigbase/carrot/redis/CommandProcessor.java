@@ -22,6 +22,7 @@ import java.util.HashMap;
 
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.commands.RedisCommand;
+import org.bigbase.carrot.redis.commands.SHUTDOWN;
 import org.bigbase.carrot.redis.util.Utils;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
@@ -77,22 +78,23 @@ public class CommandProcessor {
     }
   };
   
-  private static final byte[] WRONG_REQUEST_FORMAT = "-ERR Wrong request format".getBytes();
-  private static final byte[] UNSUPPORTED_COMMAND = "-ERR Unsupported command: ".getBytes();
+  private static final byte[] WRONG_REQUEST_FORMAT = "-ERR: Wrong request format".getBytes();
+  private static final byte[] UNSUPPORTED_COMMAND = "-ERR: Unsupported command: ".getBytes();
   
   /**
    * Main method
    * @param in input buffer contains incoming Redis command
    * @param out output buffer to return to a client (command response)
+   * @return true , if shutdown was requested, false - otherwise
    */
   @SuppressWarnings("deprecation")
-  public static void process(BigSortedMap storage, ByteBuffer in, ByteBuffer out) {
+  public static boolean process(BigSortedMap storage, ByteBuffer in, ByteBuffer out) {
     long inbuf = inBufTLS.get();
     // Convert Redis request to a Carrot internal format
     boolean result = Utils.requestToCarrot(in, inbuf, BUFFER_SIZE);
     if (!result) {
       out.put(WRONG_REQUEST_FORMAT);
-      return;
+      return false;
     }
     HashMap<Key, RedisCommand> map = commandMapTLS.get();
     Key key = getCommandKey(inbuf);
@@ -109,15 +111,22 @@ public class CommandProcessor {
         out.put(cmdName.getBytes());
         out.put((byte)'\r');
         out.put((byte)'\n');
-        return;
+        return false;
       } 
     }
     long outbuf = outBufTLS.get();
     // Execute Redis command
+    //*DEBUG*/ System.out.println(Thread.currentThread().getName()+" : "+cmd.getClass().getName());
     cmd.executeCommand(storage, inbuf, outbuf, BUFFER_SIZE);
-    // Convert response to Redis format
-    Utils.carrotToRedisResponse(outbuf, out);
+    if (cmd.autoconvertToRedis()) {
+      // Convert response to Redis format
+      Utils.carrotToRedisResponse(outbuf, out);
+    } else {
+      // Let command implement custom conversion
+      cmd.convertToRedis(out);
+    }
     // Done.
+    return cmd instanceof SHUTDOWN;  
   }
   
   /**
@@ -130,6 +139,8 @@ public class CommandProcessor {
     int cmdLen = UnsafeAccess.toInt(inbuf + org.bigbase.carrot.util.Utils.SIZEOF_INT);
     key.address = inbuf + 2 * org.bigbase.carrot.util.Utils.SIZEOF_INT;
     key.length = cmdLen;
+    // To upper case
+    org.bigbase.carrot.util.Utils.toUpperCase(key.address, key.length);
     return key;
   }
   

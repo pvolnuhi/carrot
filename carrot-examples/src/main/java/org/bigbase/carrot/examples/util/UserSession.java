@@ -38,7 +38,7 @@ import org.bigbase.carrot.util.Bytes;
  * cached session information.
  * "StartTime" - start session time (timestamp - 8 bytes)
  * "LastActiveTime" - last interaction time (timestamp - 8 bytes)
- * @author vrodionov
+ * 
  *
  */
 public class UserSession extends KeyValues{ 

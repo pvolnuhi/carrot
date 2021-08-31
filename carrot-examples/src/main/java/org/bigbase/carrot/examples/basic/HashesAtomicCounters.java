@@ -89,7 +89,7 @@ import org.bigbase.carrot.util.Utils;
  * In Redis Hashes with ziplist encodings can be used to keep counters
  * TODO: we need to compare Redis optimized version with our default
  * 
- * @author vrodionov
+ * 
  *
  */
 public class HashesAtomicCounters {

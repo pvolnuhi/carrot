@@ -118,12 +118,6 @@ import org.bigbase.carrot.compression.CodecType;
  * Redis/ Carrot LZ4 compression   = 4.18
  * Redis/ Carrot LZ4HC compression = 4.32
  * 
- *     
- *     
- *     
- *  
- * @author vrodionov
- *
  */
 
 public class TestCarrotTwitter {

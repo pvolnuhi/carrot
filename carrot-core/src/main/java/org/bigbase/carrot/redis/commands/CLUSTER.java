@@ -17,42 +17,65 @@
  */
 package org.bigbase.carrot.redis.commands;
 
+import java.nio.ByteBuffer;
+
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.server.Server;
+import org.bigbase.carrot.redis.cluster.Cluster;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
-public class SHUTDOWN implements RedisCommand {
-
+/**
+ * Supported cluster commands:
+ * 
+ * 1. CLUSTER SLOTS
+ *
+ */
+public class CLUSTER implements RedisCommand {
+  
+  private Object[] result;
+  boolean autoConvert = false;
+  
+  private void reset() {
+    // Reset state
+    autoConvert = false;
+    result = null;
+  }
+  
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
+    
+    reset();
+    
     int numArgs = UnsafeAccess.toInt(inDataPtr);
-    boolean save = false;
-    if (numArgs > 2) {
+    if (numArgs != 2) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
+      autoConvert = true;
       return;
     }
     inDataPtr += Utils.SIZEOF_INT;
     inDataPtr = skip(inDataPtr, 1);
-    if (numArgs == 2) {
-      int size = UnsafeAccess.toInt(inDataPtr);
-      inDataPtr += Utils.SIZEOF_INT;
+    int size = UnsafeAccess.toInt(inDataPtr);
+    inDataPtr += Utils.SIZEOF_INT;
       
-      if (Utils.compareTo(SAVE_FLAG, SAVE_LENGTH, inDataPtr, size) == 0) {
-        save = true;
-       
-      } else  if (Utils.compareTo(NOSAVE_FLAG, NOSAVE_LENGTH, inDataPtr, size) == 0) {
-        save = false;
-      } else {
-        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_UNSUPPORTED_COMMAND, ": SHUTDOWN " + 
+    if (Utils.compareTo(SLOTS_FLAG, SLOTS_LENGTH, inDataPtr, size) != 0 && 
+        Utils.compareTo(SLOTS_LOWER_CASE_FLAG, SLOTS_LENGTH, inDataPtr, size) != 0) {
+        Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_UNSUPPORTED_COMMAND, ": CLUSTER " + 
             Utils.toString(inDataPtr, size));
+        autoConvert = true;
         return;
-      }
     }
-    boolean result = Server.SHUTDOWN(map, save);
-    if (!result) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_OPERATION_FAILED);
-      return;
-    }
+    result = Cluster.SLOTS();
+  }
+  
+  /**
+   * Do automatic conversion?
+   */
+  public boolean autoconvertToRedis() {
+    return autoConvert;
+  }
+  
+  @Override
+  public void convertToRedis(ByteBuffer buf) {
+    org.bigbase.carrot.redis.util.Utils.serializeTypedArray(result, buf);
   }
 }

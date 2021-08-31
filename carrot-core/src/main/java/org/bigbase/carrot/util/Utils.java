@@ -1802,4 +1802,17 @@ public class Utils {
     return kvs;
   }
   
+  public static void toUpperCase(long addr, int len) {
+    int min = 'a'; // 97
+    int max = 'z'; // 122
+    for (int i = 0; i < len; i++) {
+      byte v = UnsafeAccess.toByte(addr + i);
+      if (v <= max && v >= min) {
+        v -= 32;
+        UnsafeAccess.putByte(addr + i,  v);
+      }
+    }
+    
+  }
+  
 }

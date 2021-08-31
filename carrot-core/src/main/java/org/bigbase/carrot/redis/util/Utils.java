@@ -503,7 +503,7 @@ public class Utils {
   }
 
   /**
-   * Converts ARRAY Carrot type to a Redis response
+   * Converts simple ARRAY Carrot type to a Redis response
    * @param ptr memory address of a serialized Carrot response 
    * @param buf Redis response buffer
    */
@@ -531,6 +531,52 @@ public class Utils {
     }
   }
 
+  /**
+   * This call is used for CLUSTER SLOTS
+   * @param data array objects
+   * @param buf buffer to serialize to
+   */
+  public static void serializeTypedArray(Object[] data, ByteBuffer buf) {
+    buf.put(ARR_TYPE);
+    int len = data == null? -1: data.length;
+    longToStr(len, buf, buf.position());
+    buf.put(CRLF);
+    if (len < 0) return;
+    for (int i = 0; i < data.length; i++) {
+      serializeObject(data[i], buf);
+    }
+  }
+  
+  private static void serializeObject(Object obj, ByteBuffer buf) {
+    if (obj instanceof Long) {
+      Long value = (Long) obj;
+      serializeLong(value, buf);
+    } else if (obj instanceof String) {
+      String value = (String) obj;
+      serializeString(value, buf);
+    } else if (obj instanceof Object[]) {
+      Object[] value = (Object[]) obj;
+      serializeTypedArray(value, buf);
+    }
+  }
+
+  private static void serializeLong(long value, ByteBuffer buf) {
+    buf.put(INT_TYPE);
+    longToStr(value, buf, buf.position());
+    buf.put(CRLF);
+  }
+  
+  private static void serializeString(String s, ByteBuffer buf) {
+    buf.put(BULK_TYPE);  
+    int len = s == null? -1: s.length();
+    longToStr(len, buf, buf.position());
+    buf.put(CRLF);
+    if (len > 0) {
+      buf.put(s.getBytes());
+      buf.put(CRLF);
+    }
+  }
+  
   /**
    * Converts BULK_STRING Carrot type to a Redis response
    * @param ptr memory address of a serialized Carrot response 

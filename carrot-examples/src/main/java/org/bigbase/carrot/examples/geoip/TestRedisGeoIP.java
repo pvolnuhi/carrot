@@ -27,7 +27,7 @@ import redis.clients.jedis.Jedis;
  * 
  * Total memory usage: 388.5 MB
  * 
- * @author vrodionov
+ * 
  *
  */
 public class TestRedisGeoIP {

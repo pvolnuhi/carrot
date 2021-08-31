@@ -57,7 +57,7 @@ public class SnapshotManager {
 
 class SnapshotThread extends Thread {
   
-  AtomicReference<BigSortedMap> storeRef;
+  AtomicReference<BigSortedMap> storeRef = new AtomicReference<BigSortedMap>();
   Date lastSnapshotTime;
   
   SnapshotThread() {

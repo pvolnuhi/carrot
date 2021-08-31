@@ -56,7 +56,7 @@ import redis.clients.jedis.Jedis;
  * 2) LZ4   compression  5.1M/2.8M ~ 1.8x
  * 3) LZ4HC compression  5.1M/2.6M ~ 2.0x 
  * 
- * @author vrodionov
+ * 
  *
  */
 public class RedisHashesAllEnglishWords {
