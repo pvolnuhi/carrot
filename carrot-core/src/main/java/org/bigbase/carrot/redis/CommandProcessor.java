@@ -87,11 +87,17 @@ public class CommandProcessor {
    * @param out output buffer to return to a client (command response)
    * @return true , if shutdown was requested, false - otherwise
    */
+  
+  static long executeTotal = 0;
+  static int count = 0;
+  
   @SuppressWarnings("deprecation")
   public static boolean process(BigSortedMap storage, ByteBuffer in, ByteBuffer out) {
+    count++;
     long inbuf = inBufTLS.get();
     // Convert Redis request to a Carrot internal format
     boolean result = Utils.requestToCarrot(in, inbuf, BUFFER_SIZE);
+    
     if (!result) {
       out.put(WRONG_REQUEST_FORMAT);
       return false;
@@ -116,8 +122,12 @@ public class CommandProcessor {
     }
     long outbuf = outBufTLS.get();
     // Execute Redis command
-    //*DEBUG*/ System.out.println(Thread.currentThread().getName()+" : "+cmd.getClass().getName());
+    long start = System.nanoTime();
     cmd.executeCommand(storage, inbuf, outbuf, BUFFER_SIZE);
+    executeTotal += System.nanoTime() - start;
+    if (count % 10000 == 0) {
+      //System.out.println(" command exe avg=" + (executeTotal / (1000 * count)));
+    }
     if (cmd.autoconvertToRedis()) {
       // Convert response to Redis format
       Utils.carrotToRedisResponse(outbuf, out);

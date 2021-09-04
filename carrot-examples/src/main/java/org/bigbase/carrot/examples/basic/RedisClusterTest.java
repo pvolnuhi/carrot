@@ -84,7 +84,7 @@ import redis.clients.jedis.JedisPoolConfig;
 public class RedisClusterTest {
   
 
-  static long N = 1000000;
+  static long N = 10000000;
   static long totalDataSize = 0;
   static List<UserSession> userSessions = new ArrayList<UserSession>();
   static AtomicLong index = new AtomicLong(0);
@@ -149,14 +149,19 @@ public class RedisClusterTest {
     }
   }
   
+  private static JedisCluster client;
+  
   private static JedisCluster getClusterClient() {
-    Set<HostAndPort> nodes = new HashSet<HostAndPort>();
-    nodes.add(new HostAndPort("127.0.0.1", 6379));
-    JedisPoolConfig config = new JedisPoolConfig();
-    config.setMaxTotal(10000);
-    config.setMaxIdle(500);
-
-    return new JedisCluster(nodes, config);
+    if (client != null) return client;
+    synchronized(RedisClusterTest.class) {
+      Set<HostAndPort> nodes = new HashSet<HostAndPort>();
+      nodes.add(new HostAndPort("127.0.0.1", 6379));
+      JedisPoolConfig config = new JedisPoolConfig();
+      config.setMaxTotal(100);
+      config.setMaxIdle(100);
+      client = new JedisCluster(nodes, config);
+    }
+    return client;
   }
   
   private static void runClusterLoad() throws IOException, OperationFailedException {

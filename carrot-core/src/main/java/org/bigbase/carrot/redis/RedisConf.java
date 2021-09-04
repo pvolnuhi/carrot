@@ -55,7 +55,7 @@ public class RedisConf {
 
   public final static int DEFAULT_SERVER_PORT = 6379; 
   // As of v. 0.1
-  public final static int DEFAULT_COMMAND_COUNT = 104;
+  public final static int DEFAULT_COMMAND_COUNT = 105;
   public final static long DEFAULT_MAX_MEMORY_LIMIT = 1024 * 1024 * 1024; // 1GB
   public final static String DEFAULT_COMPRESSION_CODEC = "none";
   public final static int DEFAULT_THREAD_POOL_SIZE = 

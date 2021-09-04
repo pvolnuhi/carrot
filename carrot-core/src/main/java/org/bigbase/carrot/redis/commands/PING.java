@@ -17,32 +17,21 @@
  */
 package org.bigbase.carrot.redis.commands;
 
-import java.util.List;
-
 import org.bigbase.carrot.BigSortedMap;
-import org.bigbase.carrot.redis.strings.Strings;
-import org.bigbase.carrot.util.KeyValue;
 import org.bigbase.carrot.util.UnsafeAccess;
-import org.bigbase.carrot.util.Utils;
 
-public class MSET implements RedisCommand{
-
-
+public class PING implements RedisCommand {
+  
+  static long PONG = UnsafeAccess.allocAndCopy("PONG", 0, 4); 
+  
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     int numArgs = UnsafeAccess.toInt(inDataPtr);
-    if (numArgs < 3 || (numArgs - 1) % 2 != 0) {
+    if (numArgs > 1) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
       return;
     }
-    inDataPtr += Utils.SIZEOF_INT;
-    // Skip command name
-    inDataPtr = skip(inDataPtr, 1);  
-    List<KeyValue> kvs = Utils.loadKeyValues(inDataPtr, (numArgs - 1) / 2);
-    boolean result = Strings.MSET(map, kvs);
-    // Always succeed if not OOM error
-    if (!result) {
-      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_OPERATION_FAILED);
-    }
-  }   
+    
+    BULK_REPLY(outBufferPtr, PONG, 4);
+  }
 }

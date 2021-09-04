@@ -228,6 +228,14 @@ public interface RedisCommand {
     UnsafeAccess.putInt(ptr, len);     
   }
   
+  default void BULK_REPLY(long ptr, long str, int size) {
+    UnsafeAccess.putByte(ptr, (byte) ReplyType.BULK_STRING.ordinal());
+    // skip length of a string
+    ptr += Utils.SIZEOF_BYTE;
+    UnsafeAccess.copy(str, ptr + Utils.SIZEOF_INT, size);
+    UnsafeAccess.putInt(ptr, size);
+  }
+  
   default void INT_REPLY(long ptr, long value) {
     UnsafeAccess.putByte(ptr, (byte) ReplyType.INTEGER.ordinal());
     // skip length of a string

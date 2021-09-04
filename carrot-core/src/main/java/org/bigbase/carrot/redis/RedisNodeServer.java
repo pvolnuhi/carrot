@@ -126,6 +126,8 @@ public class RedisNodeServer implements Runnable {
           // Adjusts this channel's blocking mode to false
           client.configureBlocking(false);
           client.setOption(StandardSocketOptions.TCP_NODELAY, true);
+          client.setOption(StandardSocketOptions.SO_SNDBUF, 64 * 1024);
+          client.setOption(StandardSocketOptions.SO_RCVBUF, 64 * 1024);
           // Operation-set bit for read operations
           client.register(selector, SelectionKey.OP_READ);
           log("Connection Accepted: " + client.getLocalAddress());
@@ -155,12 +157,16 @@ public class RedisNodeServer implements Runnable {
     }    
   }
 
+  long totalReqTime = 0;
+  int ricCount = 0;
+  int iter = 0;
+  
   /**
    * Process incoming request
    * @param key selection key for a socket channel
    */
   private void processRequest(SelectionKey key) {
-    
+    long startTime = System.nanoTime();
     if (key.attachment() == null) {
       key.attach(new RequestHandlers.Attachment());
     }
@@ -175,9 +181,12 @@ public class RedisNodeServer implements Runnable {
     try {
       long startCounter = System.nanoTime();
       long max_wait_ns = 100000000; // 100ms
-
+      long startClock = 0;
+            
       while (true) {
+        iter++;
         int num = channel.read(in);
+        
         if (num < 0) {
           // End-Of-Stream - socket was closed, cancel the key
           key.cancel();
@@ -190,11 +199,16 @@ public class RedisNodeServer implements Runnable {
         }
         // Try to parse
         int oldPos = in.position();
+        if (startClock == 0) startClock = System.nanoTime();
         if (!requestIsComplete(in)) {
           // restore position
           in.position(oldPos);
+          in.limit(in.capacity());
           continue;
         }
+        
+        ricCount++;
+        
         in.position(oldPos);
         // Process request
         boolean shutdown = CommandProcessor.process(store, in, out);
@@ -212,9 +226,15 @@ public class RedisNodeServer implements Runnable {
         // TODO
         e.printStackTrace();
       }
+      key.cancel();
     } finally {
       // Release selection key - ready for the next request
       release(key);
+    }
+    totalReqTime += System.nanoTime() - startTime;
+    if ((ricCount % 10000) == 0) {
+      //System.out.println("Avg request time ="+(totalReqTime / (1000 * ricCount)) + 
+      //  " requests="+ ricCount + " iterations="+ iter);
     }
   }
   

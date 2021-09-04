@@ -43,9 +43,9 @@ public class KeysLocker {
    * @param key
    */
   public static void readLock(Key key) {
-    int hash = key.hashCode();
-    int index = hash % locks.length;
-    locks[index].readLock().lock();
+//    int hash = key.hashCode();
+//    int index = hash % locks.length;
+//    locks[index].readLock().lock();
   }
 
   /**
@@ -53,9 +53,9 @@ public class KeysLocker {
    * @param key
    */
   public static void readUnlock(Key key) {
-    int hash = key.hashCode();
-    int index = hash % locks.length;
-    locks[index].readLock().unlock();
+//    int hash = key.hashCode();
+//    int index = hash % locks.length;
+//    locks[index].readLock().unlock();
   }
 
   /**
@@ -63,9 +63,9 @@ public class KeysLocker {
    * @param key
    */
   public static void readLock(KeyValue key) {
-    int hash = key.hashCode();
-    int index = hash % locks.length;
-    locks[index].readLock().lock();
+//    int hash = key.hashCode();
+//    int index = hash % locks.length;
+//    locks[index].readLock().lock();
   }
 
   /**
@@ -73,9 +73,9 @@ public class KeysLocker {
    * @param key
    */
   public static void readUnlock(KeyValue key) {
-    int hash = key.hashCode();
-    int index = hash % locks.length;
-    locks[index].readLock().unlock();
+//    int hash = key.hashCode();
+//    int index = hash % locks.length;
+//    locks[index].readLock().unlock();
   }
 
   /**
@@ -83,9 +83,9 @@ public class KeysLocker {
    * @param key
    */
   public static void writeLock(Key key) {
-    int hash = key.hashCode();
-    int index = hash % locks.length;
-    locks[index].writeLock().lock();
+//    int hash = key.hashCode();
+//    int index = hash % locks.length;
+//    locks[index].writeLock().lock();
   }
 
   /**
@@ -93,9 +93,9 @@ public class KeysLocker {
    * @param key
    */
   public static void writeUnlock(Key key) {
-    int hash = key.hashCode();
-    int index = hash % locks.length;
-    locks[index].writeLock().unlock();
+//    int hash = key.hashCode();
+//    int index = hash % locks.length;
+//    locks[index].writeLock().unlock();
   }
 
   /**
@@ -103,9 +103,9 @@ public class KeysLocker {
    * @param key
    */
   public static void writeLock(KeyValue key) {
-    int hash = key.hashCode();
-    int index = hash % locks.length;
-    locks[index].writeLock().lock();
+//    int hash = key.hashCode();
+//    int index = hash % locks.length;
+//    locks[index].writeLock().lock();
   }
 
   /**
@@ -113,9 +113,9 @@ public class KeysLocker {
    * @param key
    */
   public static void writeUnlock(KeyValue key) {
-    int hash = key.hashCode(); 
-    int index = hash % locks.length;
-    locks[index].writeLock().unlock();
+//    int hash = key.hashCode(); 
+//    int index = hash % locks.length;
+//    locks[index].writeLock().unlock();
   }
 
   /**
@@ -123,20 +123,20 @@ public class KeysLocker {
    * @param kvs list of KeyValues
    */
   public static void readLockAllKeyValues(List<KeyValue> kvs) {
-    // Sort them first to avoid deadlocks in a future
-    Collections.sort(kvs);
-    for(int i=0; i < kvs.size(); i++) {
-      readLock(kvs.get(i));
-    }
+//    // Sort them first to avoid deadlocks in a future
+//    Collections.sort(kvs);
+//    for(int i=0; i < kvs.size(); i++) {
+//      readLock(kvs.get(i));
+//    }
   }
   /**
    * Read unlock list of KeyValues
    * @param kvs list of KeyValues
    */
   public static void readUnlockAllKeyValues(List<KeyValue> kvs) {
-    for(int i=0; i < kvs.size(); i++) {
-      readUnlock(kvs.get(i));
-    }
+//    for(int i=0; i < kvs.size(); i++) {
+//      readUnlock(kvs.get(i));
+//    }
   }
   
   /**
@@ -144,20 +144,20 @@ public class KeysLocker {
    * @param kvs list of KeyValues
    */
   public static void writeLockAllKeyValues(List<KeyValue> kvs) {
-    // Sort them first to avoid deadlocks in a future
-    Collections.sort(kvs);
-    for(int i=0; i < kvs.size(); i++) {
-      writeLock(kvs.get(i));
-    }
+//    // Sort them first to avoid deadlocks in a future
+//    Collections.sort(kvs);
+//    for(int i=0; i < kvs.size(); i++) {
+//      writeLock(kvs.get(i));
+//    }
   }
   /**
    * Write unlock list of KeyValues
    * @param kvs list of KeyValues
    */
   public static void writeUnlockAllKeyValues(List<KeyValue> kvs) {
-    for(int i=0; i < kvs.size(); i++) {
-      writeUnlock(kvs.get(i));
-    }
+//    for(int i=0; i < kvs.size(); i++) {
+//      writeUnlock(kvs.get(i));
+//    }
   }
   
   /**
@@ -165,11 +165,11 @@ public class KeysLocker {
    * @param kvs list of Keys
    */
   public static void writeLockAllKeys(List<Key> kvs) {
-    // Sort them first to avoid deadlocks in a future
-    Collections.sort(kvs);
-    for(int i=0; i < kvs.size(); i++) {
-      writeLock(kvs.get(i));
-    }
+//    // Sort them first to avoid deadlocks in a future
+//    Collections.sort(kvs);
+//    for(int i=0; i < kvs.size(); i++) {
+//      writeLock(kvs.get(i));
+//    }
   }
   
   /**
@@ -177,9 +177,9 @@ public class KeysLocker {
    * @param kvs list of Keys
    */
   public static void writeUnlockAllKeys(List<Key> kvs) {
-    for(int i=0; i < kvs.size(); i++) {
-      writeUnlock(kvs.get(i));
-    }
+//    for(int i=0; i < kvs.size(); i++) {
+//      writeUnlock(kvs.get(i));
+//    }
   }
   
   /**
@@ -187,19 +187,19 @@ public class KeysLocker {
    * @param kvs list of Keys
    */
   public static void readLockAllKeys(List<Key> kvs) {
-    // Sort them first to avoid deadlocks in a future
-    Collections.sort(kvs);
-    for(int i=0; i < kvs.size(); i++) {
-      readLock(kvs.get(i));
-    }
+//    // Sort them first to avoid deadlocks in a future
+//    Collections.sort(kvs);
+//    for(int i=0; i < kvs.size(); i++) {
+//      readLock(kvs.get(i));
+//    }
   }
   /**
    * Read unlock list of Keys
    * @param kvs list of Keys
    */
   public static void readUnlockAllKeys(List<Key> kvs) {
-    for(int i=0; i < kvs.size(); i++) {
-      readUnlock(kvs.get(i));
-    }
+//    for(int i=0; i < kvs.size(); i++) {
+//      readUnlock(kvs.get(i));
+//    }
   }
 }

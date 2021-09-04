@@ -40,6 +40,7 @@ public class SET implements RedisCommand {
       long expire = 0;
       int numArgs = UnsafeAccess.toInt(inDataPtr);
       int argsCount;
+      boolean keepTTL = false;
       if (numArgs < 3 || numArgs > 7) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
@@ -64,6 +65,7 @@ public class SET implements RedisCommand {
         num = ttlSectionSize(inDataPtr, false, numArgs - argsCount);
         inDataPtr = skip(inDataPtr, num);
         argsCount += num;
+        if (expire  == -1) keepTTL = true;
       }
       
       if (numArgs > argsCount) {
@@ -94,7 +96,7 @@ public class SET implements RedisCommand {
       
       long size = 0;    
       if (withGet) {
-        size = Strings.SETGET(map, keyPtr, keySize, valPtr, valSize, expire, opts, false, 
+        size = Strings.SETGET(map, keyPtr, keySize, valPtr, valSize, expire, opts, keepTTL, 
           outBufferPtr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, outBufferSize - Utils.SIZEOF_BYTE - Utils.SIZEOF_INT);
         
         // Bulk String reply
@@ -107,7 +109,7 @@ public class SET implements RedisCommand {
             (int) size + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT);
         }
       } else {
-        boolean result = Strings.SET(map, keyPtr, keySize, valPtr, valSize, expire, opts, false);
+        boolean result = Strings.SET(map, keyPtr, keySize, valPtr, valSize, expire, opts, keepTTL);
         if (!result) {
           // null
           NULL_STRING_REPLY(outBufferPtr);

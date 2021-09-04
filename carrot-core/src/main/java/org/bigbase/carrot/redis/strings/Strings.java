@@ -1060,6 +1060,9 @@ public class Strings {
   public static boolean SET(BigSortedMap map, long keyPtr, int keySize, long valuePtr,
       int valueSize, long expire, MutationOptions opts, boolean keepTTL) {
 
+    if (expire == 0 && opts == MutationOptions.NONE && keepTTL == false) {
+      return SET_DIRECT(map, keyPtr, keySize, valuePtr, valueSize);
+    }
     Key kk = getKey(keyPtr, keySize);
     try {
       KeysLocker.writeLock(kk);
@@ -1074,6 +1077,28 @@ public class Strings {
       set.setExpire(expire);
       boolean result = map.execute(set);
       return result;
+    } finally {
+      KeysLocker.writeUnlock(kk);
+    }
+  }
+  /**
+   * This optimized version is used for MSET (no expire, no mutation options)
+   * @param map sorted map storage
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param valuePtr value address
+   * @param valueSize value size
+   * @return true - success, false - OOM
+   */
+  public static boolean SET_DIRECT(BigSortedMap map, long keyPtr, int keySize, long valuePtr,
+      int valueSize) {
+
+    Key kk = getKey(keyPtr, keySize);
+    try {
+      KeysLocker.writeLock(kk);
+      int kSize = buildKey(keyPtr, keySize);
+      long kPtr = keyArena.get();
+      return map.put(kPtr, kSize, valuePtr, valueSize, 0);
     } finally {
       KeysLocker.writeUnlock(kk);
     }
@@ -1287,8 +1312,7 @@ public class Strings {
       KeysLocker.writeLockAllKeyValues(kvs);
       for(int i = 0; i < kvs.size(); i++) {
         KeyValue kv = kvs.get(i);
-        boolean result = SET(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize, 0, 
-          MutationOptions.NONE, false);
+        boolean result = SET_DIRECT(map, kv.keyPtr, kv.keySize, kv.valuePtr, kv.valueSize);
         if (!result) {
           // Out of memory possible
           return false;

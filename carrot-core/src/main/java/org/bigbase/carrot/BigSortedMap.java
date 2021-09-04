@@ -166,16 +166,12 @@ public class BigSortedMap {
    */
   private static boolean statsUpdateDisabled = false;
   
-  /*
-   * Read-Write Lock TODO: StampedLock (Java 8)
-   */
-  static ReentrantReadWriteLock[] locks = new ReentrantReadWriteLock[11113];
   
-  static {
-    for (int i = 0; i < locks.length; i++) {
-      locks[i] = new ReentrantReadWriteLock();
-    }
-  }
+//  static {
+//    for (int i = 0; i < locks.length; i++) {
+//      locks[i] = new ReentrantReadWriteLock();
+//    }
+//  }
   
   /*
    * We need this buffer to keep keys during execute update
@@ -504,7 +500,17 @@ public class BigSortedMap {
    */
   private ConcurrentSkipListMap<IndexBlock, IndexBlock> map = 
       new ConcurrentSkipListMap<IndexBlock, IndexBlock>();
-
+  /*
+   * Read-Write Lock TODO: StampedLock (Java 8), decrease # of locks
+   * too high
+   */
+  ReentrantReadWriteLock[] locks = new ReentrantReadWriteLock[11113];
+  
+  /*
+   * Read-Write Lock for index blcoks. TODO: StampedLock (Java 8)
+   */
+  ReentrantReadWriteLock[] indexLocks = new ReentrantReadWriteLock[11113];
+  
   /**
    * This tracks instance allocated memory 
    */
@@ -577,8 +583,8 @@ public class BigSortedMap {
    * @param init - initialize
    */
   public BigSortedMap(long maxMemory, boolean init) {
+    this(init);
     setGlobalMemoryLimit(maxMemory);
-    if (init) initNodes();
   }
   
   /**
@@ -586,6 +592,7 @@ public class BigSortedMap {
    * @param init
    */
   public BigSortedMap(boolean init) {
+    initLocks();
     if (init) initNodes();
   }
   
@@ -594,6 +601,24 @@ public class BigSortedMap {
    */
   public BigSortedMap() {
     this(true);
+  }
+  
+  /**
+   * Initialize locks
+   */
+  private void initLocks() {
+    for (int i = 0; i < locks.length; i++) {
+      locks[i] = new ReentrantReadWriteLock();
+      indexLocks[i] = new ReentrantReadWriteLock();
+    }
+  }
+  
+  /**
+   * Get index locks
+   * @return index lock array
+   */
+  ReentrantReadWriteLock[] getIndexLocks() {
+    return this.indexLocks;
   }
   
   /**

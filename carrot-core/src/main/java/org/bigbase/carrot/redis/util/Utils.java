@@ -70,6 +70,8 @@ public class Utils {
     // Check first byte
     if (ARR_TYPE != buf.get(0)) {
       buf.rewind();
+      /*DEBUG*/System.err.println("PANIC!!! - wrong message format: pos = "+ buf.position() + 
+        " remaining=" + buf.remaining());
       int limit = buf.limit();
       if (limit < 2) {
         return false;
@@ -112,10 +114,80 @@ public class Utils {
       // We expect request consists of array of bulk strings
       buf.position(pos);
       pos += strlen + 2; // 2 - \r\n
-      buf.position(pos);
+      if (pos <= buf.limit()) {
+        buf.position(pos);
+      } else {
+        return false;
+      }
     }
     return true;
   }
+  
+  public static boolean arrayResponseIsComplete(ByteBuffer buf) {
+    
+    if (buf.position() == 0) return false;
+    buf.flip(); // do not double flip!!!
+    int len = 0;
+    
+    // Check first byte
+    if (ARR_TYPE != buf.get(0)) {
+      buf.rewind();
+      /*DEBUG*/System.err.println("PANIC!!! - wrong message format: pos = "+ buf.position() + 
+        " remaining=" + buf.remaining());
+      int limit = buf.limit();
+      if (limit < 2) {
+        return false;
+      }
+      // I hope it is correct
+      return buf.get(limit - 2) == (byte) '\r' && buf.get(limit - 1) == (byte) '\n';
+    }
+    
+    // Read first line to get array length
+    int lsize = readLine(buf);
+    if (lsize < 0) {
+      // Wrong format
+      return false;
+    }
+    // Read array length
+    len = (int) strToLong(buf, 1, lsize - 3 /*less first byte and last two */);
+    if (len <= 0) {
+      return false;
+    }
+
+    int pos = lsize;
+    // move to next line
+    buf.position(pos);
+    
+    for (int i = 0; i < len; i++) {
+      lsize = readLine(buf);
+      if (lsize < 0) {
+        // wrong format
+        return false;
+      }
+      int strlen =  (int) strToLong(buf, pos + 1, lsize - 3);
+      if (strlen <= 0) {
+        // NULL string
+        pos += lsize;
+        buf.position(pos);
+        continue;
+      }
+      if (buf.get(pos) != BULK_TYPE) {
+        return false;
+      }
+      pos += lsize;
+
+      // We expect request consists of array of bulk strings
+      buf.position(pos);
+      pos += strlen + 2; // 2 - \r\n
+      if (pos <= buf.limit()) {
+        buf.position(pos);
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
   
   /**
    * Converts Redis request (raw) to an internal Carrot 
@@ -192,6 +264,7 @@ public class Utils {
    * @return
    */
   private static int readLine(ByteBuffer buf) {
+    if (buf.hasRemaining() == false) return -1;
     byte prev = buf.get();
     int count = 1;
     while(buf.hasRemaining()) {
@@ -219,6 +292,11 @@ public class Utils {
     
     int off = SIZEOF_INT;
     int count = 0, len = 0;
+    /*DEBUG*/ System.err.println("inline pos=" + buf.position() + " limit="+ buf.limit());
+    byte[] bytes = new byte[buf.remaining()];
+    buf.get(bytes);
+    System.err.println("first 100 bytes="+ (new String(bytes).substring(0, 100)));
+    buf.position(0);
     
     while(buf.hasRemaining()) {
       skipWhiteSpaces(buf);

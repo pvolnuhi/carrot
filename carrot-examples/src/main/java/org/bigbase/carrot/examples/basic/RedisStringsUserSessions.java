@@ -17,21 +17,21 @@
 
 package org.bigbase.carrot.examples.basic;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.bigbase.carrot.examples.util.UserSession;
 import org.bigbase.carrot.ops.OperationFailedException;
 
-import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisCluster;
-import redis.clients.jedis.JedisPoolConfig;
 
 /**
  * This example shows how to use Redis Strings to store user sessions objects 
@@ -79,10 +79,11 @@ import redis.clients.jedis.JedisPoolConfig;
 public class RedisStringsUserSessions {
   
 
-  static long N = 1000000;
+  static long N = 10000000;
   static long totalDataSize = 0;
   static List<UserSession> userSessions = new ArrayList<UserSession>();
   static AtomicLong index = new AtomicLong(0);
+  static int NUM_THREADS = 4;
   static {
     for (int i = 0; i < N; i++) {
       userSessions.add(UserSession.newSession(i));
@@ -93,102 +94,169 @@ public class RedisStringsUserSessions {
   public static void main(String[] args) throws IOException, OperationFailedException {
 
     System.out.println("Run Redis Cluster");
-    //runTest();
-    runClusterTest();
-  }
-  
-  private static JedisCluster getClusterClient() {
-    Set<HostAndPort> nodes = new HashSet<HostAndPort>();
-    nodes.add(new HostAndPort("127.0.0.1", 6379));
-    JedisPoolConfig config = new JedisPoolConfig();
-    config.setMaxTotal(10000);
-    config.setMaxIdle(500);
-
-    return new JedisCluster(nodes, config);
-  }
-  
-  private static void runClusterTest() throws IOException, OperationFailedException {
+    Jedis client = getClient();
+    client.flushAll();
+    Runnable r = () -> { try {runLoad();} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
     
-    JedisCluster client = getClusterClient();    
+    System.out.println("Finished "+ N + " sets in "+ (end - start) + "ms. RPS="+ 
+    (((long) N) * 1000) / (end - start));
+    
+    index.set(0);
+    
+    r = () -> { try {runGets();} catch (Exception e) {e.printStackTrace();}};
+    workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+    }
+    start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ N + " gets in "+ (end - start) + "ms. RPS="+ 
+    (((long) N) * 1000) / (end - start));
+    
+    start = System.currentTimeMillis();
+    client.save();
+    end = System.currentTimeMillis();
+    System.out.println("DB save took "+ (end -start)+"ms");
+    client.close();
+  }
+    
+  private static Jedis getClient() {
+    return new Jedis("localhost");
+  }
+  
+  private static int getIndexes(int[] to) {
+    int count = 0;
+    for (int i = 0; i < to.length; i++) {
+      int idx = (int) index.getAndIncrement();
+      if (idx >= N) break;
+      count++;
+      to[i] = idx;
+    }
+    return count;
+  }
+  
+  private static String[] getSetArgs(int[] idxs, int len) {
+    String[] ret = new String[2 * len];
+    for(int i = 0; i < len; i++) {
+      UserSession us = userSessions.get(idxs[i]);
+      String skey = us.getUserId();
+      String svalue = us.toString();
+      ret[2 * i] = skey;
+      ret[2 * i + 1] = svalue;
+    }
+    return ret;
+  }
+  
+  private static String[] getGetArgs(int[] idxs, int len) {
+    String[] ret = new String[len];
+    for(int i = 0; i < len; i++) {
+      UserSession us = userSessions.get(idxs[i]);
+      String skey = us.getUserId();
+      ret[i] = skey;
+    }
+    return ret;
+  }
+  
+  private static void runLoad() throws IOException, OperationFailedException {
+    
+    Jedis client = getClient();    
     totalDataSize = 0;
     
     long startTime = System.currentTimeMillis();
     int count = 0;
-    for (UserSession us: userSessions) {
-      count++;
-      String skey = us.getUserId();
-      String svalue = us.toString();
-      totalDataSize += skey.length() + svalue.length();    
-      client.set(skey, svalue);
-      if (count % 10000 == 0) {
-        System.out.println("set "+ count);
+    int[] idxs = new int[20];
+    int batches = 1;
+    for (;;) {
+//      int idx = (int) index.getAndIncrement();
+//      if (idx >= N) break;
+//      UserSession us = userSessions.get(idx);
+//      count++;
+//      String skey = us.getUserId();
+//      String svalue = us.toString();
+//      totalDataSize += skey.length() + svalue.length();    
+//      client.set(skey, svalue);
+      int len = getIndexes(idxs);
+      if (len == 0) break;
+      String[] args = getSetArgs(idxs, len);
+      client.mset(args);
+      count += len;
+      if (count / 100000 >= batches) {
+        System.out.println(Thread.currentThread().getId() +": set "+ count);
+        batches++;
       }
-      if (count == 10) break;
     }
     long endTime = System.currentTimeMillis();
         
-    System.out.println("Loaded " + userSessions.size() +" user sessions, total size="+totalDataSize
+    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" user sessions, total size="+totalDataSize
       + " in "+ (endTime - startTime) );
    
-    count = 0;
-    System.out.println("Press any button ...");
-    System.in.read();
-    startTime = System.currentTimeMillis();
-    for (UserSession us: userSessions) {
-      count++;
-      String skey = us.getUserId();
-      client.del(skey);
-      if (count % 10000 == 0) {
-        System.out.println("del "+ count);
-      }
-      if (count == 10) break;
-    }
-    endTime = System.currentTimeMillis();
-        
-    System.out.println("Deleted " + userSessions.size() +" user sessions, total size="+totalDataSize
-      + " in "+ (endTime - startTime) );
     client.close();
   }
   
-  private static void runTest() throws IOException, OperationFailedException {
+  private static void runGets() throws IOException, OperationFailedException {
     
-    Jedis client = new Jedis("localhost");    
+    Jedis client = getClient();    
     totalDataSize = 0;
     
     long startTime = System.currentTimeMillis();
-    int count =0;
-    for (UserSession us: userSessions) {
-      count++;
-      String skey = us.getUserId();
-      String svalue = us.toString();
-      totalDataSize += skey.length() + svalue.length();    
-      client.set(skey, svalue);
-      if (count % 10000 == 0) {
-        System.out.println("set "+ count);
+    int count = 0;
+    int batches = 1;
+    int[] idxs = new int[20];
+    for (;;) {
+//      int idx = (int) index.getAndIncrement();
+//      if (idx >= N) break;
+//      UserSession us = userSessions.get(idx);
+//      count++;
+//      String skey = us.getUserId();
+//      String svalue = us.toString();
+//      totalDataSize += skey.length() + svalue.length();    
+//      String v = client.get(skey);
+//      assertTrue(v != null && v.length() == svalue.length());
+      
+      int len = getIndexes(idxs);
+      if (len == 0) break;
+      String[] args = getGetArgs(idxs, len);
+      List<String> result = client.mget(args);
+      count += len;
+      if (count / 100000 >= batches) {
+        System.out.println(Thread.currentThread().getId() +": get "+ count);
+        batches++;
       }
+      assertEquals(args.length, result.size());
+      verify(result, idxs);
+      
+//      if (count % 10000 == 0) {
+//        System.out.println(Thread.currentThread().getId() +": get "+ count);
+//      }
     }
     long endTime = System.currentTimeMillis();
         
-    System.out.println("Loaded " + userSessions.size() +" user sessions, total size="+totalDataSize
-      + " in "+ (endTime - startTime) );
-   
-    count = 0;
-    System.out.println("Press any button ...");
-    System.in.read();
-    startTime = System.currentTimeMillis();
-    for (UserSession us: userSessions) {
-      count++;
-      String skey = us.getUserId();
-      client.del(skey);
-      if (count % 10000 == 0) {
-        System.out.println("del "+ count);
-      }
-    }
-    endTime = System.currentTimeMillis();
-        
-    System.out.println("Deleted " + userSessions.size() +" user sessions, total size="+totalDataSize
+    System.out.println(Thread.currentThread().getId() +": Read " + count +" user sessions"
       + " in "+ (endTime - startTime) );
     client.close();
   }
 
+  private static void verify(List<String> result, int[] idxs) {
+    int size = result.size();
+    for (int i= 0; i< size; i++) {
+      UserSession us = userSessions.get(idxs[i]);
+      String expected = us.toString();
+      String value = result.get(i);
+      assertNotNull(value);
+      assertEquals(expected, value);
+    }
+  }
+ 
+  
 }

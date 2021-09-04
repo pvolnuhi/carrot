@@ -86,9 +86,9 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * to a particular CPU cores - this value can be very low. The lower value is the better
 	 * performance is for put/delete operations.
 	 */
-	private static long SAFE_UNSAFE_THRESHOLD = 100;// in ms
+	private static long SAFE_UNSAFE_THRESHOLD = 0;// in ms
 
-	 private static long SAFE_UNSAFE_THRESHOLD_A = 100;// in ms
+	private static long SAFE_UNSAFE_THRESHOLD_A = 0;// in ms
 
 	// bytes
 
@@ -144,12 +144,12 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	/*
 	 * Read-Write Lock TODO: StampedLock (Java 8)
 	 */
-	static ReentrantReadWriteLock[] locks = new ReentrantReadWriteLock[11113];
-	static {
-		for (int i = 0; i < locks.length; i++) {
-			locks[i] = new ReentrantReadWriteLock();
-		}
-	}
+	/* static */ ReentrantReadWriteLock[] locks = null;//new ReentrantReadWriteLock[11113];
+//	static {
+//		for (int i = 0; i < locks.length; i++) {
+//			locks[i] = new ReentrantReadWriteLock();
+//		}
+//	}
 
 	/**
 	 * Get min size greater than current
@@ -262,6 +262,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		if (map != null) {
 		  map.incrInstanceAllocatedMemory(size);
 		  map.incrInstanceBlockIndexSize(size);
+		  this.locks = map.getIndexLocks();
 		} else {
 		  BigSortedMap.incrGlobalAllocatedMemory(size);
 		  BigSortedMap.incrGlobalBlockIndexSize(size);
@@ -490,7 +491,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	}
 
 	 public void readLock(boolean withException) throws RetryOperationException {
-	    if (isThreadSafe())
+	    if (isThreadSafe() || locks == null)
 	      return;
 	    long before = this.seqNumberSplitOrMerge;
 	    int index = (hashCode() % locks.length);
@@ -510,7 +511,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * Read unlock
 	 */
 	public void readUnlock() {
-		if (isThreadSafe())
+		if (isThreadSafe() || locks == null)
 			return;
 		int index = (hashCode() % locks.length);
 		ReentrantReadWriteLock lock = locks[index];
@@ -525,7 +526,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 */
 	public void writeLock() throws RetryOperationException {
 
-		if (isThreadSafe())
+		if (isThreadSafe() || locks == null)
 			return;
 		long before = this.seqNumberSplitOrMerge;
 		int index = (hashCode() % locks.length);
@@ -544,7 +545,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	 * Write unlock
 	 */
 	public void writeUnlock() {
-		if (isThreadSafe())
+		if (isThreadSafe() || locks == null)
 			return;
 		int index = (hashCode() % locks.length);
 		ReentrantReadWriteLock lock = locks[index];

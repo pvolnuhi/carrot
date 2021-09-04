@@ -17,10 +17,12 @@
 
 package org.bigbase.carrot.examples.util;
 
+import java.util.Calendar;
 import java.util.Properties;
 import java.util.Random;
 
 import org.bigbase.carrot.util.Bytes;
+import org.bigbase.carrot.util.Utils;
 
 /**
  * Simple user session class
@@ -42,7 +44,6 @@ import org.bigbase.carrot.util.Bytes;
  *
  */
 public class UserSession extends KeyValues{ 
-  static Random rnd = new Random();
   
   UserSession(Properties p){
     super(p);
@@ -91,28 +92,28 @@ public class UserSession extends KeyValues{
   
   public static UserSession newSession(int i) {
     Properties p = new Properties();
-    
-    p.put("SessionId", sessionId());
-    p.put("Host", host());
-    p.put("UserId", userId(i));
-    p.put("Type", type());
-    p.put("State", state());
+    Random rnd = new Random(i);
+    p.put("SessionId", sessionId(rnd));
+    p.put("Host", host(rnd));
+    p.put("UserId", userId(rnd, i));
+    p.put("Type", type(rnd));
+    p.put("State", state(rnd));
     p.put("MaxIdleTime", maxIdleTime());
     p.put("MaxSessionTime", maxSessionTime());
     p.put("MaxCachingTime", maxCachingTime());
-    p.put("StartTime", startTime());
-    p.put("LastActiveTime", lastActiveTime());
+    p.put("StartTime", startTime(rnd));
+    p.put("LastActiveTime", lastActiveTime(rnd));
     
     return new UserSession(p);
   }
   
-  private static String sessionId() {
+  private static String sessionId(Random rnd) {
     byte[] buf = new byte[8];
     rnd.nextBytes(buf);
     return Bytes.toHex(buf);
   }
   
-  private static String host() {
+  private static String host(Random rnd) {
     
     int v1 = rnd.nextInt(256);
     int v2 = rnd.nextInt(256);
@@ -121,17 +122,17 @@ public class UserSession extends KeyValues{
     return v1 + "." + v2 + "." + v3 +"." + v4;
   }
   
-  private static String userId(int userId) {
-    return "session:user:"+userId;
+  private static String userId(Random rnd, int userId) {
+    return "session:user:" + Utils.getRandomStr(rnd, 6) + ":" + userId;
   }
   
-  private static String type() {
+  private static String type(Random rnd) {
     double d = rnd.nextDouble();
     if (d < 0.1) return "APPLICATION";
     return "USER";
   }
   
-  private static String state() {
+  private static String state(Random rnd) {
     double d = rnd.nextDouble();
     if (d < 0.01) return "INVALID";
     return "VALID";
@@ -149,14 +150,21 @@ public class UserSession extends KeyValues{
     return "10";
   }
   
-  private static String startTime() {
-    long time = System.currentTimeMillis()/1000; // discard milliseconds
+  static long time ;
+  static {
+    Calendar cal = Calendar.getInstance();
+    cal.set(2025, 1, 1);
+    time = cal.getTimeInMillis();
+  }
+  
+  private static String startTime(Random rnd) {
+    //long time = System.currentTimeMillis()/1000; // discard milliseconds
     int period = 24 * 3600; 
     return Long.toString(time - rnd.nextInt(period));
   }
   
-  private static String lastActiveTime() {
-    long time = System.currentTimeMillis()/1000; // discard milliseconds
+  private static String lastActiveTime(Random rnd) {
+    //long time = System.currentTimeMillis()/1000; // discard milliseconds
     int period = 3600; 
     return Long.toString(time - rnd.nextInt(period));
   }
