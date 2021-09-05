@@ -29,7 +29,7 @@ Carrot supports multiple data nodes inside a single process, each data node can 
 
 #### Sparsed bitmaps
 First release introduces new data type: **sparsed bitmap**. The sparse bitmap has the same API as a regular bitmap. The difference is in memory usage:
-* sparse bitmap does not allocate memory continuosly, For example:  '''SETBIT key 1000000000 1''' in Redis will allocate at least 125MB of RAM first to keep all the bitmap up to the last bit set. The command for Carrot: '''SSETBIT 1000000000 1''' will allocate only 4Kb of data and will compress it after that. 
+* sparse bitmap does not allocate memory continuosly, For example:  ```SETBIT key 1000000000 1``` in Redis will allocate at least 125MB of RAM first to keep all the bitmap up to the last bit set. The command for Carrot: ```SSETBIT 1000000000 1``` will allocate only 4Kb of data and will compress it after that. 
 * Sparse bitmaps are very memory efficient when population counts (%% of set bits) is < 10% and > 90%. In this case it provides very decent compression. Sparse bitmaps length is limited only by available physical RAM (bit index is the signed 64-bit integer).
 
 #### B-tree data type
