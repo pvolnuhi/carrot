@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Carrot is the new in-memory data store, which proides full Redis comaptibility (up to the current 6.2.5 version) and can be used with any existing Redis clients. It will follow open source Redis as close as possible to facilitate easy migration for Redis users, but surely, Carrtot has its own flavors, which differ it from the original. 
+Carrot is the new in-memory data store, which proides full Redis compatibility (up to the current 6.2.5 version) and can be used with any existing Redis clients. It will follow open source Redis as close as possible to facilitate easy migration for existing Redis users, but surely, Carrtot has its own flavors, which differ it from the original. 
 
 ### In memory data compression. 
 
