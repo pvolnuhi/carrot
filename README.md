@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Carrot is the new in-memory data store, which proides full Redis comaptibility (up to current 6.2.5 version) and can be used with any existing Redis clients. It will follow open source Redis as close as possible to facilitate easy migration for Redis users, but surely, Carrtot has its own flavors, which differ it from the original. 
+Carrot is the new in-memory data store, which proides full Redis comaptibility (up to the current 6.2.5 version) and can be used with any existing Redis clients. It will follow open source Redis as close as possible to facilitate easy migration for Redis users, but surely, Carrtot has its own flavors, which differ it from the original. 
 
 ### In memory data compression. 
 
@@ -18,12 +18,28 @@ Besides supporting compression of in memory data, Carrot utilizes many technique
 
 ### Fast fork-less data snapshots
 
-Carrot implements totally fork-less in memory data snapshots. Therefore, there is no need for 50% memory overprovision as for Redis. Snapshots are done by a separate thread which reads data in parallel with a major processing thread (remember we support multi-threaded access to a data store). The data can be restored by loading snapshot from a disk and replaying idempotent mutation operations one-by-one from a Write-Ahead-Log file (not in a first release yet). Why Redis requires the same amount of memory, which data occupies, during a data store snapshot? There is a lot of expalnations on the Internet, but the short answer is: Redis does process fork, and two processes share the same memory during the snapshot operation. If data changes in a parent process, copy-on-write is performed to save old version of a memory page. If during a snapshot, ALL pages are being modified (for example, teh server experience heavy write load), all parent memory occupied by data must be page-copied to a free space - this means that data set can not occupy more than 50% of available physical RAM.   
+Carrot implements totally fork-less in memory data snapshots. Therefore, there is no need for 50% memory overprovision as for Redis. Snapshots are done by a separate thread which reads data in parallel with a major processing thread (remember we support multi-threaded access to a data store). The data can be restored by loading snapshot from a disk and replaying idempotent mutation operations one-by-one from a Write-Ahead-Log file (not in a first release yet). Why Redis requires the same amount of memory, which data occupies, during a data store snapshot? There is a lot of expalnations on the Internet, but the short answer is: Redis does process fork, and two processes share the same memory during the snapshot operation. If data changes in a parent process, copy-on-write is performed to save old version of a memory page. If during a snapshot, ALL memory pages are being modified (for example, server experiences heavy write load), all parent memory occupied by data must be page-copied to a free space - this means that data set can not occupy more than 50% of available physical RAM.   
 Carrot is **much** faster when saving and loading data to/from disk during snapshots and on start-up. The smaller key-values are, the larger performance difference is. Example: Data store with 10M of 250 bytes key-values. It takes 23 sec in Redis 6.2.5 to save data set to a very fast SSD, approximately the same time - to load data on start-up. Carrot numbers: 1.2, 0.5, 2.5, 2.2. Snapshot (compression disabled) - 1.2 sec. Snapshot (compression LZ4) - 0.5 sec. Data loading 2.5 and 2.2 respectively. So, this is up to 45x times faster. This performance opens a direct path to TB-size Carrot in memory stores.
 
 ### Support for a very large data sets (1TB+)
 
-Carrot supports multiple data nodes inside a single process, each data node can have separate location for data, snapshot taking and loading can be done in parallel by all data nodes at a full disk speed. For example, with 8 data nodes per Carrot process, each having its dedicated fast SSD for data, the overall throughput can exceed 20GB/S. So, for 1TB data set in memory it will take only 50 sec to save and load data.  What about Redis? No, Redis people recommend 25GB per server instance, so you will need 40 nodes cluster to keep 1TB of data. Ooops, We forgot that 1TB RAM in Carrot can translate to 4-5TB in Redis, so multiply that by 4-5. 160-200 nodes. It is a nightmare for sysops. 
+Carrot supports multiple data nodes inside a single process, each data node can have separate location for data on disk, snapshot taking and loading can be done in parallel by all data nodes at a full disk(s) speed. For example, with 8 data nodes per Carrot process, each having its dedicated fast SSD for data, the overall throughput can exceed 20GB/S. So, for 1TB data set in memory it will take only 50 sec to save and load data.  What about Redis? No, Redis people recommend 25GB per server instance (**LINK**), so you will need 40 nodes cluster to keep 1TB of data. Ooops, We forgot that 1TB RAM in Carrot can translate to 4-5TB in Redis, so multiply that by 4-5. 160-200 nodes. It is a nightmare for sysops. 
+
+### Support for new data types
+
+#### Sparsed bitmaps
+First release introduces new data type: **sparsed bitmap**. The sparse bitmap has the same API as a regular bitmap. The difference is in memory usage:
+* sparse bitmap does not allocate memory continuosly, For example:  '''SETBIT key 1000000000 1''' in Redis will allocate at least 125MB of RAM first to keep all the bitmap up to the last bit set. The command for Carrot: '''SSETBIT 1000000000 1''' will allocate only 4Kb of data and will compress it after that. 
+* Sparse bitmaps are very memory efficient when population counts (%% of set bits) is < 10% and > 90%. In this case it provides very decent compression. Sparse bitmaps length is limited only by available physical RAM (bit index is the signed 64-bit integer).
+
+#### B-tree data type
+
+Release 0.2 will introduce B-Tree data type, which will allow range queries with filters and aggregations. Stay tuned   
+
+### New features in existing data types
+
+* Sets elements are ordered lexicographically. In upcoming releases Sets API will be extended by allowing some types of a range queries on set elements.
+* Hashes are ordered lexicographically by field names as well, therefore, **ZLEXCOUNT key min max** will always work correctly and does not require for all set's members to have the same score (as in Redis), The same is true for the following commands as well: **ZRANGEBYLEX**, **ZREVRANGEBYLEX** and **ZREMRANGEBYLEX**. 
 
 ## What is Carrot not for
 
@@ -41,7 +57,7 @@ Short answer is - this is the primary programming language of the Carrot's devel
 
 ## What is covered in the first release
 
-Most of data types commands (total number is 105 for the release 0.1) of Redis 6.2.x have been implemented. The following data types are suported (with some commands still missing): **sets, ordered sets, hashes, lists, strings, bitmaps**. No administration, cluster, ACL yet. These will follow in the next releases. Persistence is supported, as well as a **SAVE** and **BGSAVE** commands.
+Most of data types commands (total number is 105 for the release 0.1) of Redis 6.2.x have been implemented. The list of supported commands is **HERE**. The following data types are suported (with some commands still missing): **sets, ordered sets, hashes, lists, strings, bitmaps**. No administration, cluster, ACL yet. These will follow in the next releases. Persistence is supported, as well as a **SAVE** and **BGSAVE** commands.
 
 ## How to build
 
@@ -53,11 +69,15 @@ Carrot was tested with Java Jedis, should work with other clients as well. The c
 
 ## Benchmark summary
 
-Accros all benchmark tests, Redis requires between 2 and 12 times more memory to keep the same data set. Carrot performance is within 5-10% of Redis, when Carrot compression is disabled and 40% less (only for updates and deletes) when compression is on. See performance benchmark tests in the WiKi **TODO**. **We have not started code optimization yet, no profiling not hot spot detection*. So, this is preproduction data and, definetely, performance will be improved by the time of the first official release**.  
+Accros all benchmark tests, Redis requires between 2 and 12 times more memory to keep the same data set. Carrot performance is within 5-10% of Redis, when Carrot compression is disabled and 40% less (only for updates and deletes) when compression is on. See performance benchmark tests in the WiKi **TODO**. We have not started code optimization yet, no profiling not hot spot detection*. So, this is preproduction data and, definetely, performance will be improved by the time of the first official release.  
 
 ## Releases timeline
 
 First release, which is 0.1 was done on Sept 3rd 2021. We plan to release new version every 1-2 months. Stay tuned.
+
+## License
+
+Similar to MongoDB, permissive, but not fully open source.
 
 ## Copyright
 
