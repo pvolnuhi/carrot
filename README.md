@@ -82,7 +82,7 @@ $ mvn --settings settings.xml eclipse:eclipse -DskipTests
 
 ## Usage and Redis client compatibility
 
-Carrot was tested with Java Jedis, should work with other clients as well. The client **cluster support is required** to use Carrot at a full potential (multiple data nodes per server).
+Carrot was tested with Java Jedis, should work with other clients as well. The client **cluster support is required** to use Carrot at a full potential (multiple data nodes per server). **TODO**.
 
 ## Benchmark summary
 
