@@ -2525,7 +2525,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	DataBlock loadData(FileChannel fc, ByteBuffer buf) throws IOException {
 	  
 	  while(true) {
-	    DataBlock next = DataBlock.loadData(fc, buf);
+	    DataBlock next = DataBlock.loadData(this, fc, buf);
 	    if (next == null) {
 	      return null;
 	    }	    

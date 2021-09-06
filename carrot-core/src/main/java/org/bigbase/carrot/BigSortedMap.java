@@ -569,6 +569,11 @@ public class BigSortedMap {
    * Little hack
    */
   private long indexBlockSizeBeforeSnapshot;
+  
+  /**
+   * One more
+   */
+  private long dataBlockSizeBeforeSnapshot;
   /**
    * Legacy constructor of a big sorted map (single instance)
    * @param maxMemory - memory limit in bytes
@@ -721,7 +726,7 @@ public class BigSortedMap {
    * @return  block data size after increment
    */
   public long incrInstanceBlockDataSize(long incr) {
-    if (isStatsUpdatesDisabled()) return 0;
+    //if (isStatsUpdatesDisabled()) return 0;
     // Increment global
     incrGlobalBlockDataSize(incr);
     // Increment instance
@@ -866,7 +871,12 @@ public class BigSortedMap {
     long loaded = blockIndexSize.get();
     long addj = indexBlockSizeBeforeSnapshot - loaded;
     allocatedMemory.addAndGet(-addj);
+    loaded = blockDataSize.get();
+    
+    addj = dataBlockSizeBeforeSnapshot - loaded;
+    allocatedMemory.addAndGet(-addj);
   }
+  
   /**
    * For testing ONLY
    * @return dumps records in a HEX form and returns number of records
@@ -2432,7 +2442,8 @@ public class BigSortedMap {
     value = buf.getLong();
     map.allocatedMemory.set(value);
     value = buf.getLong();
-    map.blockDataSize.set(value);
+    //map.blockDataSize.set(value);
+    map.dataBlockSizeBeforeSnapshot = value;
     value = buf.getLong();
     map.indexBlockSizeBeforeSnapshot = value;
     

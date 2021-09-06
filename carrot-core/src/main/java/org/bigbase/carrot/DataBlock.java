@@ -3474,7 +3474,7 @@ public final class DataBlock  {
    * LOAD DATA
    */
   
-  static DataBlock loadData(FileChannel fc, ByteBuffer buf) throws IOException {
+  static DataBlock loadData(IndexBlock parent, FileChannel fc, ByteBuffer buf) throws IOException {
     // Read meta
     byte type, codecCompData;
     short numRecords, dataSize, numExtAllocs, numCustomAllocs;
@@ -3512,7 +3512,7 @@ public final class DataBlock  {
 
     int blockSize = getMinSizeGreaterOrEqualsThan(MAX_BLOCK_SIZE, dataSize);
 
-    DataBlock block = new DataBlock(null, blockSize);
+    DataBlock block = new DataBlock(parent, blockSize);
     block.numRecords = numRecords;
     block.dataInBlockSize = dataSize;
     block.numExtAllocs = numExtAllocs;
