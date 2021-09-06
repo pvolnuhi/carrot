@@ -16,6 +16,8 @@
  */
 package org.bigbase.carrot.redis;
 
+import java.util.concurrent.CountDownLatch;
+
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.lists.Lists;
 
@@ -39,6 +41,9 @@ public class RedisMain {
     RedisConf conf = RedisConf.getInstance();
     String[] nodes = conf.getNodes();
     RedisNodeServer[] nodeServers = new RedisNodeServer[nodes.length];
+    RedisNodeServer.readyToStartLatch = new CountDownLatch(nodes.length);
+    // Disable global statistics update during snapshot data loading
+    BigSortedMap.setStatsUpdatesDisabled(true);
     for (int i = 0; i < nodes.length; i++) {
       String[] parts = nodes[i].split(":");
       String host = parts[0].trim();

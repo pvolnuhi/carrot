@@ -37,18 +37,16 @@ import org.bigbase.carrot.redis.util.Utils;
 public class RedisClusterTestRaw {
   
   
-  static long N = 1000000;
-  
-  static long totalDataSize = 0;
-    
+  static long N = 4000000;
+      
   static AtomicLong index = new AtomicLong(0);
   
-  static int NUM_THREADS = 1;
+  static int NUM_THREADS = 4;
   
   static int BATCH_SIZE = 100;
   
-  static List<String> clusterNodes = Arrays.asList("localhost:6379" /*, "localhost:6380",
-    "localhost:6381", "localhost:6382", "localhost:6383", "localhost:6384", "localhost:6385", "localhost:6386"*/); 
+  static List<String> clusterNodes = Arrays.asList("localhost:6379" , "localhost:6380",
+    "localhost:6381", "localhost:6382"/*, "localhost:6383", "localhost:6384", "localhost:6385", "localhost:6386"*/); 
   
   public static void main(String[] args) throws IOException, OperationFailedException {
 
@@ -178,10 +176,12 @@ public class RedisClusterTestRaw {
   @SuppressWarnings("unused")
   private static void runClusterSet() throws IOException, OperationFailedException {
     
-    RawClusterClient client = new RawClusterClient(clusterNodes);
+    int id = Integer.parseInt(Thread.currentThread().getName());
+    List<String> list = new ArrayList<String>();
+    list.add(clusterNodes.get(id % clusterNodes.size()));
+    RawClusterClient client = new RawClusterClient(list);
+    System.out.println(Thread.currentThread().getName() + " SET started. , connect to :"+ list.get(0));
 
-    totalDataSize = 0;
-    
     long startTime = System.currentTimeMillis();
     int count = 0;
 
@@ -192,7 +192,6 @@ public class RedisClusterTestRaw {
       count++;
       String skey = us.getUserId();
       String svalue = us.toString();
-      totalDataSize += skey.length() + svalue.length();    
       String v = client.set(skey, svalue);
       //assertTrue(v.indexOf(svalue) > 0);
       if (count % 100000 == 0) {
@@ -202,7 +201,7 @@ public class RedisClusterTestRaw {
     
     long endTime = System.currentTimeMillis();
         
-    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" user sessions, total size="+totalDataSize
+    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" user sessions," 
       + " in "+ (endTime - startTime) );
    
     client.close();
@@ -214,7 +213,6 @@ public class RedisClusterTestRaw {
     List<String> list = new ArrayList<String>();
     list.add(clusterNodes.get(id % clusterNodes.size()));
     RawClusterClient client = new RawClusterClient(list);
-    totalDataSize = 0;
     System.out.println(Thread.currentThread().getName() + " SET started. , connect to :"+ list.get(0));
 
     long startTime = System.currentTimeMillis();
@@ -231,7 +229,6 @@ public class RedisClusterTestRaw {
         count++;
         String skey = us.getUserId();
         String svalue = us.toString();
-        totalDataSize += skey.length() + svalue.length(); 
         argList.add(skey);
         argList.add(svalue);
       }
@@ -250,7 +247,7 @@ public class RedisClusterTestRaw {
     
     long endTime = System.currentTimeMillis();
         
-    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" user sessions, total size="+totalDataSize
+    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" user sessions,"
       + " in "+ (endTime - startTime) );
    
     client.close();
@@ -260,9 +257,11 @@ public class RedisClusterTestRaw {
   @SuppressWarnings("unused")
   private static void runClusterGet() throws IOException, OperationFailedException {
     
-    RawClusterClient client = new RawClusterClient(clusterNodes);
-    totalDataSize = 0;
-    
+    int id = Integer.parseInt(Thread.currentThread().getName());
+    List<String> list = new ArrayList<String>();
+    list.add(clusterNodes.get(id % clusterNodes.size()));
+    RawClusterClient client = new RawClusterClient(list);
+    System.out.println(Thread.currentThread().getName() + " GET started. , connect to :"+ list.get(0));    
     long startTime = System.currentTimeMillis();
     int count = 0;
     for (;;) {
@@ -272,7 +271,6 @@ public class RedisClusterTestRaw {
       count++;
       String skey = us.getUserId();
       String svalue = us.toString();
-      totalDataSize += skey.length() + svalue.length();    
       String v = client.get(skey);
       //assertTrue(v.indexOf(svalue) > 0);
       if (count % 100000 == 0) {
@@ -288,7 +286,6 @@ public class RedisClusterTestRaw {
  
   private static void runClusterMGet() throws IOException, OperationFailedException {
     
-    totalDataSize = 0;
     int id = Integer.parseInt(Thread.currentThread().getName());
     List<String> list = new ArrayList<String>();
     list.add(clusterNodes.get(id % clusterNodes.size()));

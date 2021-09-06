@@ -601,7 +601,7 @@ public class Utils {
       buf.put(BULK_TYPE);
       longToStr(size, buf, buf.position());
       buf.put(CRLF);
-      if(size > 0) {
+      if(size >= 0) {
         UnsafeAccess.copy(ptr, buf, size);
         buf.put(CRLF);
         ptr += size;

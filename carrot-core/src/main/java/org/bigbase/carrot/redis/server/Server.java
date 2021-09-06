@@ -262,7 +262,6 @@ public class Server {
   public static void FLUSHALL(BigSortedMap map) {
     // TODO: async mode
     // Create new empty store and flush old one
-    
     map.flushAll();
   }
   

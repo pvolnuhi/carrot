@@ -81,7 +81,7 @@ import redis.clients.jedis.Jedis;
 public class RedisHashesAtomicCounters {
   
 
-  static long N = 1000000;
+  static long N = 10000000;
   static long totalDataSize = 0;
   static int MAX_VALUE = 1000;
   
@@ -103,7 +103,7 @@ public class RedisHashesAtomicCounters {
     for (int i = 0; i < N; i++) {
       String skey = "counter:" + i;
       
-      int keySize = Math.max(8, skey.length() -3);
+      int keySize = Math.max(8, skey.length() - 2);
       String key = skey.substring(0, keySize);
       String field = skey.substring(keySize);
       

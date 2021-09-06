@@ -208,6 +208,11 @@ public interface RedisCommand {
 
   static final int SLOTS_LENGTH = "SLOTS".length();
   
+  static final long MEMORY_FLAG = UnsafeAccess.allocAndCopy("MEMORY", 0, "MEMORY".length());
+  static final long MEMORY_LOWER_CASE_FLAG = UnsafeAccess.allocAndCopy("memory", 0, "memory".length());
+  
+  static final int MEMORY_LENGTH = "MEMORY".length();
+  
   default void NULL_STRING_REPLY (long ptr) {
     UnsafeAccess.putByte(ptr,  (byte) ReplyType.BULK_STRING.ordinal());
     UnsafeAccess.putInt(ptr + Utils.SIZEOF_BYTE, -1);
@@ -243,6 +248,24 @@ public interface RedisCommand {
     UnsafeAccess.putLong(ptr, value);     
   }
   
+  default void ARRAY_REPLY (long ptr, String[] arr) {
+    UnsafeAccess.putByte(ptr, (byte) ReplyType.ARRAY.ordinal());
+    // skip length of a string
+    ptr += Utils.SIZEOF_BYTE;
+    // Skip serialized size (TODO: fix it)
+    ptr += Utils.SIZEOF_INT;
+    // Put array length
+    UnsafeAccess.putInt(ptr, arr.length);
+    ptr += Utils.SIZEOF_INT;
+    for(int i = 0; i < arr.length; i++) {
+      String s = arr[i];
+      UnsafeAccess.putInt(ptr, s.length());
+      ptr += Utils.SIZEOF_INT;
+      byte[] bytes = s.getBytes();
+      UnsafeAccess.copy(bytes, 0, ptr, bytes.length);
+      ptr += bytes.length;
+    }
+  }
   /**
    * Execute the Redis command
    * @param map sorted map storaghe

@@ -24,6 +24,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
 import org.bigbase.carrot.BigSortedMap;
@@ -37,7 +38,7 @@ import org.bigbase.carrot.redis.util.Utils;
 public class RedisNodeServer implements Runnable {
 
   static int bufferSize = 256 * 1024;
-  
+  static CountDownLatch readyToStartLatch;
   /*
    * Input buffer
    */
@@ -78,6 +79,7 @@ public class RedisNodeServer implements Runnable {
   }
   
   
+  
   public void join() {
     if (runner == null) return;
     try {
@@ -91,9 +93,14 @@ public class RedisNodeServer implements Runnable {
   @Override
   public void run() {
     loadDataStore();
+    readyToStartLatch.countDown();
     try {
+      readyToStartLatch.await();
+      BigSortedMap.setStatsUpdatesDisabled(false);
+      store.syncStatsToGlobal();
+      // now we can sync
       runNodeServer();
-    } catch (IOException e) {
+    } catch (Exception e) {
       e.printStackTrace();
     }
   }

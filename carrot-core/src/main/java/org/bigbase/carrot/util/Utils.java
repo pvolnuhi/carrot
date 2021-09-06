@@ -1802,6 +1802,11 @@ public class Utils {
     return kvs;
   }
   
+  /**
+   * To upper case
+   * @param addr address of a string byte array
+   * @param len length of an array
+   */
   public static void toUpperCase(long addr, int len) {
     int min = 'a'; // 97
     int max = 'z'; // 122
@@ -1812,7 +1817,13 @@ public class Utils {
         UnsafeAccess.putByte(addr + i,  v);
       }
     }
-    
   }
   
+  public static String toString(double d, int afterDecimalPoint) {
+    String s = Double.toString(d);
+    int index = s.indexOf('.');
+    if (index < 0) return s;
+    if (index + 3 >= s.length()) return s;
+    return s.substring(0, index + afterDecimalPoint + 1);
+  }
 }
