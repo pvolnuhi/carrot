@@ -292,11 +292,6 @@ public class Utils {
     
     int off = SIZEOF_INT;
     int count = 0, len = 0;
-    /*DEBUG*/ System.err.println("inline pos=" + buf.position() + " limit="+ buf.limit());
-    byte[] bytes = new byte[buf.remaining()];
-    buf.get(bytes);
-    System.err.println("first 100 bytes="+ (new String(bytes).substring(0, 100)));
-    buf.position(0);
     
     while(buf.hasRemaining()) {
       skipWhiteSpaces(buf);
@@ -312,7 +307,7 @@ public class Utils {
       // Advance memory buffer offset
       off += len;
       // Advance buffer
-      buf.position(buf.position() + len);
+      //buf.position(buf.position() + len);
       // Increment count
       count++;
     }
@@ -415,6 +410,9 @@ public class Utils {
   }
   
   private static void multiBulkResponse(long ptr, ByteBuffer buf) {
+    buf.put(ARR_TYPE);
+    longToStr(2, buf, buf.position());
+    buf.put(CRLF);
     // 1. CURSOR
     buf.put(BULK_TYPE);
     ptr += SIZEOF_BYTE; // skip multi bulk type    

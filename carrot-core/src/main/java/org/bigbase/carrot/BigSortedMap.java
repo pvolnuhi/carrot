@@ -166,13 +166,7 @@ public class BigSortedMap {
    */
   private static boolean statsUpdateDisabled = false;
   
-  
-//  static {
-//    for (int i = 0; i < locks.length; i++) {
-//      locks[i] = new ReentrantReadWriteLock();
-//    }
-//  }
-  
+    
   /*
    * We need this buffer to keep keys during execute update
    */
@@ -439,18 +433,14 @@ public class BigSortedMap {
    */
   public static void printGlobalMemoryAllocationStats() {
     System.out.println("\nGLOBAL Carrot memory allocation statistics:");
-    System.out.println("-------------- TOTAL -------------------------");
     System.out.println("Total memory               :" + getGlobalAllocatedMemory());
-    System.out.println("-------------- DATA --------------------------");
     System.out.println("Total data blocks          :" + getGlobalBlockDataSize());
     System.out.println("Total data size            :" + getGlobalDataSize());
     System.out.println("Total data block usage     :" + ((double)getGlobalDataSize())
       /getGlobalBlockDataSize());
-    System.out.println("-------------- INDEX ------------------------");
     System.out.println("Total block index size     :" + getGlobalBlockIndexSize());
     System.out.println("Total data index size      :" + getGlobalDataInIndexBlocksSize());
     System.out.println("Total index size           :" + getGlobalIndexSize());
-    System.out.println("----- COMPRESSED and EXTERNAL ---------------");
     System.out.println("Total compressed data size :" + getGlobalCompressedDataSize());
     System.out.println("Total external data size   :" + getGlobalExternalDataSize());   
     System.out.println("Copmpression ratio         :" + ((double)getGlobalDataSize()/ 
@@ -664,7 +654,7 @@ public class BigSortedMap {
   
   /**
    * Set snapshot directory for the store
-   * @param dir snapshot dierctory path
+   * @param dir snapshot directory path
    */
   public void setSnapshotDir(String dir) {
     this.snapshotDir = dir;
@@ -675,22 +665,18 @@ public class BigSortedMap {
    */
   public  void printMemoryAllocationStats() {
     System.out.println("\nCarrot memory allocation statistics [id=" + Thread.currentThread().getName() +"]:");
-    System.out.println("--------------------- TOTAL -------------------");
     System.out.println("Total allocated memory     :" + getInstanceAllocatedMemory());
-    System.out.println("--------------------- DATA --------------------");
     System.out.println("Total data block size      :" + getInstanceBlockDataSize());
     System.out.println("Total data size            :" + getInstanceDataSize());
     System.out.println("Total data block usage     :" + ((double)getInstanceDataSize())
-      /getGlobalBlockDataSize());
-    System.out.println("--------------------- INDEX -------------------");
+      /getInstanceBlockDataSize());
     System.out.println("Total block index size     :" + getInstanceBlockIndexSize());
     System.out.println("Total data index size      :" + getInstanceDataInIndexBlocksSize());
     System.out.println("Total index size           :" + getInstanceIndexSize());
-    System.out.println("----------- COMPRESSION and EXTERNAL ----------");
     System.out.println("Total compressed data size :" + getInstanceCompressedDataSize());
     System.out.println("Total external data size   :" + getInstanceExternalDataSize());   
     System.out.println("Copmpression ratio         :" + ((double)getInstanceDataSize()/ 
-        getGlobalAllocatedMemory())+"\n");
+        getInstanceAllocatedMemory())+"\n");
   }
   
   /**
@@ -2407,6 +2393,7 @@ public class BigSortedMap {
       map.setLastSnapshotTimestamp(timestamp);
       map.setSnapshotDir(snapshotDir);
       map.adjustCountersAfterLoad();
+      map.printMemoryAllocationStats();
       return map;
     } catch (IOException e) {
       System.err.println(
