@@ -44,22 +44,30 @@ public class INFO implements RedisCommand {
       return;
     }
     
-    String[] info = new String[9];
+    String[] info = new String[13];
     info[0] = "# Memory (Carrot)";
-    info[1] = "used_memory:"+ BigSortedMap.getGlobalAllocatedMemory();
-    info[2] = "used_memory_dataset:" + BigSortedMap.getGlobalDataSize();
-    info[3] = "used_memory_dataset_perc:" + 
-        Utils.toString(((double)BigSortedMap.getGlobalDataSize() * 100)/BigSortedMap.getGlobalAllocatedMemory() , 2) +"%";
     long maxmemory = RedisConf.getInstance().getMaxMemoryLimit();
-    info[4] = "maxmemory:"+ maxmemory;
-    info[5] = "used_memory_compressed:" + BigSortedMap.getGlobalCompressedDataSize();
-    info[6] = "mem_fragmentation_ratio:" + 
+    info[1] = "maxmemory:"+ maxmemory;
+
+    info[2] = "used_memory:"+ BigSortedMap.getGlobalAllocatedMemory();
+    info[3] = "used_memory_dataset:" + BigSortedMap.getGlobalDataSize();
+    info[4] = "used_memory_dataset_perc:" + 
+        Utils.toString(((double)BigSortedMap.getGlobalDataSize() * 100)/BigSortedMap.getGlobalAllocatedMemory() , 2) +"%";
+    info[5] = "used_memory_index:" + BigSortedMap.getGlobalIndexSize();
+    info[6] = "used_memory_index_perc:" + 
+        Utils.toString(((double)BigSortedMap.getGlobalIndexSize() * 100)/BigSortedMap.getGlobalAllocatedMemory() , 2) +"%";
+    info[7] = "used_memory_ext:" + BigSortedMap.getGlobalExternalDataSize();
+    info[8] = "used_memory_ext_perc:" + 
+        Utils.toString(((double)BigSortedMap.getGlobalExternalDataSize() * 100)/BigSortedMap.getGlobalAllocatedMemory() , 2) +"%";
+
+    info[9] = "used_memory_compressed:" + BigSortedMap.getGlobalCompressedDataSize();
+    info[10] = "mem_fragmentation_ratio:" + 
         Utils.toString(((double)BigSortedMap.getGlobalAllocatedMemory())/BigSortedMap.getGlobalDataSize() , 2);
-    info[7] = "compression_ratio:" + 
+    info[11] = "compression_ratio:" + 
         (BigSortedMap.getGlobalCompressedDataSize() > 0 ?
             Utils.toString(((double)BigSortedMap.getGlobalDataSize())/BigSortedMap.getGlobalAllocatedMemory() , 2):
               "0.0");
-    info[8] = "";
+    info[12] = "";
     ARRAY_REPLY(outBufferPtr, info);   
   }
 }
