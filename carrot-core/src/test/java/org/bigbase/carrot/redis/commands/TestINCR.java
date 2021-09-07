@@ -22,7 +22,7 @@ public class TestINCR extends CommandBase {
   protected String[] validRequests = new String[] {
       "INCR key",
       "INCR key",
-      "INCR key"
+      "incr key"
   };
   
   protected String[] validResponses = new String[] {
@@ -33,7 +33,6 @@ public class TestINCR extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "incr x",                      /* unsupported command */
       "INCR",                        /* wrong number of arguments*/
       "INCR x y",                    /* wrong number of arguments*/
       "SET key1 value1",             /* OK */
@@ -41,7 +40,6 @@ public class TestINCR extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: incr\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
     "+OK\r\n",

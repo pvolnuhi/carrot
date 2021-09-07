@@ -24,25 +24,25 @@ public class TestFLUSHALL extends CommandBase {
       "SET x y",             /* OK */
       "GET x",               /* y */ 
       "FLUSHALL"             /* OK */,
-      "GET x"                /* nil */
+      "GET x"                /* nil */,
+      "flushall"             /* OK */ 
   };
   
   protected String[] validResponses = new String[] {
       "+OK\r\n",
       "$1\r\ny\r\n",
       "+OK\r\n",
-      "$-1\r\n"
+      "$-1\r\n",
+      "+OK\r\n"
   };
   
   
   protected String[] invalidRequests = new String[] {
-      "flushall x y",                      /* unsupported command */
       "FLUSHALL COUNT X",                  /* wrong number of arguments*/
       "FLUSHALL FCUK"                      /* Wrong command format */
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: flushall\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Unsupported command: FLUSHALL FCUK\r\n"
   };

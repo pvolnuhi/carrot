@@ -30,12 +30,12 @@ public class TestMGET extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "mget x",                     /* unsupported command */
+      "mge x",                     /* unsupported command */
       "MGET"                        /* Wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: mget\r\n",
+    "-ERR: Unsupported command: MGE\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };
   

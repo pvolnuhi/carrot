@@ -26,7 +26,7 @@ public class TestHEXISTS extends CommandBase {
       "HEXISTS key1 field3",                                                      /* 1 */
       "HEXISTS key1 field4",                                                      /* 1 */
       "HEXISTS key1 field5",                                                      /* 0 */
-      "HEXISTS key2 field1",                                                      /* 0 */
+      "hexists key2 field1",                                                      /* 0 */
 
   };
   
@@ -41,7 +41,6 @@ public class TestHEXISTS extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hexists x",                  /* unsupported command */
       "HEXISTS",                    /* wrong number of arguments*/
       "HEXISTS x",                  /* wrong number of arguments*/
       "HEXISTS x y z",              /* wrong number of arguments*/
@@ -49,7 +48,6 @@ public class TestHEXISTS extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hexists\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

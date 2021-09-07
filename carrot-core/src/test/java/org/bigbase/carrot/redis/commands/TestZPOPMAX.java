@@ -42,7 +42,7 @@ public class TestZPOPMAX extends CommandBase {
       "ZCARD key",                                                            /* 2 */
       "ZPOPMAX key",                                                          /* c9 2.0 */ 
       "ZCARD key",                                                            /* 1 */
-      "ZPOPMAX key",                                                          /* c10 1.0 */ 
+      "zpopmax key",                                                          /* c10 1.0 */ 
       
       "ZCARD key",                                                            /* 0 */
       
@@ -105,7 +105,7 @@ public class TestZPOPMAX extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zpopmax x y",                           /* unsupported command */
+      "zpopma x y",                           /* unsupported command */
       "ZPOPMAX",                               /* wrong number of arguments*/
       "ZPOPMAX key a b",                       /* wrong number of arguments*/
       "ZPOPMAX key a",                         /* wrong number format */
@@ -113,7 +113,7 @@ public class TestZPOPMAX extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zpopmax\r\n",
+    "-ERR: Unsupported command: ZPOPMA\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number format: a\r\n",

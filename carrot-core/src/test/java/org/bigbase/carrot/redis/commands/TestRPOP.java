@@ -44,7 +44,7 @@ public class TestRPOP extends CommandBase {
       "RPOP key",                                                 /* v10 */
       "LLEN key",                                                  /* 0 */
       
-      "RPOP key"                                                  /* NULL */
+      "rpop key"                                                  /* NULL */
   }; 
   
   protected String[] validResponses = new String[] {
@@ -78,13 +78,13 @@ public class TestRPOP extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "rpop x y",                      /* unsupported command */
+      "rpo x y",                      /* unsupported command */
       "RPOP",                          /* wrong number of arguments*/
       "RPOP key value",                /* wrong number of arguments*/      
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: rpop\r\n",
+    "-ERR: Unsupported command: RPO\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

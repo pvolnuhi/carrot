@@ -58,7 +58,7 @@ public class TestZREMRANGEBYRANK extends CommandBase {
       "ZCARD key",                                                                        /* 6 */
       "ZADD key 0.0 c0 1.0 c1 2.0 c2 3.0 c3 4.0 c4 5.0 c5 6.0 c6 7.0 c7 8.0 c8 9.0 c9",   /* 4 */
      
-      "ZREMRANGEBYRANK key 3 9",                                                          /* 7 */
+      "zremrangebyrank key 3 9",                                                          /* 7 */
       "ZCARD key",                                                                        /* 3 */
       "ZADD key 0.0 c0 1.0 c1 2.0 c2 3.0 c3 4.0 c4 5.0 c5 6.0 c6 7.0 c7 8.0 c8 9.0 c9",   /* 7 */
   };
@@ -106,7 +106,7 @@ public class TestZREMRANGEBYRANK extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zremrangebyrank x y",                           /* unsupported command */
+      "zremrangebyronk x y",                           /* unsupported command */
       "ZREMRANGEBYRANK",                               /* wrong number of arguments*/
       "ZREMRANGEBYRANK key",                           /* wrong number of arguments*/
       "ZREMRANGEBYRANK key a",                         /* wrong number of arguments*/
@@ -116,7 +116,7 @@ public class TestZREMRANGEBYRANK extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zremrangebyrank\r\n",
+    "-ERR: Unsupported command: ZREMRANGEBYRONK\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

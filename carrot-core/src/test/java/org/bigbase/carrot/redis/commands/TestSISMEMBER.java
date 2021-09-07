@@ -31,7 +31,7 @@ public class TestSISMEMBER extends CommandBase {
       "SISMEMBER key v8",                                        /* 1 */
       "SISMEMBER key v9",                                        /* 1 */
       "SISMEMBER key v10",                                       /* 1 */
-      "SISMEMBER key v11",                                       /* 0 */
+      "sismember key v11",                                       /* 0 */
       
   };
   
@@ -52,7 +52,7 @@ public class TestSISMEMBER extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "sismember x y",                     /* unsupported command */
+      "sismembe x y",                     /* unsupported command */
       "SISMEMBER",                         /* wrong number of arguments*/
       "SISMEMBER x",                       /* wrong number of arguments*/
       "SISMEMBER x y z",                   /* wrong number of arguments*/
@@ -60,7 +60,7 @@ public class TestSISMEMBER extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: sismember\r\n",
+    "-ERR: Unsupported command: SISMEMBE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",    

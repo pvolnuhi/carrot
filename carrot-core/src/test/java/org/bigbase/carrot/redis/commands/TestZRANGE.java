@@ -49,7 +49,7 @@ public class TestZRANGE extends CommandBase {
       "ZRANGE key 2 5",                                                    /* 4 */
       "ZRANGE key 3 9",                                                    /* 7 */
       "ZRANGE key 2 5 WITHSCORES",                                         /* 4 */
-      "ZRANGE key 3 9 WITHSCORES",                                         /* 7 */
+      "zrange key 3 9 WITHSCORES",                                         /* 7 */
   };
   
   protected String[] validResponses = new String[] {
@@ -105,7 +105,7 @@ public class TestZRANGE extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zrange x y",                           /* unsupported command */
+      "zrang x y",                           /* unsupported command */
       "ZRANGE",                               /* wrong number of arguments*/
       "ZRANGE key",                           /* wrong number of arguments*/
       "ZRANGE key a",                         /* wrong number of arguments*/
@@ -116,7 +116,7 @@ public class TestZRANGE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zrange\r\n",
+    "-ERR: Unsupported command: ZRANG\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

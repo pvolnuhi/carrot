@@ -44,7 +44,7 @@ public class TestZINCRBY extends CommandBase {
       "ZINCRBY key 3.1 v7",                                                   /* 3.1 */
       "ZSCORE key v7",
       
-      "ZINCRBY key1 3.1 v1",                                                  /* 3.1 */
+      "zincrby key1 3.1 v1",                                                  /* 3.1 */
       "ZSCORE key1 v1"
   };
   
@@ -79,7 +79,7 @@ public class TestZINCRBY extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "zincrby x y",                          /* unsupported command */
+      "zincrbyy x y",                          /* unsupported command */
       "ZINCRBY",                              /* wrong number of arguments*/
       "ZINCRBY key",                          /* wrong number of arguments*/
       "ZINCRBY key a",                        /* wrong number of arguments*/
@@ -89,7 +89,7 @@ public class TestZINCRBY extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zincrby\r\n",
+    "-ERR: Unsupported command: ZINCRBYY\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

@@ -26,7 +26,7 @@ public class TestHGET extends CommandBase {
       "HGET key1 field3", /*value3*/
       "HGET key1 field4", /*value4*/
       "HGET key1 field5", /* NULL */
-      "HGET key2 field1", /* NULL */
+      "hget key2 field1", /* NULL */
 
   };
   
@@ -41,7 +41,6 @@ public class TestHGET extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hget x",                     /* unsupported command */
       "HGET",                       /* wrong number of arguments*/
       "HGET x",                     /* wrong number of arguments*/
       "HGET x y z",                 /* wrong number of arguments*/
@@ -50,7 +49,6 @@ public class TestHGET extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hget\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

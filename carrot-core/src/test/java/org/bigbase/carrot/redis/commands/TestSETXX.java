@@ -22,7 +22,7 @@ public class TestSETXX extends CommandBase {
   protected String[] validRequests = new String[] {
       "SETXX key value",                    /* 0 */
       "SETNX key value",                    /* 1 */
-      "SETXX key value1"                    /* 1 */
+      "setxx key value1"                    /* 1 */
   };
   
   protected String[] validResponses = new String[] {
@@ -33,14 +33,14 @@ public class TestSETXX extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "setxx x y",                      /* unsupported command */
+      "setxxx x y",                      /* unsupported command */
       "SETXX",                          /* wrong number of arguments*/
       "SETXX key",                      /* wrong number of arguments*/
       "SETXX key XXX value",            /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: setxx\r\n",
+    "-ERR: Unsupported command: SETXXX\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

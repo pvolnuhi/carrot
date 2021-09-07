@@ -21,7 +21,7 @@ public class TestSETEX extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "SETEX key 100000 value",               /* OK */
-      "SETEX key 1000000 value"              /* OK */
+      "setex key 1000000 value"              /* OK */
   };
   
   protected String[] validResponses = new String[] {
@@ -31,7 +31,7 @@ public class TestSETEX extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "setex x y",                      /* unsupported command */
+      "setexx x y",                      /* unsupported command */
       "SETEX",                          /* wrong number of arguments*/
       "SETEX key",                      /* wrong number of arguments*/
       "SETEX key value",                /* wrong number of arguments*/
@@ -40,7 +40,7 @@ public class TestSETEX extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: setex\r\n",
+    "-ERR: Unsupported command: SETEXX\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

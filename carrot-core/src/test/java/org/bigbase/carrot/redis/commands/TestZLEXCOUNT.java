@@ -47,7 +47,7 @@ public class TestZLEXCOUNT extends CommandBase {
       "ZLEXCOUNT key (c8 [c99",                                               /* 1 */
       "ZLEXCOUNT key [c8 [c99",                                               /* 2 */
       "ZLEXCOUNT key (c9 [c99",                                               /* 0 */
-      "ZLEXCOUNT key [c9 [c99",                                               /* 1 */
+      "zlexcount key [c9 [c99",                                               /* 1 */
   };
   
   protected String[] validResponses = new String[] {
@@ -82,7 +82,7 @@ public class TestZLEXCOUNT extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zlexcount x y",                           /* unsupported command */
+      "zlexcoun x y",                           /* unsupported command */
       "ZLEXCOUNT",                               /* wrong number of arguments*/
       "ZLEXCOUNT key",                           /* wrong number of arguments*/
       "ZLEXCOUNT key a",                         /* wrong number of arguments*/
@@ -95,7 +95,7 @@ public class TestZLEXCOUNT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zlexcount\r\n",
+    "-ERR: Unsupported command: ZLEXCOUN\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

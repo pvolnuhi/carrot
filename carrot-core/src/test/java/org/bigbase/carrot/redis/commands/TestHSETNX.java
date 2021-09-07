@@ -22,7 +22,7 @@ public class TestHSETNX extends CommandBase {
   protected String[] validRequests = new String[] {
       "HSETNX key1 field1 value1",                                               /* 1 */
       "HGET key1 field1",                                                        /* value1 */
-      "HSETNX key1 field1 value2",                                               /* 0 */
+      "hsetnx key1 field1 value2",                                               /* 0 */
       "HGET key1 field1"                                                         /* value1 */
   };
   
@@ -34,14 +34,12 @@ public class TestHSETNX extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hsetnx x",                  /* unsupported command */
       "HSETNX",                    /* wrong number of arguments*/
       "HSETNX x y",                /* wrong number of arguments*/
       "HSETNX x y z zz"            /* wrong number of arguments*/      
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hsetnx\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

@@ -23,7 +23,7 @@ public class TestLLEN extends CommandBase {
       "LPUSH key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",                 /* 10 */
       "LLEN key",                                                 /* 10 */
       "RPUSH key vv1 vv2",                                        /* 12 */
-      "LLEN key"                                                  /* 12 */
+      "llen key"                                                  /* 12 */
   };
   
   protected String[] validResponses = new String[] {
@@ -35,13 +35,13 @@ public class TestLLEN extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "llen x y",                      /* unsupported command */
+      "lle x y",                      /* unsupported command */
       "LLEN",                          /* wrong number of arguments*/
       "LLEN key value",                /* wrong number of arguments*/      
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: llen\r\n",
+    "-ERR: Unsupported command: LLE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

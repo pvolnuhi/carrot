@@ -24,7 +24,7 @@ public class TestHRANDFIELD extends CommandBase {
       
       "HRANDFIELD key1",
       
-      "HRANDFIELD key2",
+      "hrandfield key2",
       "HRANDFIELD key2 2",
       "HRANDFIELD key2 -2",
       "HRANDFIELD key2 2 WITHVALUES",
@@ -68,7 +68,6 @@ public class TestHRANDFIELD extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hrandfield x",                     /* unsupported command */
       "HRANDFIELD",                       /* Wrong number of arguments*/
       "HRANDFIELD x x",                   /* Wrong number format */
       "HRANDFIELD x x WITHVALUES",        /* Wrong number format */
@@ -76,7 +75,6 @@ public class TestHRANDFIELD extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hrandfield\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number format: x\r\n",
     "-ERR: Wrong number format: x\r\n",

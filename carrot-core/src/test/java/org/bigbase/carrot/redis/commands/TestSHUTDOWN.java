@@ -30,13 +30,13 @@ public class TestSHUTDOWN extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "shutdown x y",                       /* unsupported command */
+      "shutdow x y",                       /* unsupported command */
       "SHUTDOWN x y z",                     /* wrong number of arguments*/
       "SHUTDOWN FAST"                    
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: shutdown\r\n",
+    "-ERR: Unsupported command: SHUTDOW\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Unsupported command: SHUTDOWN FAST\r\n"
   };

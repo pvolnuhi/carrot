@@ -31,7 +31,7 @@ public class TestLINDEX extends CommandBase {
       "LINDEX key 7",                                             /* v3 */
       "LINDEX key 8",                                             /* v2 */
       "LINDEX key 9",                                             /* v1 */
-      "LINDEX key 10"                                            /* NULL */
+      "lindex key 10"                                            /* NULL */
   };
   
   protected String[] validResponses = new String[] {
@@ -51,7 +51,7 @@ public class TestLINDEX extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lindex x y",                      /* unsupported command */
+      "linde x y",                      /* unsupported command */
       "LINDEX",                          /* wrong number of arguments*/
       "LINDEX key",                      /* wrong number of arguments*/
       "LINDEX key a",                    /* wrong number format*/
@@ -59,7 +59,7 @@ public class TestLINDEX extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lindex\r\n",
+    "-ERR: Unsupported command: LINDE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number format: a\r\n"    

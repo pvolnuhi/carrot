@@ -44,7 +44,7 @@ public class TestLPOP extends CommandBase {
       "LPOP key",                                                 /* v10 */
       "LLEN key",                                                  /* 0 */
       
-      "LPOP key"                                                  /* NULL */
+      "lpop key"                                                  /* NULL */
   }; 
   
   protected String[] validResponses = new String[] {
@@ -78,13 +78,13 @@ public class TestLPOP extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lpop x y",                      /* unsupported command */
+      "lpo x y",                      /* unsupported command */
       "LPOP",                          /* wrong number of arguments*/
       "LPOP key value",                /* wrong number of arguments*/      
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lpop\r\n",
+    "-ERR: Unsupported command: LPO\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

@@ -25,7 +25,7 @@ public class TestSMOVE extends CommandBase {
       "SMOVE key key1 v100",                                    /* 0 */
       "SMOVE key1 key0 v2",                                     /* 0 */                                      
       "SMOVE key key1 v2",                                      /* 1 */
-      "SMOVE key key1 v3",                                      /* 1 */
+      "smove key key1 v3",                                      /* 1 */
       "SCARD key",                                              /* 7 */
       "SCARD key1"                                             /* 3 */
   };
@@ -42,7 +42,7 @@ public class TestSMOVE extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "smove x y",                     /* unsupported command */
+      "smov x y",                     /* unsupported command */
       "SMOVE",                         /* wrong number of arguments*/
       "SMOVE x",                       /* wrong number of arguments*/
       "SMOVE x y",                     /* wrong number of arguments*/
@@ -51,7 +51,7 @@ public class TestSMOVE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: smove\r\n",
+    "-ERR: Unsupported command: SMOV\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

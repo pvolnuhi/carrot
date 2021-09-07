@@ -40,7 +40,7 @@ public class TestLRANGE extends CommandBase {
       
       // Test5 - out of range
       "LRANGE key -12 -11",                                    /* array=0: */
-      "LRANGE key 11 100"                                      /* array=0: */
+      "lrange key 11 100"                                      /* array=0: */
 
   };
   
@@ -68,7 +68,7 @@ public class TestLRANGE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lrange x y",                      /* unsupported command */
+      "lrang x y",                      /* unsupported command */
       "LRANGE",                          /* wrong number of arguments*/
       "LRANGE key",                      /* wrong number of arguments*/
       "LRANGE key value",                /* wrong number of arguments*/
@@ -80,7 +80,7 @@ public class TestLRANGE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lrange\r\n",
+    "-ERR: Unsupported command: LRANG\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

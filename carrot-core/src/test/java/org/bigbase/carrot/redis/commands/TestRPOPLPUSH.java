@@ -35,7 +35,7 @@ public class TestRPOPLPUSH extends CommandBase {
       "RPOPLPUSH key2 key2",              /* v14, v15, v11, v12, v13 */
       "RPOPLPUSH key2 key2",              /* v13, v14, v15, v11, v12 */
       "RPOPLPUSH key2 key2",              /* v12, v13, v14, v15, v11 */
-      "RPOPLPUSH key2 key2"               /* v11, v12, v13, v14, v15 */
+      "rpoplpush key2 key2"               /* v11, v12, v13, v14, v15 */
 
   };
   
@@ -61,14 +61,14 @@ public class TestRPOPLPUSH extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "rpoplpush x y",                 /* unsupported command */
+      "rpoplpus x y",                 /* unsupported command */
       "RPOPLPUSH",                     /* wrong number of arguments*/
       "RPOPLPUSH x",                   /* wrong number of arguments*/
       "RPOPLPUSH x y z",               /* wrong number of arguments*/      
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: rpoplpush\r\n",
+    "-ERR: Unsupported command: RPOPLPUS\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n" 

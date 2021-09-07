@@ -23,7 +23,7 @@ public class TestHDEL extends CommandBase {
       "HSET key1 field1 value1 field2 value2 field3 value3 field4 value4",        /* 4 */
       "HDEL key1 field1 field5",                                                  /* 1 */
       "HGET key1 field1",                                                         /* NULL */
-      "HDEL key1 field1 field2 field3 field4",                                    /* 3 */ 
+      "hdel key1 field1 field2 field3 field4",                                    /* 3 */ 
       "HGET key1 field2",                                                         /* NULL */
       "HGET key1 field3",                                                         /* NULL */
       "HGET key1 field4"                                                          /* NULL */
@@ -41,13 +41,11 @@ public class TestHDEL extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hdel x",                     /* unsupported command */
       "HDEL",                       /* wrong number of arguments*/
       "HDEL x"                      /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hdel\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

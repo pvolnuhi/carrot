@@ -30,12 +30,12 @@ public class TestTIME extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "time x y",                      /* unsupported command */
+      "timex x y",                      /* unsupported command */
       "TIME COUNT X",                  /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: time\r\n",
+    "-ERR: Unsupported command: TIMEX\r\n",
     "-ERR: Wrong number of arguments\r\n",
   };
   

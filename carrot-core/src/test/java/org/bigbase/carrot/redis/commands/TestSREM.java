@@ -26,7 +26,7 @@ public class TestSREM extends CommandBase {
       "SREM key1 v1 v2 v3",                                     /* 0 */                                      
       "SREM key v1 v2 v3 v4 v5",                                /* 2 */                                      
       "SCARD key",                                              /* 5 */
-      "SREM key v6 v7 v8 v9 v10",                               /* 5 */                                      
+      "srem key v6 v7 v8 v9 v10",                               /* 5 */                                      
       "SCARD key",                                              /* 0 */
   };
   
@@ -42,13 +42,13 @@ public class TestSREM extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "srem x y",                     /* unsupported command */
+      "sre x y",                     /* unsupported command */
       "SREM",                         /* wrong number of arguments*/
       "SREM x"                        /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: srem\r\n",
+    "-ERR: Unsupported command: SRE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

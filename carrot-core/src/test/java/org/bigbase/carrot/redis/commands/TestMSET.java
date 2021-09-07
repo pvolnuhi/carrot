@@ -22,7 +22,7 @@ public class TestMSET extends CommandBase {
   protected String[] validRequests = new String[] {
       "MSET key1 value1",                   /* OK */
       "GET key1",                           /* value1 */
-      "MSET key1 value11 key2 value2 key3 value3 key4 value4",                     /* OK */
+      "mset key1 value11 key2 value2 key3 value3 key4 value4",                     /* OK */
       "GET key1",                           /* value11 */ 
       "GET key2",                           /* value2 */
       "GET key3",                           /* value3 */ 
@@ -42,7 +42,7 @@ public class TestMSET extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "mset x",                     /* unsupported command */
+      "mse x",                     /* unsupported command */
       "MSET",                       /* wrong number of arguments*/
       "MSET x",                     /* wrong number of arguments*/
       "MSET x y z",                 /* wrong number of arguments*/
@@ -51,7 +51,7 @@ public class TestMSET extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: mset\r\n",
+    "-ERR: Unsupported command: MSE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

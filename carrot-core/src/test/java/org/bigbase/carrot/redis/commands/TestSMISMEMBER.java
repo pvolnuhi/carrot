@@ -26,7 +26,7 @@ public class TestSMISMEMBER extends CommandBase {
       "SMISMEMBER key1 v1 v1",                                  /* 0, 0*/
       
       "SMISMEMBER key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",          /* all 1's*/                                       
-      "SMISMEMBER key v1 v22 v3 v44 v5 v66 v7 v88 v9 v100",     /* all 10's*/                                       
+      "smismember key v1 v22 v3 v44 v5 v66 v7 v88 v9 v100",     /* all 10's*/                                       
   
   };
   
@@ -41,13 +41,13 @@ public class TestSMISMEMBER extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "smismember x y",                     /* unsupported command */
+      "smismembe x y",                     /* unsupported command */
       "SMISMEMBER",                         /* wrong number of arguments*/
       "SMISMEMBER x",                     /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: smismember\r\n",
+    "-ERR: Unsupported command: SMISMEMBE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

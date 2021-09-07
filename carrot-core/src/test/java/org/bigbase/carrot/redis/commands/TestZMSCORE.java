@@ -26,7 +26,7 @@ public class TestZMSCORE extends CommandBase {
       "ZMSCORE key v3 v4",
       "ZMSCORE key v5 v6",
       "ZMSCORE key1 v1 v2",
-      "ZMSCORE key v1 v7 v2"
+      "zmscore key v1 v7 v2"
   };
   
   protected String[] validResponses = new String[] {
@@ -41,13 +41,13 @@ public class TestZMSCORE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "zmscore x y",                          /* unsupported command */
+      "zmscor x y",                          /* unsupported command */
       "ZMSCORE",                              /* wrong number of arguments*/
       "ZSCORE key"                            /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zmscore\r\n",
+    "-ERR: Unsupported command: ZMSCOR\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

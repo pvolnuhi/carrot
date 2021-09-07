@@ -55,7 +55,7 @@ public class TestZRANGEBYSCORE extends CommandBase {
       "ZRANGEBYSCORE key (7.0 9.9 WITHSCORES",                                               /* 1 */
       "ZRANGEBYSCORE key 7.0 9.9 WITHSCORES",                                                /* 2 */
       "ZRANGEBYSCORE key (8.0 9.9 WITHSCORES",                                               /* 0 */
-      "ZRANGEBYSCORE key 8.0 9.9 WITHSCORES"                                                 /* 1 */
+      "zrangebyscore key 8.0 9.9 WITHSCORES"                                                 /* 1 */
       
   };
   
@@ -124,7 +124,7 @@ public class TestZRANGEBYSCORE extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zrangebyscore x y",                           /* unsupported command */
+      "zrangebyscor x y",                           /* unsupported command */
       "ZRANGEBYSCORE",                               /* wrong number of arguments*/
       "ZRANGEBYSCORE key",                           /* wrong number of arguments*/
       "ZRANGEBYSCORE key a",                         /* wrong number of arguments*/
@@ -136,7 +136,7 @@ public class TestZRANGEBYSCORE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zrangebyscore\r\n",
+    "-ERR: Unsupported command: ZRANGEBYSCOR\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

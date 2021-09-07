@@ -21,7 +21,7 @@ public class TestSSETBIT extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "SSETBIT key 100 1",               /* 0 */
-      "SSETBIT key 100 0"               /* 1 */
+      "ssetbit key 100 0"               /* 1 */
   };
   
   protected String[] validResponses = new String[] {
@@ -31,7 +31,7 @@ public class TestSSETBIT extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "ssetbit x y",                      /* unsupported command */
+      "ssetbi x y",                      /* unsupported command */
       "SSETBIT",                          /* wrong number of arguments*/
       "SSETBIT key",                      /* wrong number of arguments*/
       "SSETBIT key value",                /* wrong number of arguments*/
@@ -43,7 +43,7 @@ public class TestSSETBIT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: ssetbit\r\n",
+    "-ERR: Unsupported command: SSETBI\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

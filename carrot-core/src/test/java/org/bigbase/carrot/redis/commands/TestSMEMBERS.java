@@ -22,7 +22,7 @@ public class TestSMEMBERS extends CommandBase {
   protected String[] validRequests = new String[] {
       "SADD key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",                /* 10 */
       "SMEMBERS key",                                           /* all */
-      "SMEMBERS key1"                                           /* empty array*/                                       
+      "smembers key1"                                           /* empty array*/                                       
   };
   
   protected String[] validResponses = new String[] {
@@ -34,13 +34,13 @@ public class TestSMEMBERS extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "smembers x y",                     /* unsupported command */
+      "smember x y",                     /* unsupported command */
       "SMEMBERS",                         /* wrong number of arguments*/
       "SMEMBERS x v",                     /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: smembers\r\n",
+    "-ERR: Unsupported command: SMEMBER\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

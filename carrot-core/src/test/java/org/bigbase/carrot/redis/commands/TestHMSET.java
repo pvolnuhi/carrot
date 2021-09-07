@@ -21,6 +21,7 @@ public class TestHMSET extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "HMSET key1 field1 value1 field2 value2 field3 value3 field4 value4",        /* 4 */
+      "hmset key1 field1 value1 field2 value2 field3 value3 field4 value4",        /* 4 */
       "HGET key1 field1",
       "HGET key1 field2",
       "HGET key1 field3",
@@ -29,6 +30,7 @@ public class TestHMSET extends CommandBase {
   
   protected String[] validResponses = new String[] {
       "+OK\r\n",
+      "+OK\r\n",
       "$6\r\nvalue1\r\n",
       "$6\r\nvalue2\r\n",
       "$6\r\nvalue3\r\n",
@@ -36,7 +38,6 @@ public class TestHMSET extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hmset x",                     /* unsupported command */
       "HMSET",                       /* wrong number of arguments*/
       "HMSET x",                     /* wrong number of arguments*/
       "HMSET x y",                   /* wrong number of arguments*/
@@ -46,7 +47,6 @@ public class TestHMSET extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hmset\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

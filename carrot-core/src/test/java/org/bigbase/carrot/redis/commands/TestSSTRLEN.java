@@ -24,7 +24,7 @@ public class TestSSTRLEN extends CommandBase {
       "SSTRLEN key",                     /* 13 */
       "SSETBIT key 10000000000 1",       /* 0 */
       "SSTRLEN key",                     /* 1250000001 */
-      "SSTRLEN key1"                     
+      "sstrlen key1"                     
   };
   
   protected String[] validResponses = new String[] {
@@ -37,14 +37,14 @@ public class TestSSTRLEN extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "sstrlen x y",                      /* unsupported command */
+      "sstrle x y",                      /* unsupported command */
       "SSTRLEN",                          /* wrong number of arguments*/
       "SSTRLEN key value"                 /* wrong number of arguments*/
       
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: sstrlen\r\n",
+    "-ERR: Unsupported command: SSTRLE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

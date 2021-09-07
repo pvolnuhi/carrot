@@ -24,7 +24,7 @@ public class TestZRANDMEMBER extends CommandBase {
       "ZADD key 5.0 c5 6.0 c6 7.0 c7 8.0 c8 9.0 c9",                       /* 5 */
       "ZCARD key",                                                         /* 10 */
       
-      "ZRANDMEMBER key", 
+      "zrandmember key", 
       "ZRANDMEMBER key", 
       "ZRANDMEMBER key", 
       "ZRANDMEMBER key", 
@@ -148,7 +148,7 @@ public class TestZRANDMEMBER extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zrandmember x y",                       /* unsupported command */
+      "zrandmembe x y",                       /* unsupported command */
       "ZRANDMEMBER",                           /* wrong number of arguments*/
       "ZRANDMEMBER key a b c",                   /* wrong number of arguments*/
       "ZRANDMEMBER key a WITHSCORES",            /* wrong number format */
@@ -158,7 +158,7 @@ public class TestZRANDMEMBER extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zrandmember\r\n",
+    "-ERR: Unsupported command: ZRANDMEMBE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number format: a\r\n",

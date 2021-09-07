@@ -33,7 +33,7 @@ public class TestSBITCOUNT extends CommandBase {
       "SBITCOUNT key 0 1000",            /* 5 */
       "SBITCOUNT key 0 -1",              /* 5 */
       "SBITCOUNT key 105 110",           /* 0 */
-      "SBITCOUNT key1",                  /* 0 */
+      "sbitcount key1",                  /* 0 */
       
   };
   
@@ -56,7 +56,7 @@ public class TestSBITCOUNT extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "sbitcount x y",                    /* unsupported command */
+      "sbitcoun x y",                    /* unsupported command */
       "SBITCOUNT",                        /* wrong number of arguments*/
       "SBITCOUNT key 1",                  /* wrong number of arguments*/
       "SBITCOUNT key 1 2 3",              /* wrong number of arguments*/
@@ -65,7 +65,7 @@ public class TestSBITCOUNT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: sbitcount\r\n",
+    "-ERR: Unsupported command: SBITCOUN\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

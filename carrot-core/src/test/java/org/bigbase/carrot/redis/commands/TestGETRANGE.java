@@ -31,7 +31,7 @@ public class TestGETRANGE extends CommandBase {
       "GETRANGE key 10 9",                          /* NULL */
       "GETRANGE key -10 -10",                       /* 1 */
       "GETRANGE key -10 -9",                        /* 12 */
-      "GETRANGE key -11 -12"                        /* NULL */
+      "getrange key -11 -12"                        /* NULL */
   };
   
   protected String[] validResponses = new String[] {
@@ -50,7 +50,6 @@ public class TestGETRANGE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "getrange x y",                         /* unsupported command */
       "GETRANGE",                             /* wrong number of arguments*/
       "GETRANGE key",                         /* wrong number of arguments*/
       "GETRANGE key 1",                       /* wrong number of arguments*/
@@ -61,7 +60,6 @@ public class TestGETRANGE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: getrange\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

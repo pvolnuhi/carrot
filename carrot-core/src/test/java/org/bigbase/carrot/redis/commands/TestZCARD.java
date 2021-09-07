@@ -34,7 +34,7 @@ public class TestZCARD extends CommandBase {
       "ZADD key XX CH 12345 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81 22.0 v9 11.0 v10 ",  /* 1 */
       "ZCARD key",                                                            /* 14 */
       "ZADD key NX CH 1234 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81 22.0 v9 11.0 v10",  /* 2 */
-      "ZCARD key"                                                            /* 16 */
+      "zcard key"                                                            /* 16 */
   };
   
   protected String[] validResponses = new String[] {
@@ -57,7 +57,7 @@ public class TestZCARD extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "zcard x y",                          /* unsupported command */
+      "zcardd x y",                          /* unsupported command */
       "ZCARD",                              /* wrong number of arguments*/
       "ZCARD key 1",                        /* wrong number of arguments*/
       "ZCARD key 1 2 3",                    /* wrong number of arguments*/
@@ -65,7 +65,7 @@ public class TestZCARD extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zcard\r\n",
+    "-ERR: Unsupported command: ZCARDD\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

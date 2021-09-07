@@ -32,7 +32,7 @@ public class TestZCOUNT extends CommandBase {
       "ZCOUNT key 3.0 (10.0",                                                 /* 7 */ 
       "ZCOUNT key 3.0 10.0",                                                 /* 8 */ 
       "ZCOUNT key (3.0 (10.0",                                                /* 6 */ 
-      "ZCOUNT key (3.0 10.0"                                                  /* 7 */ 
+      "zcount key (3.0 10.0"                                                  /* 7 */ 
            
   };
   
@@ -54,7 +54,7 @@ public class TestZCOUNT extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zcount x y",                           /* unsupported command */
+      "zcountt x y",                           /* unsupported command */
       "ZCOUNT",                               /* wrong number of arguments*/
       "ZCOUNT key",                           /* wrong number of arguments*/
       "ZCOUNT key a",                         /* wrong number of arguments*/
@@ -66,7 +66,7 @@ public class TestZCOUNT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zcount\r\n",
+    "-ERR: Unsupported command: ZCOUNTT\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

@@ -22,7 +22,7 @@ public class TestHKEYS extends CommandBase {
   protected String[] validRequests = new String[] {
       "HSET key1 field1 value1 field2 value2 field3 value3 field4 value4",        /* 4 */
       "HKEYS key1",
-      "HKEYS key2"
+      "hkeys key2"
   };
   
   protected String[] validResponses = new String[] {
@@ -32,7 +32,6 @@ public class TestHKEYS extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hkeys x",                     /* unsupported command */
       "HKEYS",                       /* wrong number of arguments*/
       "HKEYS x y z",                 /* wrong number of arguments*/
       "HKEYS x y z a b bb",          /* wrong number of arguments*/
@@ -40,7 +39,6 @@ public class TestHKEYS extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hkeys\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

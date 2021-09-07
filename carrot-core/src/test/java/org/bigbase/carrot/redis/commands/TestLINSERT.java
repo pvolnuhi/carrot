@@ -35,7 +35,7 @@ public class TestLINSERT extends CommandBase {
       "LINSERT key BEFORE v555 v155",                              /* -1 */      
       "LINSERT key AFTER v5555 v155",                              /* -1 */      
       "LINSERT key1 BEFORE v555 v155",                             /* -1 */      
-      "LINSERT key1 AFTER v5555 v155",                             /* -1 */      
+      "linsert key1 AFTER v5555 v155",                             /* -1 */      
 
       
       "LINDEX key 0",                                             /* v0 */
@@ -97,7 +97,7 @@ public class TestLINSERT extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "linsert x y",                     /* unsupported command */
+      "linser x y",                     /* unsupported command */
       "LINSERT x",                       /* wrong number of arguments*/
       "LINSERT x y",                     /* wrong number of arguments*/
       "LINSERT x y z",                   /* wrong number format*/
@@ -106,7 +106,7 @@ public class TestLINSERT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: linsert\r\n",
+    "-ERR: Unsupported command: LINSER\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",    

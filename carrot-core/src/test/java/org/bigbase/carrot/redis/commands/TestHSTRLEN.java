@@ -21,7 +21,7 @@ public class TestHSTRLEN extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "HSET key1 f1 value1111 f2 value2222222 f3 value3333333333 f4 value444444444444",        /* 4 */
-      "HSTRLEN key1 f1", /* 9 */
+      "hstrlen key1 f1", /* 9 */
       "HSTRLEN key1 f2", /* 12 */
       "HSTRLEN key1 f3", /* 15 */
       "HSTRLEN key1 f4", /* 17 */
@@ -41,7 +41,6 @@ public class TestHSTRLEN extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hstrlen x",                     /* unsupported command */
       "HSTRLEN",                       /* wrong number of arguments*/
       "HSTRLEN x",                     /* wrong number of arguments*/
       "HSTRLEN x y z",                 /* wrong number of arguments*/
@@ -50,7 +49,6 @@ public class TestHSTRLEN extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hstrlen\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

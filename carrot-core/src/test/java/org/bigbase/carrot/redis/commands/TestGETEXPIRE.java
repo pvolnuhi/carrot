@@ -24,7 +24,7 @@ public class TestGETEXPIRE extends CommandBase {
       "SET key1 value",                             /* OK */
       "GETEXPIRE key",                              /* 123456789 */
       "GETEXPIRE key1",                             /* 0 */
-      "GETEXPIRE key2",                             /* -1 */
+      "getexpire key2",                             /* -1 */
   };
   
   protected String[] validResponses = new String[] {
@@ -37,13 +37,11 @@ public class TestGETEXPIRE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "getexpire x y",                      /* unsupported command */
       "GETEXPIRE",                          /* wrong number of arguments*/
       "GETEXPIRE key value"                 /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: getexpire\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
   };

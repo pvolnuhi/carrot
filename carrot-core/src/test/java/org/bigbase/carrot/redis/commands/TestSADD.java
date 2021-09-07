@@ -22,7 +22,7 @@ public class TestSADD extends CommandBase {
   protected String[] validRequests = new String[] {
       "SADD key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",                 /* 10 */
       "SADD key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",                 /* 0 */
-      "SADD key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 v11"              /* 1 */
+      "sadd key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 v11"              /* 1 */
       
   };
   
@@ -34,13 +34,13 @@ public class TestSADD extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "sadd x y",                     /* unsupported command */
+      "sad x y",                     /* unsupported command */
       "SADD",                         /* wrong number of arguments*/
       "SADD x"                        /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: sadd\r\n",
+    "-ERR: Unsupported command: SAD\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n" 
   };

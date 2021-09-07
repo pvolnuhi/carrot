@@ -22,7 +22,7 @@ public class TestINCRBY extends CommandBase {
   protected String[] validRequests = new String[] {
       "INCRBY key 100",
       "INCRBY key 100",
-      "INCRBY key 100"
+      "incrby key 100"
   };
   
   protected String[] validResponses = new String[] {
@@ -33,7 +33,7 @@ public class TestINCRBY extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "incrby x",                     /* unsupported command */
+      "incrb x",                     /* unsupported command */
       "INCRBY",                       /* wrong number of arguments*/
       "INCRBY x",                     /* wrong number of arguments*/
       "INCRBY x y z",                 /* wrong number of arguments*/
@@ -43,7 +43,7 @@ public class TestINCRBY extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: incrby\r\n",
+    "-ERR: Unsupported command: INCRB\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
     "-ERR: Wrong number of arguments\r\n",  

@@ -23,7 +23,7 @@ public class TestGETDEL extends CommandBase {
       "SET key1 100",
       "GETDEL key1",
       "GETDEL key1",
-      "GETDEL key2"
+      "getdel key2"
   };
   
   protected String[] validResponses = new String[] {
@@ -35,11 +35,13 @@ public class TestGETDEL extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "getdel x",                     /* unsupported command */
+      "getdel x y",                     /* wrong argument number*/
+      "GETDEL x y"                     /* wrong argument number*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: getdel\r\n"
+      "-ERR: Wrong number of arguments\r\n",
+      "-ERR: Wrong number of arguments\r\n"      
   };
   
   /**

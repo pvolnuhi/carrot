@@ -28,7 +28,7 @@ public class TestSETRANGE extends CommandBase {
       "SETRANGE key 0 0",                           /* 02345678901234567890*/
       "SETRANGE key 1 0",                           /* 00345678901234567890*/
       "GET key",                                    /* 00345678901234567890*/ 
-      "SETRANGE key 2 00000000",                    /* 00000000001234567890*/
+      "setrange key 2 00000000",                    /* 00000000001234567890*/
       "GET key",                                    /* 00000000001234567890*/
       "SETRANGE key 100 1234567890",                /* 110 */
       "GETRANGE key 100 -1",                        /* 1234567890 */
@@ -57,7 +57,7 @@ public class TestSETRANGE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "setrange x y",                         /* unsupported command */
+      "setrang x y",                         /* unsupported command */
       "SETRANGE",                             /* wrong number of arguments*/
       "SETRANGE key",                         /* wrong number of arguments*/
       "SETRANGE key 1",                       /* wrong number of arguments*/
@@ -68,7 +68,7 @@ public class TestSETRANGE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: setrange\r\n",
+    "-ERR: Unsupported command: SETRANG\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

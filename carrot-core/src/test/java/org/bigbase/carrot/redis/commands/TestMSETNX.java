@@ -23,7 +23,7 @@ public class TestMSETNX extends CommandBase {
       "SET key1 value1",                   /* OK */
       "GET key1",                           /* value1 */
       "MSETNX key1 value11 key2 value2 key3 value3 key4 value4",        /* 0 */
-      "MSETNX key2 value2 key3 value3 key4 value4",                     /* 1 */
+      "msetnx key2 value2 key3 value3 key4 value4",                     /* 1 */
       "GET key1",                           /* still value1 */ 
       "GET key2",                           /* value2 */
       "GET key3",                           /* value3 */ 
@@ -44,7 +44,7 @@ public class TestMSETNX extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "msetnx x",                     /* unsupported command */
+      "msetn x",                     /* unsupported command */
       "MSETNX",                       /* wrong number of arguments*/
       "MSETNX x",                     /* wrong number of arguments*/
       "MSETNX x y z",                 /* wrong number of arguments*/
@@ -53,7 +53,7 @@ public class TestMSETNX extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: msetnx\r\n",
+    "-ERR: Unsupported command: MSETN\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

@@ -25,7 +25,7 @@ public class TestBITCOUNT extends CommandBase {
       "SETBIT key 102 1",               /* 0 */
       "SETBIT key 103 1",               /* 0 */
       "SETBIT key 104 1",               /* 0 */
-      "BITCOUNT key",                   /* 5 */
+      "bitcount key",                   /* 5 */
       "BITCOUNT key 0 11",              /* 0 */
       "BITCOUNT key 0 12",              /* 4 */
       "BITCOUNT key 0 13",              /* 5 */
@@ -56,7 +56,6 @@ public class TestBITCOUNT extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "bitcount x y",                    /* unsupported command */
       "BITCOUNT",                        /* wrong number of arguments*/
       "BITCOUNT key 1",                  /* wrong number of arguments*/
       "BITCOUNT key 1 2 3",              /* wrong number of arguments*/
@@ -65,7 +64,6 @@ public class TestBITCOUNT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: bitcount\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

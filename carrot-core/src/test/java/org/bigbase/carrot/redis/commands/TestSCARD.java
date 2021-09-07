@@ -24,7 +24,7 @@ public class TestSCARD extends CommandBase {
       "SCARD key",                                              /* 10 */
       "SADD key v11 v21 v31 v41 v51 v61 v71 v81 v91 v101",      /* 10 */
       "SCARD key",                                              /* 20 */ 
-      "SCARD key1"                                              /* 0 */
+      "scard key1"                                              /* 0 */
   };
   
   protected String[] validResponses = new String[] {
@@ -37,13 +37,13 @@ public class TestSCARD extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "scard x y",                     /* unsupported command */
+      "scar x y",                     /* unsupported command */
       "SCARD",                         /* wrong number of arguments*/
       "SCARD x v",                     /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: scard\r\n",
+    "-ERR: Unsupported command: SCAR\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

@@ -38,7 +38,7 @@ public class TestLSET extends CommandBase {
       
       "LSET key 10 vv",                                            /* ERR */
       "LSET key 11 vv",                                            /* ERR */
-      "LSET key 12 vv"                                             /* ERR */
+      "lset key 12 vv"                                             /* ERR */
   };
   
   protected String[] validResponses = new String[] {
@@ -66,7 +66,7 @@ public class TestLSET extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lset x y",                     /* unsupported command */
+      "lse x y",                     /* unsupported command */
       "LSET",                         /* wrong number of arguments*/
       "LSET x",                       /* wrong number of arguments*/
       "LSET x y",                     /* wrong number of arguments*/
@@ -76,7 +76,7 @@ public class TestLSET extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lset\r\n",
+    "-ERR: Unsupported command: LSE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",    

@@ -24,7 +24,7 @@ public class TestHLEN extends CommandBase {
       "HSET key2 field1 value1 field2 value2 field3 value3 field4 value4 f5 v5",  /* 5 */
       "HLEN key1",
       "HLEN key2",
-      "HLEN key3"
+      "hlen key3"
   };
   
   protected String[] validResponses = new String[] {
@@ -36,7 +36,6 @@ public class TestHLEN extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hlen x",                     /* unsupported command */
       "HLEN",                       /* wrong number of arguments*/
       "HLEN x y z",                 /* wrong number of arguments*/
       "HLEN x y z a b bb",          /* wrong number of arguments*/
@@ -44,7 +43,6 @@ public class TestHLEN extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hlen\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

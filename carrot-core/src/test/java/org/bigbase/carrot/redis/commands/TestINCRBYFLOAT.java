@@ -22,7 +22,7 @@ public class TestINCRBYFLOAT extends CommandBase {
   protected String[] validRequests = new String[] {
       "INCRBYFLOAT key 100.5",
       "INCRBYFLOAT key 100.1",
-      "INCRBYFLOAT key 100.2"
+      "incrbyfloat key 100.2"
   };
   
   protected String[] validResponses = new String[] {
@@ -33,7 +33,7 @@ public class TestINCRBYFLOAT extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "incrbyfloat x",                      /* unsupported command */
+      "incrbyfloa x",                      /* unsupported command */
       "INCRBYFLOAT",                        /* wrong number of arguments*/
       "INCRBYFLOAT x",                      /* wrong number of arguments*/
       "INCRBYFLOAT x y z",                  /* wrong number of arguments*/
@@ -43,7 +43,7 @@ public class TestINCRBYFLOAT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: incrbyfloat\r\n",
+    "-ERR: Unsupported command: INCRBYFLOA\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
     "-ERR: Wrong number of arguments\r\n",  

@@ -36,7 +36,6 @@ public class TestHSET extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hset x",                     /* unsupported command */
       "HSET",                       /* wrong number of arguments*/
       "HSET x",                     /* wrong number of arguments*/
       "HSET x y",                   /* wrong number of arguments*/
@@ -46,7 +45,6 @@ public class TestHSET extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hset\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

@@ -252,6 +252,12 @@ class WorkThread extends Thread {
           CommandProcessor.process(store, in, out);
           // send response back
           out.flip();
+          int limit = out.limit();
+          byte[] bb = new byte[limit];
+          out.get(bb);
+          System.out.println("SERVER:\n"+ new String(bb));
+          out.position(0);
+          out.limit(limit);
           while (out.hasRemaining()) {
             channel.write(out);
           }

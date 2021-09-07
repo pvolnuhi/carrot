@@ -49,7 +49,7 @@ public class TestZREVRANGE extends CommandBase {
       "ZREVRANGE key 2 5",                                                    /* 4 */
       "ZREVRANGE key 3 9",                                                    /* 7 */
       "ZREVRANGE key 2 5 WITHSCORES",                                         /* 4 */
-      "ZREVRANGE key 3 9 WITHSCORES",                                         /* 7 */
+      "zrevrange key 3 9 WITHSCORES",                                         /* 7 */
   };
   
   protected String[] validResponses = new String[] {
@@ -106,7 +106,7 @@ public class TestZREVRANGE extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zrevrange x y",                           /* unsupported command */
+      "zrevrang x y",                           /* unsupported command */
       "ZREVRANGE",                               /* wrong number of arguments*/
       "ZREVRANGE key",                           /* wrong number of arguments*/
       "ZREVRANGE key a",                         /* wrong number of arguments*/
@@ -117,7 +117,7 @@ public class TestZREVRANGE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zrevrange\r\n",
+    "-ERR: Unsupported command: ZREVRANG\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

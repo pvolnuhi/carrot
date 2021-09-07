@@ -42,7 +42,7 @@ public class TestZPOPMIN extends CommandBase {
       "ZCARD key",                                                            /* 2 */
       "ZPOPMIN key",                                                          /* c9 2.0 */ 
       "ZCARD key",                                                            /* 1 */
-      "ZPOPMIN key",                                                          /* c10 1.0 */ 
+      "zpopmin key",                                                          /* c10 1.0 */ 
       
       "ZCARD key",                                                            /* 0 */
       
@@ -105,7 +105,7 @@ public class TestZPOPMIN extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zpopmin x y",                           /* unsupported command */
+      "zpopmi x y",                           /* unsupported command */
       "ZPOPMIN",                               /* wrong number of arguments*/
       "ZPOPMIN key a b",                       /* wrong number of arguments*/
       "ZPOPMIN key a",                         /* wrong number format */
@@ -113,7 +113,7 @@ public class TestZPOPMIN extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zpopmin\r\n",
+    "-ERR: Unsupported command: ZPOPMI\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number format: a\r\n",

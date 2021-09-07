@@ -31,14 +31,12 @@ public class TestAPPEND extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "append x y",                      /* unsupported command */
       "APPEND",                          /* wrong number of arguments*/
       "APPEND key",                      /* wrong number of arguments*/
       "APPEND key value value",          /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: append\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

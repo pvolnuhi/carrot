@@ -24,7 +24,7 @@ public class TestGETSET extends CommandBase {
       "GETSET key value2",                        /* value1 */
       "GETSET key value3",                        /* value2 */
       "GETSET key value4",                        /* value3 */
-      "GETSET key value5"                         /* value4 */
+      "getset key value5"                         /* value4 */
   };
   
   protected String[] validResponses = new String[] {
@@ -37,14 +37,12 @@ public class TestGETSET extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "getset x y",                        /* unsupported command */
       "GETSET",                            /* wrong number of arguments*/
       "GETSET key",                        /* wrong number of arguments*/
       "GETSET key 1 2 3"                   /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: getset\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

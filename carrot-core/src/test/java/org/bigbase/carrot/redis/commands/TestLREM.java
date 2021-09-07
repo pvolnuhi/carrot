@@ -57,7 +57,7 @@ public class TestLREM extends CommandBase {
       "LINDEX key 3",                                          /* v2 */
       "LINDEX key 4",                                          /* v2 */
       
-      "LREM key -5 v2",                                        /* 5 */
+      "lrem key -5 v2",                                        /* 5 */
       "LLEN key",                                              /* 0 */
       "LINDEX key 0"                                          /* NULL */
   };
@@ -108,7 +108,7 @@ public class TestLREM extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lrem x y",                      /* unsupported command */
+      "lre x y",                      /* unsupported command */
       "LREM",                          /* wrong number of arguments*/
       "LREM key",                      /* wrong number of arguments*/
       "LREM key value",                /* wrong number of arguments*/
@@ -119,7 +119,7 @@ public class TestLREM extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lrem\r\n",
+    "-ERR: Unsupported command: LRE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

@@ -23,7 +23,7 @@ public class TestHINCRBY extends CommandBase {
       "HSET key field1 100 field2 200",
       "HINCRBY key field1 100",
       "HINCRBY key field2 100",
-      "HINCRBY key field3 100"         
+      "hincrby key field3 100"         
   };
   
   protected String[] validResponses = new String[] {
@@ -35,7 +35,6 @@ public class TestHINCRBY extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "hincrby x",                     /* unsupported command */
       "HINCRBY",                       /* wrong number of arguments*/
       "HINCRBY x",                     /* wrong number of arguments*/
       "HINCRBY x y",                   /* wrong number of arguments */
@@ -45,7 +44,6 @@ public class TestHINCRBY extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hincrby\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
     "-ERR: Wrong number of arguments\r\n",  

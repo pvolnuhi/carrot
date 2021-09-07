@@ -22,7 +22,7 @@ public class TestHGETALL extends CommandBase {
   protected String[] validRequests = new String[] {
       "HSET key1 field1 value1 field2 value2 field3 value3 field4 value4",        /* 4 */
       "HGETALL key1",
-      "HGETALL key2"
+      "hgetall key2"
   };
   
   protected String[] validResponses = new String[] {
@@ -33,7 +33,6 @@ public class TestHGETALL extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hgetall x",                     /* unsupported command */
       "HGETALL",                       /* wrong number of arguments*/
       "HGETALL x y z",                 /* wrong number of arguments*/
       "HGETALL x y z a b bb",          /* wrong number of arguments*/
@@ -41,7 +40,6 @@ public class TestHGETALL extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hgetall\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

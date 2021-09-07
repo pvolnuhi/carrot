@@ -30,7 +30,7 @@ public class TestDEL extends CommandBase {
       "SET key8 100",
       "SET key9 100",
       "SET key10 100",
-      "DEL key1", 
+      "del key1", 
       "DEL key1",
       "DEL key2 key3 key4 key5",
       "DEL key2 key3 key4 key5",
@@ -60,11 +60,14 @@ public class TestDEL extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "del x",                     /* unsupported command */
+      "DEL",                     /* wrong arg number */
+      "del"
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: del\r\n"
+      "-ERR: Wrong number of arguments\r\n",
+      "-ERR: Wrong number of arguments\r\n",
+
   };
   
   /**

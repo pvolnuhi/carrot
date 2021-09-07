@@ -28,7 +28,7 @@ public class TestSRANDMEMBER extends CommandBase {
       "SRANDMEMBER key -10",                           /*  ten random members */
       "SRANDMEMBER key1 2",                            /* empty array*/
       "SRANDMEMBER key",                               /* one random member */
-      "SRANDMEMBER key 5",                             /* five random members */
+      "srandmember key 5",                             /* five random members */
       "SCARD key"                                      /* 10 */ 
   };
   
@@ -48,7 +48,7 @@ public class TestSRANDMEMBER extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "srandmember x",                     /* unsupported command */
+      "srandmembe x",                     /* unsupported command */
       "SRANDMEMBER",                       /* Wrong number of arguments*/
       "SRANDMEMBER x 0 0",                 /* Wrong number of arguments */
       "SRANDMEMBER x x",                   /* Wrong number format*/
@@ -56,7 +56,7 @@ public class TestSRANDMEMBER extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: srandmember\r\n",
+    "-ERR: Unsupported command: SRANDMEMBE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",    
     "-ERR: Wrong number format: x\r\n",

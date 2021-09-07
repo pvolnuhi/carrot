@@ -22,7 +22,7 @@ import org.bigbase.carrot.redis.RedisConf;
 public class TestCOMMAND_COUNT extends CommandBase {
   
   protected String[] validRequests = new String[] {
-      "COMMAND COUNT"               /* 103 */
+      "COMMAND COUNT"               /* 106 */
   };
   
   protected String[] validResponses = new String[] {
@@ -31,13 +31,11 @@ public class TestCOMMAND_COUNT extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "command x y",                      /* unsupported command */
       "COMMAND COUNT X",                  /* wrong number of arguments*/
       "COMMAND X",                        /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: command\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Unsupported command: COMMAND X\r\n"
   };

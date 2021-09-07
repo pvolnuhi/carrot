@@ -33,6 +33,10 @@ public class DEL implements RedisCommand {
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     
     int numArgs = UnsafeAccess.toInt(inDataPtr);
+    if (numArgs < 2) {
+      Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
+      return;
+    }
     inDataPtr += Utils.SIZEOF_INT;
     // skip command name
     int clen = UnsafeAccess.toInt(inDataPtr);

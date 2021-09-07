@@ -33,7 +33,7 @@ public class TestZSCORE extends CommandBase {
       "ZADD key -inf v7",                                                      
       "ZADD key +inf v8",
       "ZSCORE key v7",
-      "ZSCORE key v8"
+      "zscore key v8"
   };
   
   protected String[] validResponses = new String[] {
@@ -55,14 +55,14 @@ public class TestZSCORE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "zscore x y",                          /* unsupported command */
+      "zscoree x y",                          /* unsupported command */
       "ZSCORE",                              /* wrong number of arguments*/
       "ZSCORE key 1 2 3",                    /* wrong number of arguments*/
       "ZSCORE key A 2"                       /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zscore\r\n",
+    "-ERR: Unsupported command: ZSCOREE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

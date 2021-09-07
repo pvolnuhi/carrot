@@ -33,7 +33,7 @@ public class TestSPOP extends CommandBase {
       "SCARD key",                                     /* 10 */ 
       "SPOP key",
       "SCARD key",                                     /* 9 */ 
-      "SPOP key 5",
+      "spop key 5",
       "SCARD key",                                     /* 4 */ 
 
   };
@@ -59,7 +59,7 @@ public class TestSPOP extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "spop x",                     /* unsupported command */
+      "spo x",                     /* unsupported command */
       "SPOP",                       /* Wrong number of arguments*/
       "SPOP x 0 0",                 /* Wrong number of arguments */
       "SPOP x x",                   /* Wrong number format*/
@@ -68,7 +68,7 @@ public class TestSPOP extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: spop\r\n",
+    "-ERR: Unsupported command: SPO\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",    
     "-ERR: Wrong number format: x\r\n",

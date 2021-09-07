@@ -22,7 +22,7 @@ public class TestHVALS extends CommandBase {
   protected String[] validRequests = new String[] {
       "HSET key1 field1 value1 field2 value2 field3 value3 field4 value4",        /* 4 */
       "HVALS key1",
-      "HVALS key2"
+      "hvals key2"
   };
   
   protected String[] validResponses = new String[] {
@@ -32,7 +32,6 @@ public class TestHVALS extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hvals x",                     /* unsupported command */
       "HVALS",                       /* wrong number of arguments*/
       "HVALS x y z",                 /* wrong number of arguments*/
       "HVALS x y z a b bb",          /* wrong number of arguments*/
@@ -40,7 +39,6 @@ public class TestHVALS extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hvals\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"

@@ -26,7 +26,7 @@ public class TestSTRLEN extends CommandBase {
       "STRLEN key1",                        /* 4 */
       "STRLEN key2",                        /* 5 */
       "STRLEN key3",                        /* 6 */
-      "STRLEN key4"                         /* -1 */
+      "strlen key4"                         /* -1 */
   };
   
   protected String[] validResponses = new String[] {
@@ -40,13 +40,13 @@ public class TestSTRLEN extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "strlen x",                     /* unsupported command */
+      "strle x",                     /* unsupported command */
       "STRLEN",                       /* wrong number of arguments*/
       "STRLEN x y"                    /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: strlen\r\n",
+    "-ERR: Unsupported command: STRLE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
   };

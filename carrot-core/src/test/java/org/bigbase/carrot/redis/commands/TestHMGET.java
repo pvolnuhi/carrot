@@ -22,7 +22,7 @@ public class TestHMGET extends CommandBase {
   protected String[] validRequests = new String[] {
       "HMSET key1 field1 value1 field2 value2 field3 value3 field4 value4",        /* 4 */
       "HMGET key1 field1 field11 field2 field22 field3 field33 field4 field44",
-      "HMGET key2 f1 f2 f3 f4" 
+      "hmget key2 f1 f2 f3 f4" 
   };
   
   protected String[] validResponses = new String[] {
@@ -32,13 +32,11 @@ public class TestHMGET extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "hmget x",                     /* unsupported command */
       "HMGET",                        /* Wrong number of arguments*/
       "HMGET x"                        /* Wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hmget\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

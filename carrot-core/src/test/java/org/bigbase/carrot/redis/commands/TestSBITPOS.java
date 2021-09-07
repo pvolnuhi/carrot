@@ -35,7 +35,7 @@ public class TestSBITPOS extends CommandBase {
       "SBITPOS key1 0",                  /* 0 */
       "SBITPOS key 1 0",                 /* 100 */
       "SBITPOS key 1 11",                /* 100 */
-      "SBITPOS key 1 14"                /* -1 */
+      "sbitpos key 1 14"                /* -1 */
   };
   
   protected String[] validResponses = new String[] {
@@ -59,7 +59,7 @@ public class TestSBITPOS extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "sbitpos x y",                      /* unsupported command */
+      "sbitpo x y",                      /* unsupported command */
       "SBITPOS",                          /* wrong number of arguments*/
       "SBITPOS key",                      /* wrong number of arguments*/
       "SBITPOS key 1 2 3 4",              /* wrong number of arguments*/
@@ -69,7 +69,7 @@ public class TestSBITPOS extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: sbitpos\r\n",
+    "-ERR: Unsupported command: SBITPO\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

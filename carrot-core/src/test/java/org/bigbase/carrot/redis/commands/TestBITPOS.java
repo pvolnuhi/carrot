@@ -25,7 +25,7 @@ public class TestBITPOS extends CommandBase {
       "SETBIT key 102 1",               /* 0 */
       "SETBIT key 103 1",               /* 0 */
       "SETBIT key 104 1",               /* 0 */
-      "BITPOS key 1",                   /* 100 */
+      "bitpos key 1",                   /* 100 */
       "BITPOS key 0",                   /* 0 */
       "BITPOS key 1 0 11",              /* -1 */
       "BITPOS key 1 0 -1",              /* 100 */
@@ -60,7 +60,6 @@ public class TestBITPOS extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "bitpos x y",                      /* unsupported command */
       "BITPOS",                          /* wrong number of arguments*/
       "BITPOS key",                      /* wrong number of arguments*/
       "BITPOS key 1 2 3 4",              /* wrong number of arguments*/
@@ -70,7 +69,6 @@ public class TestBITPOS extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: bitpos\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

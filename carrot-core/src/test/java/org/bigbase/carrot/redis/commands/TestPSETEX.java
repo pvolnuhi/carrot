@@ -21,7 +21,7 @@ public class TestPSETEX extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "PSETEX key 100000 value",              /* OK */
-      "PSETEX key 1000000 value"              /* OK */
+      "psetex key 1000000 value"              /* OK */
   };
   
   protected String[] validResponses = new String[] {
@@ -31,7 +31,7 @@ public class TestPSETEX extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "psetex x y",                      /* unsupported command */
+      "psete x y",                      /* unsupported command */
       "PSETEX",                          /* wrong number of arguments*/
       "PSETEX key",                      /* wrong number of arguments*/
       "PSETEX key value",                /* wrong number of arguments*/
@@ -40,7 +40,7 @@ public class TestPSETEX extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: psetex\r\n",
+    "-ERR: Unsupported command: PSETE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

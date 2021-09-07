@@ -21,7 +21,7 @@ public class TestSETNX extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "SETNX key value",                    /* 1 */
-      "SETNX key value1"                    /* 0 */
+      "setnx key value1"                    /* 0 */
   };
   
   protected String[] validResponses = new String[] {
@@ -31,14 +31,14 @@ public class TestSETNX extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "setnx x y",                      /* unsupported command */
+      "setnxx x y",                      /* unsupported command */
       "SETNX",                          /* wrong number of arguments*/
       "SETNX key",                      /* wrong number of arguments*/
       "SETNX key XXX value",            /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: setnx\r\n",
+    "-ERR: Unsupported command: SETNXX\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

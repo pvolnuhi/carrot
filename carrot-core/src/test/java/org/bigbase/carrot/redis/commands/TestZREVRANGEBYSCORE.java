@@ -55,7 +55,7 @@ public class TestZREVRANGEBYSCORE extends CommandBase {
       "ZREVRANGEBYSCORE key (7.0 9.9 WITHSCORES",                                               /* 1 */
       "ZREVRANGEBYSCORE key 7.0 9.9 WITHSCORES",                                                /* 2 */
       "ZREVRANGEBYSCORE key (8.0 9.9 WITHSCORES",                                               /* 0 */
-      "ZREVRANGEBYSCORE key 8.0 9.9 WITHSCORES"                                                 /* 1 */
+      "zrevrangebyscore key 8.0 9.9 WITHSCORES"                                                 /* 1 */
       
   };
   
@@ -132,7 +132,7 @@ public class TestZREVRANGEBYSCORE extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zrevrangebyscore x y",                           /* unsupported command */
+      "zrevrangebyscare x y",                           /* unsupported command */
       "ZREVRANGEBYSCORE",                               /* wrong number of arguments*/
       "ZREVRANGEBYSCORE key",                           /* wrong number of arguments*/
       "ZREVRANGEBYSCORE key a",                         /* wrong number of arguments*/
@@ -144,7 +144,7 @@ public class TestZREVRANGEBYSCORE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zrevrangebyscore\r\n",
+    "-ERR: Unsupported command: ZREVRANGEBYSCARE\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

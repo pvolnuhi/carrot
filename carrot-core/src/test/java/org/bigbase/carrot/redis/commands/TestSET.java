@@ -39,7 +39,7 @@ public class TestSET extends CommandBase {
       "SET key2 value EX 1000 NX",      /* OK */
      
 
-      "SET key value PX 1000 NX",       /* NULL */
+      "set key value PX 1000 NX",       /* NULL */
       "SET key value PX 1000 XX",       /* OK */
       "SET key3 value PX 1000 XX",      /* NULL */
       "SET key3 value PX 1000 NX",      /* OK */
@@ -167,7 +167,7 @@ public class TestSET extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "set x y",                      /* unsupported command */
+      "sett x y",                      /* unsupported command */
       "SET",                          /* wrong number of arguments*/
       "SET key",                      /* wrong number of arguments*/
       "SET key value1 value2",        /* wrong number of arguments*/
@@ -189,7 +189,7 @@ public class TestSET extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: set\r\n",
+    "-ERR: Unsupported command: SETT\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong command format, unexpected argument: value2\r\n",

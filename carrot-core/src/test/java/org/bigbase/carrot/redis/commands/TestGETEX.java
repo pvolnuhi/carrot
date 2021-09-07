@@ -32,7 +32,7 @@ public class TestGETEX extends CommandBase {
       "GETEX key1 PX 10000",         /* NULL */
       "GETEX key1 EXAT 100000",      /* NULL */
       "GETEX key1 PXAT 1000000",     /* NULL */
-      "GETEX key1 PERSIST"          /* NULL */
+      "getex key1 PERSIST"          /* NULL */
   
   };
   
@@ -55,7 +55,6 @@ public class TestGETEX extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "getex x y",                      /* unsupported command */
       "GETEX",                          /* wrong number of arguments*/
       "GETEX key EX 1000 1000",         /* wrong number of arguments*/
       
@@ -71,7 +70,6 @@ public class TestGETEX extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: getex\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
 

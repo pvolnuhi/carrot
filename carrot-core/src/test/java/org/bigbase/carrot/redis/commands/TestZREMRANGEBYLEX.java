@@ -109,7 +109,7 @@ public class TestZREMRANGEBYLEX extends CommandBase {
       "ZREMRANGEBYLEX key (c9 [c99",                                          /* 0 */
       "ZCARD key",                                                            /* 10 */
       
-      "ZREMRANGEBYLEX key [c9 [c99",                                          /* 1 */
+      "zremrangebylex key [c9 [c99",                                          /* 1 */
       "ZCARD key",                                                            /* 9 */
   };
   
@@ -207,7 +207,7 @@ public class TestZREMRANGEBYLEX extends CommandBase {
    };
   
   protected String[] invalidRequests = new String[] {
-      "zremrangebylex x y",                           /* unsupported command */
+      "zremrangebylux x y",                           /* unsupported command */
       "ZREMRANGEBYLEX",                               /* wrong number of arguments*/
       "ZREMRANGEBYLEX key",                           /* wrong number of arguments*/
       "ZREMRANGEBYLEX key a",                         /* wrong number of arguments*/
@@ -220,7 +220,7 @@ public class TestZREMRANGEBYLEX extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zremrangebylex\r\n",
+    "-ERR: Unsupported command: ZREMRANGEBYLUX\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",

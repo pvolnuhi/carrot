@@ -32,13 +32,11 @@ public class TestBGSAVE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "bgsave x y",                      /* unsupported command */
       "BGSAVE COUNT X",                  /* wrong number of arguments*/
       "BGSAVE FCUK"                      /* Wrong command format */
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: bgsave\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Unsupported command: BGSAVE FCUK\r\n"
   };

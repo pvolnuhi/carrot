@@ -21,7 +21,7 @@ public class TestDECRBY extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "DECRBY key 100",
-      "DECRBY key 100",
+      "decrby key 100",
       "DECRBY key 100"
   };
   
@@ -32,7 +32,6 @@ public class TestDECRBY extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "decrby x",                     /* unsupported command */
       "DECRBY",                       /* wrong number of arguments*/
       "DECRBY x",                     /* wrong number of arguments*/
       "DECRBY x y z",                 /* wrong number of arguments*/
@@ -42,7 +41,6 @@ public class TestDECRBY extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: decrby\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
     "-ERR: Wrong number of arguments\r\n",  

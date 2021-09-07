@@ -128,7 +128,7 @@ public class RedisNodeServer implements Runnable {
 
       try {
         if (!key.isValid()) return;
-        if (key.isAcceptable()) {
+        if (key.isValid() && key.isAcceptable()) {
           SocketChannel client = serverSocket.accept();
           // Adjusts this channel's blocking mode to false
           client.configureBlocking(false);
@@ -138,7 +138,7 @@ public class RedisNodeServer implements Runnable {
           // Operation-set bit for read operations
           client.register(selector, SelectionKey.OP_READ);
           log("Connection Accepted: " + client.getLocalAddress());
-        } else if (key.isReadable()) {
+        } else if (key.isValid() && key.isReadable()) {
           // Check if it is in use
           RequestHandlers.Attachment att = (RequestHandlers.Attachment)key.attachment();
           if (att !=null && att.inUse()) return;

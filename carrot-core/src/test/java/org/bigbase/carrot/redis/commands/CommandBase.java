@@ -104,7 +104,9 @@ public abstract class CommandBase {
     String[] validResponses = getValidResponses();
     
     for (int i = 0; i < validRequests.length; i++) {
-      
+      while(is.available() > 0) {
+        is.read();
+      }
       String inline = validRequests[i];
       String request = Utils.inlineToRedisRequest(inline);
       String expResponse = validResponses[i];

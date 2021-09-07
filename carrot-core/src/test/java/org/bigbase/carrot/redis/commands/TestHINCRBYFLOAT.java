@@ -23,7 +23,7 @@ public class TestHINCRBYFLOAT extends CommandBase {
       "HSET key field1 100 field2 200",
       "HINCRBYFLOAT key field1 100.1",
       "HINCRBYFLOAT key field2 100.1",
-      "HINCRBYFLOAT key field3 100.1"         
+      "hincrbyfloat key field3 100.1"         
   };
   
   protected String[] validResponses = new String[] {
@@ -35,7 +35,6 @@ public class TestHINCRBYFLOAT extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "hincrbyfloat x",                     /* unsupported command */
       "HINCRBYFLOAT",                       /* wrong number of arguments*/
       "HINCRBYFLOAT x",                     /* wrong number of arguments*/
       "HINCRBYFLOAT x y",                   /* wrong number of arguments */
@@ -45,7 +44,6 @@ public class TestHINCRBYFLOAT extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: hincrbyfloat\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
     "-ERR: Wrong number of arguments\r\n",  

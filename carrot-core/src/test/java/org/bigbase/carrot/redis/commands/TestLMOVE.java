@@ -51,7 +51,7 @@ public class TestLMOVE extends CommandBase {
       "LMOVE key1 key1 LEFT RIGHT",       /* v12 */
       "LMOVE key1 key1 LEFT RIGHT",       /* v13 */
       "LMOVE key1 key1 LEFT RIGHT",       /* v14 */
-      "LMOVE key1 key1 LEFT RIGHT",       /* v15 */
+      "lmove key1 key1 LEFT RIGHT",       /* v15 */
       
       "LINDEX key1 0",                     /* v11 */
       "LINDEX key1 1",                     /* v12 */
@@ -104,7 +104,7 @@ public class TestLMOVE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lmove x y",                     /* unsupported command */
+      "lmov x y",                     /* unsupported command */
       "LMOVE",                         /* wrong number of arguments*/
       "LMOVE x",                       /* wrong number of arguments*/
       "LMOVE x y",                     /* wrong number of arguments*/
@@ -116,7 +116,7 @@ public class TestLMOVE extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lmove\r\n",
+    "-ERR: Unsupported command: LMOV\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n", 

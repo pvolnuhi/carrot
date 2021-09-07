@@ -22,7 +22,7 @@ public class TestLPUSHX extends CommandBase {
   protected String[] validRequests = new String[] {
       "LPUSHX key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",              /* -1 */
       "LPUSH key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",               /* 10 */
-      "LPUSHX key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",               /* 20 */
+      "lpushx key v1 v2 v3 v4 v5 v6 v7 v8 v9 v10",               /* 20 */
 
   };
   
@@ -34,13 +34,13 @@ public class TestLPUSHX extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lpushx x y",                      /* unsupported command */
+      "lpshx x y",                      /* unsupported command */
       "LPUSHX",                          /* wrong number of arguments*/
       "LPUSHX key",                      /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lpushx\r\n",
+    "-ERR: Unsupported command: LPSHX\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n"
   };

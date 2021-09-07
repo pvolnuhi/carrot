@@ -22,7 +22,7 @@ public class TestGET extends CommandBase {
   protected String[] validRequests = new String[] {
       "SET key1 100",
       "GET key1",
-      "GET key2"
+      "get key2"
   };
   
   protected String[] validResponses = new String[] {
@@ -33,11 +33,18 @@ public class TestGET extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "get x",                     /* unsupported command */
+      "GET",                     /* wrong arg number*/
+      "get",                     /*  wrong arg number */
+      "get x y",                     /*  wrong arg number */
+      "GET x y",                     /*  wrong arg number */
+
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: get\r\n"
+      "-ERR: Wrong number of arguments\r\n",
+      "-ERR: Wrong number of arguments\r\n",
+      "-ERR: Wrong number of arguments\r\n",
+      "-ERR: Wrong number of arguments\r\n"
   };
   
   /**

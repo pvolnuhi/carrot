@@ -21,7 +21,7 @@ public class TestDECR extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "DECR key",
-      "DECR key",
+      "decr key",
       "DECR key"
   };
   
@@ -33,7 +33,6 @@ public class TestDECR extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "decr x",                      /* unsupported command */
       "DECR",                        /* wrong number of arguments*/
       "DECR x y z key",              /* wrong number of arguments*/
       "SET key1 value1",             /* OK */
@@ -41,7 +40,6 @@ public class TestDECR extends CommandBase {
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: decr\r\n",
     "-ERR: Wrong number of arguments\r\n",
     "-ERR: Wrong number of arguments\r\n",  
     "+OK\r\n",

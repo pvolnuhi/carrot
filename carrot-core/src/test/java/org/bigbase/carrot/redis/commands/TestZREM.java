@@ -35,7 +35,7 @@ public class TestZREM extends CommandBase {
       "ZREM key v5 v6 v66",                                                   /* 2 */
       "ZCARD key",                                                            /* 0 */
       
-      "ZREM key1 v1 v2",                                                      /* 0 */
+      "zrem key1 v1 v2",                                                      /* 0 */
 
   };
   
@@ -59,12 +59,12 @@ public class TestZREM extends CommandBase {
   };
   
   protected String[] invalidRequests = new String[] {
-      "zrem x y",                          /* unsupported command */
+      "zremm x y",                          /* unsupported command */
       "ZREM key"                          /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: zrem\r\n",
+    "-ERR: Unsupported command: ZREMM\r\n",
     "-ERR: Wrong number of arguments\r\n",
   };
   
