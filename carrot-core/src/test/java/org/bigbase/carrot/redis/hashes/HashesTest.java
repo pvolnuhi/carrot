@@ -29,6 +29,7 @@ import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeyValue;
 //import org.bigbase.carrot.redis.Commons;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -66,6 +67,24 @@ public class HashesTest {
     return values;
   }
   
+  private List<KeyValue> getKeyValues(int n){
+    List<KeyValue> list = new ArrayList<KeyValue>(n);
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("VALUES SEED=" + seed);
+    byte[] buf = new byte[valSize];
+    for (int i = 0; i < n; i++) {
+      r.nextBytes(buf);
+      long fptr = UnsafeAccess.malloc(valSize);
+      long vptr = UnsafeAccess.malloc(valSize);
+      UnsafeAccess.copy(buf, 0, fptr, valSize);
+      UnsafeAccess.copy(buf, 0, vptr, valSize);
+      list.add(new KeyValue(fptr, valSize, vptr, valSize));
+    }
+    return list;
+  }
+  
   private Key getKey() {
     long ptr = UnsafeAccess.malloc(keySize);
     byte[] buf = new byte[keySize];
@@ -85,7 +104,7 @@ public class HashesTest {
   }
   
 
-  //@Ignore
+  @Ignore
   @Test
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
@@ -98,7 +117,7 @@ public class HashesTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
@@ -111,7 +130,7 @@ public class HashesTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
@@ -144,6 +163,33 @@ public class HashesTest {
   
   long countRecords(BigSortedMap map) throws IOException {
     return map.countRecords();
+  }
+  
+  @Test
+  public void testMultiSet() {
+    System.out.println("\nTest Multi Set");
+    map = new BigSortedMap(1000000000);
+    List<KeyValue> list = getKeyValues(1000);
+    List<KeyValue> copy = new ArrayList<KeyValue>(list.size());
+    list.stream().forEach(x -> copy.add(x));
+    
+    Key key = getKey();
+    int nn = Hashes.HSET(map, key.address, key.length, copy);
+    assertEquals(list.size(), nn);
+    assertEquals(list.size(), (int)Hashes.HLEN(map, key.address, key.length));
+    // Verify inserted
+    long buffer = UnsafeAccess.malloc(valSize * 2);
+    for (KeyValue kv: list) {
+      int result = Hashes.HEXISTS(map, key.address, key.length, kv.keyPtr, kv.keySize);
+      assertEquals(1, result);
+      int size = Hashes.HGET(map, key.address, key.length, kv.keyPtr, kv.keySize, buffer, valSize * 2);
+      assertEquals(valSize, size);
+      assertTrue(Utils.compareTo(kv.valuePtr, kv.valueSize, buffer, valSize) == 0);
+    }
+    map.dispose();
+    UnsafeAccess.free(buffer);
+    UnsafeAccess.free(key.address);
+    list.stream().forEach(x -> {UnsafeAccess.free(x.keyPtr); UnsafeAccess.free(x.valuePtr);});
   }
   
   @Ignore

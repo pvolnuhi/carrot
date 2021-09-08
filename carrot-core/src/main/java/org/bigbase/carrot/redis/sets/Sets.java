@@ -247,6 +247,7 @@ public class Sets {
   
   /**
    * Adds multiple elements to an empty (non-existent) set
+   * This is highly optimized version
    * @param map sorted map storage
    * @param keyPtr set's key address
    * @param keySize set's key size
@@ -261,6 +262,8 @@ public class Sets {
       Value first = new Value(ZERO, SIZEOF_BYTE);
       // Sort all the keys
       Utils.sortKeys(members);
+      Utils.dedup(members);
+      
       Value prev = null;
       while(!members.isEmpty()) {
         Value value = prev == null? first: members.get(0);

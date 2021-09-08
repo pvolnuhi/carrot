@@ -26,6 +26,7 @@ import static org.bigbase.carrot.util.KeysLocker.readLock;
 import static org.bigbase.carrot.util.KeysLocker.readUnlock;
 import static org.bigbase.carrot.util.KeysLocker.writeLock;
 import static org.bigbase.carrot.util.KeysLocker.writeUnlock;
+import static org.bigbase.carrot.util.Utils.SIZEOF_BYTE;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,6 +45,7 @@ import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.Pair;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import org.bigbase.carrot.util.Value;
 
 /**
  * Support for packing multiple field-values into one K-V value
@@ -338,7 +340,7 @@ public class Hashes {
   }
   
   /**
-   * For testing only
+   * For testing only - NOPE
    * @param map sorted map storage
    * @param keyPtr hash key address
    * @param keySize hash key size
@@ -347,6 +349,10 @@ public class Hashes {
    */
   public static int HSET(BigSortedMap map, long keyPtr, int keySize, List<KeyValue> kvs) {
 
+    if (!keyExists(map, keyPtr, keySize)) {
+      // Much faster version
+      return HSET_NEW(map, keyPtr, keySize, kvs);
+    }
     Key k = getKey(keyPtr, keySize);
     int count = 0;
     try {
@@ -456,6 +462,7 @@ public class Hashes {
   public static int HSET(BigSortedMap map, long keyPtr, int keySize, long fieldPtr, int fieldSize,
       long valuePtr, int valueSize, boolean lock) {
 
+
     Key k = getKey(keyPtr, keySize);
     int count = 0;
     try {
@@ -500,6 +507,116 @@ public class Hashes {
     UnsafeAccess.free(keyPtr);
     return result;
   }
+  
+  /**
+   * Adds multiple elements to an empty (non-existent) hash
+   * This is highly optimized version
+   * @param map sorted map storage
+   * @param keyPtr hash's key address
+   * @param keySize hash's key size
+   * @param members list of field - value elements to add
+   * @return number of elements added
+   */
+  public static int HSET_NEW(BigSortedMap map, long keyPtr, int keySize, List<KeyValue> members) {
+    Key k = getKey(keyPtr, keySize);
+    int count = 0;
+    try {
+      KeysLocker.writeLock(k);
+      KeyValue first = new KeyValue(ZERO, SIZEOF_BYTE, ZERO, SIZEOF_BYTE);
+      // Sort all the keys
+      Utils.sortKeyValues(members);
+      Utils.dedup(members);
+      
+      KeyValue prev = null;
+      while(!members.isEmpty()) {
+        KeyValue kv = prev == null? first: members.get(0);
+        if (prev != null && prev.equals(kv)) {
+          members.remove(0);
+          continue;
+        }
+        int kSize = buildKey(keyPtr, keySize, kv.keyPtr, kv.keySize);
+        long kPtr = keyArena.get();
+        int maxValueSize = getMaxValueSize(kSize);
+        int valueSize = getRequiredValueSize(members, maxValueSize);
+        checkValueArena(valueSize);
+        long valuePtr = valueArena.get();
+        
+        int num = populate(members, valuePtr, valueSize);
+        boolean result = map.put(kPtr, kSize, valuePtr, valueSize, 0);
+        if (!result) {
+          break;
+        }
+        count += num;
+        prev = kv;
+      }
+      return count;
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+  }
+  
+  private static int populate(List<KeyValue> members, long valuePtr, int valueSize) {
+    
+    KeyValue prev = null;
+    long ptr = valuePtr + NUM_ELEM_SIZE;
+    int added = 0;
+    int size = NUM_ELEM_SIZE;
+    
+    while(!members.isEmpty()) {
+      KeyValue kv = members.remove(0);
+      if (prev != null && prev.equals(kv)) {
+        continue;
+      }
+      int kSizeSize = Utils.sizeUVInt(kv.keySize);
+      int vSizeSize = Utils.sizeUVInt(kv.valueSize);
+      int add = kv.keySize + kSizeSize + kv.valueSize + vSizeSize;
+      if (size + add > valueSize) {
+        members.add(0, kv);
+        break;
+      }
+      Utils.writeUVInt(ptr, kv.keySize);
+      Utils.writeUVInt(ptr + kSizeSize, kv.valueSize);
+      UnsafeAccess.copy(kv.keyPtr, ptr + kSizeSize + vSizeSize, kv.keySize);
+      UnsafeAccess.copy(kv.valuePtr, ptr + kSizeSize + vSizeSize + kv.keySize, kv.valueSize);
+      size += add;
+      ptr += add;
+      prev = kv;
+      added += 1;
+    }
+    
+    UnsafeAccess.putShort(valuePtr, (short) added);
+    return added;
+  }
+  
+  private static int getRequiredValueSize(List<KeyValue> members,  int maxValueSize) {
+    int size = NUM_ELEM_SIZE;
+    int i = 0;
+    KeyValue prev = null;
+    while(i < members.size()) {
+      KeyValue kv = members.get(i++);
+      if (prev != null && prev.equals(kv)) {
+        prev = kv;
+        continue;
+      }
+      int add = kv.keySize + Utils.sizeUVInt(kv.keySize) +
+          kv.valueSize + Utils.sizeUVInt(kv.valueSize);
+      if (size + add > maxValueSize) {
+        return size == NUM_ELEM_SIZE? size + add: size;
+      }
+      size += add;
+      prev = kv;
+    }
+    return size;
+  }
+  
+  static int getMaxValueSize(int keySize) {
+    int size = DataBlock.getMaximumEmbeddedValueSize(keySize);
+    if (size < DataBlock.MAX_BLOCK_SIZE / 4) {
+      return DataBlock.MAX_BLOCK_SIZE / 2; // Key is LARGE (sick!) Will allocate externally
+    }
+    return size;
+  }
+  
   
   /**
    * HMSET - obsolete

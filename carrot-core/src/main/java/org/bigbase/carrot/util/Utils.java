@@ -1845,4 +1845,21 @@ public class Utils {
     if (index + 3 >= s.length()) return s;
     return s.substring(0, index + afterDecimalPoint + 1);
   }
+
+  public static void dedup(List<? extends Object> members) {
+    if (members.size() <= 1) {
+      return;
+    }
+    Object prev = null;
+    int i = 0;
+    while(i < members.size()) {
+      Object o = members.get(i++);
+      if (prev != null && prev.equals(o)) {
+        // decrement index and remove current
+        members.remove(--i);
+        continue;
+      }
+      prev = o;
+    }
+  }
 }

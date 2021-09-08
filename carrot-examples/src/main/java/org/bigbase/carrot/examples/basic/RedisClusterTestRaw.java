@@ -63,8 +63,10 @@ public class RedisClusterTestRaw {
 //    runClusterGetCycle();
 //    runClusterMSetCycle();
 //    runClusterMGetCycle();
-     runClusterSaddCycle();
-     runClusterSismemberCycle();
+//     runClusterSaddCycle();
+//     runClusterSismemberCycle();
+     runClusterHSetCycle();
+     runClusterHexistsCycle();
     shutdownAll(client, true);
     client.close();
   }
@@ -209,6 +211,44 @@ public class RedisClusterTestRaw {
     
   }
   
+  private static void runClusterHSetCycle() {
+    index.set(0);
+
+    Runnable r = () -> { try {runClusterHSet();} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+      workers[i].setName(Integer.toString(i));
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ SET_KEY_TOTAL + " hset x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    
+  }
+  
+  private static void runClusterHexistsCycle() {
+    index.set(0);
+
+    Runnable r = () -> { try {runClusterHexists();;} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+      workers[i].setName(Integer.toString(i));
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ SET_KEY_TOTAL + " hexists x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    
+  }
+  
   private static void flushAll(RawClusterClient client) throws IOException {
     client.flushAll();
   }
@@ -316,9 +356,6 @@ public class RedisClusterTestRaw {
    populate(setMembers, id);
 
    for (; idx < SET_KEY_TOTAL; idx += NUM_THREADS) {
-     //idx = (int) index.getAndIncrement();
-     //if (idx >= SET_KEY_TOTAL) break;
-     // Load up to BATCH_SIZE k-v pairs
      UserSession us = UserSession.newSession(idx);
      String key = us.getUserId();
      String result = client.sadd(key, setMembers);
@@ -380,6 +417,91 @@ public class RedisClusterTestRaw {
    client.close();
  } 
  
+ private static void runClusterHSet() throws IOException, OperationFailedException {
+   
+   int id = Integer.parseInt(Thread.currentThread().getName());
+   List<String> list = new ArrayList<String>();
+   list.add(clusterNodes.get(id % clusterNodes.size()));
+   RawClusterClient client = new RawClusterClient(list);
+   System.out.println(Thread.currentThread().getName() + " HSET started. , connect to :"+ list.get(0));
+
+   long startTime = System.currentTimeMillis();
+   int count = 0;
+   int idx = id;
+   int batch = 1;
+   String[] setMembers = new String[SET_SIZE];
+   populate(setMembers, id);
+   setMembers = interleave(setMembers); 
+   for (; idx < SET_KEY_TOTAL; idx += NUM_THREADS) {
+     UserSession us = UserSession.newSession(idx);
+     String key = us.getUserId();
+     String result = client.hset(key, setMembers);
+     count += SET_SIZE;
+     if (count / 1000000 >= batch) {
+       System.out.println(Thread.currentThread().getId() +": hset "+ count);
+       batch++;
+     }
+   }
+   
+   long endTime = System.currentTimeMillis();
+       
+   System.out.println(Thread.currentThread().getId() +": Loaded " + count +" hash members,"
+     + " in "+ (endTime - startTime) );
+  
+   client.close();
+ } 
+ 
+ private static String[] interleave(String[] arr) {
+   String[] ret = new String[2 * arr.length];
+   for (int i = 0, j = 0; i < arr.length; i++, j += 2) {
+     ret[j] = arr[i];
+     ret[j + 1] = arr[i];
+   }
+   return ret;
+ }
+ 
+ private static void runClusterHexists() throws IOException, OperationFailedException {
+   
+   int id = Integer.parseInt(Thread.currentThread().getName());
+   List<String> list = new ArrayList<String>();
+   list.add(clusterNodes.get(id % clusterNodes.size()));
+   RawClusterClient client = new RawClusterClient(list);
+   System.out.println(Thread.currentThread().getName() + " HEXISTS started. , connect to :"+ list.get(0));
+
+   long startTime = System.currentTimeMillis();
+   int count = 0;
+   int idx = id;
+   int batch = 1;
+   String[] setMembers = new String[SET_SIZE];
+   populate(setMembers, id);
+   
+   Arrays.sort(setMembers);
+   
+   for (; idx < SET_KEY_TOTAL; idx += NUM_THREADS) {
+     UserSession us = UserSession.newSession(idx);
+     String key = us.getUserId();
+     for(int i = 0; i < SET_SIZE; i++) {
+       String member = setMembers[i];
+       String result = client.hexists(key, member);
+       if (":1\r\n".equals(result) == false) {
+         System.err.println("hexists failed result="+ result);
+         System.exit(-1);
+       }
+     }
+     count += SET_SIZE;
+     if (count / 1000000 >= batch) {
+       System.out.println(Thread.currentThread().getId() +": hexists "+ count);
+       batch++;
+     }
+   }
+   
+   long endTime = System.currentTimeMillis();
+       
+   System.out.println(Thread.currentThread().getId() +": Checked " + count +" hash fields,"
+     + " in "+ (endTime - startTime) );
+  
+   client.close();
+ } 
  
  private static void populate(String[] setMembers, long seed) {
    Random r = new Random(seed);
@@ -745,6 +867,54 @@ public class RedisClusterTestRaw {
       newArgs[1] = key;
       newArgs[2] = v;
       
+      writeRequest(buf, newArgs);
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
+    }
+    
+    public String hset(String key, String[] args) throws IOException {
+      String[] newArgs = new String[args.length + 2];
+      System.arraycopy(args, 0, newArgs, 2, args.length);
+      newArgs[0] = "HSET";
+      newArgs[1] = key;
+      writeRequest(buf, newArgs);
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
+    }
+    
+    public String hexists(String key, String field) throws IOException {
+      String[] newArgs = new String[3];
+      newArgs[0] = "HEXISTS";
+      newArgs[1] = key;
+      newArgs[2] = field;
       writeRequest(buf, newArgs);
       buf.flip();
       int slot = 0;//Math.abs(key.hashCode()) % connList.size();

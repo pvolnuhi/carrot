@@ -65,6 +65,17 @@ public class KeyValue implements Comparable<KeyValue>{
     return Math.abs(Utils.murmurHash(keyPtr, keySize, 0));
   }
   
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || ! (o instanceof KeyValue)) {
+      return false;
+    }
+    return compareTo((KeyValue) o) == 0;
+  }
+  
   public void free() {
     UnsafeAccess.free(keyPtr);
     UnsafeAccess.free(valuePtr);
