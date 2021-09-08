@@ -36,6 +36,7 @@ import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
 import org.bigbase.carrot.redis.util.Commons;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -63,7 +64,7 @@ public class SetsTest {
     r.setSeed(seed);
     System.out.println("VALUES SEED=" + seed);
     byte[] buf = new byte[valSize/2];
-    for (int i=0; i < n; i++) {
+    for (int i = 0; i < n; i++) {
       r.nextBytes(buf);
       long ptr = UnsafeAccess.malloc(valSize);
       UnsafeAccess.copy(buf, 0, ptr, buf.length);
@@ -88,6 +89,7 @@ public class SetsTest {
     }
     return values;
   }
+  
   private Key getKey() {
     long ptr = UnsafeAccess.malloc(valSize);
     byte[] buf = new byte[valSize];
@@ -107,6 +109,30 @@ public class SetsTest {
     values = getValues(n);
   }
   
+  @Test
+  public void testMultiAdd() {
+    System.out.println("Test multi add");
+    map = new BigSortedMap(1000000000);
+    values = getRandomValues(1000);
+    
+    List<Value> copy = new ArrayList<Value>();
+    values.stream().forEach(x -> copy.add(x));
+    
+    Key key = getKey();
+    int num = Sets.SADD(map, key.address, key.length, copy);
+    assertEquals(values.size(), num);
+    assertEquals(values.size(), (int) Sets.SCARD(map, key.address, key.length));
+    for (Value v: values) {
+      int result = Sets.SISMEMBER(map, key.address, key.length, v.address, v.length);
+      assertEquals(1, result);
+    }
+    List<byte[]> members = Sets.SMEMBERS(map, key.address, key.length, values.size() * valSize * 2);
+    for (byte[] v : members) {
+      System.out.println(Bytes.toHex(v));
+    }
+    tearDown();
+  }
+  
   //@Ignore
   @Test
   public void runAllNoCompression() throws IOException {
@@ -120,7 +146,7 @@ public class SetsTest {
     }
   }
   
-  @Ignore
+  //@Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));

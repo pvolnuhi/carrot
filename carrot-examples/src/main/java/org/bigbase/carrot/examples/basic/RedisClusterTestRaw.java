@@ -27,6 +27,7 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.bigbase.carrot.examples.util.UserSession;
@@ -36,30 +37,34 @@ import org.bigbase.carrot.redis.util.Utils;
 
 public class RedisClusterTestRaw {
   
-  
-  static long N = 4000000;
+  static long N = 10000000;
       
   static AtomicLong index = new AtomicLong(0);
   
-  static int NUM_THREADS = 4;
+  static int NUM_THREADS = 2;
   
   static int BATCH_SIZE = 100;
+  static int SET_SIZE = 1000;
+  static int SET_KEY_TOTAL = 20000;
   
-  static List<String> clusterNodes = Arrays.asList("localhost:6379" , "localhost:6380",
-    "localhost:6381", "localhost:6382"/*, "localhost:6383", "localhost:6384", "localhost:6385", "localhost:6386"*/); 
+  static List<String> clusterNodes = Arrays.asList("localhost:6379" /*, "localhost:6380",
+    "localhost:6381", "localhost:6382", "localhost:6383", "localhost:6384", "localhost:6385", "localhost:6386"*/); 
   
   public static void main(String[] args) throws IOException, OperationFailedException {
 
     System.out.println("Run Redis Cluster");
     RawClusterClient client = new RawClusterClient(clusterNodes);
+    long start = System.currentTimeMillis();
     flushAll(client);
-    
+    long end = System.currentTimeMillis();
+     System.out.println("flush all "+ (end - start) + "ms");
 //    runClusterPingPongCycle();   
-    runClusterSetCycle();
-    runClusterGetCycle();
+//    runClusterSetCycle();
+//    runClusterGetCycle();
 //    runClusterMSetCycle();
 //    runClusterMGetCycle();
-        
+     runClusterSaddCycle();
+     runClusterSismemberCycle();
     shutdownAll(client, true);
     client.close();
   }
@@ -164,13 +169,55 @@ public class RedisClusterTestRaw {
     (((long) NUM_THREADS * N) * 1000) / (end - start));
     
   }
+  @SuppressWarnings("unused")
+  private static void runClusterSaddCycle() {
+    index.set(0);
+
+    Runnable r = () -> { try {runClusterSadd();} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+      workers[i].setName(Integer.toString(i));
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ SET_KEY_TOTAL + " sadd x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    
+  }
+  
+  
+  private static void runClusterSismemberCycle() {
+    index.set(0);
+
+    Runnable r = () -> { try {runClusterSetIsMember();} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+      workers[i].setName(Integer.toString(i));
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ SET_KEY_TOTAL + " sismember x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    
+  }
   
   private static void flushAll(RawClusterClient client) throws IOException {
     client.flushAll();
   }
 
   private static void shutdownAll(RawClusterClient client, boolean save) throws IOException {
+    long start = System.currentTimeMillis();
     client.saveAll();
+    long end = System.currentTimeMillis();
+    System.out.println("Save time="+ (end - start));
   }
   
   @SuppressWarnings("unused")
@@ -253,7 +300,95 @@ public class RedisClusterTestRaw {
     client.close();
   }
   
+ private static void runClusterSadd() throws IOException, OperationFailedException {
+   
+   int id = Integer.parseInt(Thread.currentThread().getName());
+   List<String> list = new ArrayList<String>();
+   list.add(clusterNodes.get(id % clusterNodes.size()));
+   RawClusterClient client = new RawClusterClient(list);
+   System.out.println(Thread.currentThread().getName() + " SADD started. , connect to :"+ list.get(0));
+
+   long startTime = System.currentTimeMillis();
+   int count = 0;
+   int idx = id;
+   int batch = 1;
+   String[] setMembers = new String[SET_SIZE];
+   populate(setMembers, id);
+
+   for (; idx < SET_KEY_TOTAL; idx += NUM_THREADS) {
+     //idx = (int) index.getAndIncrement();
+     //if (idx >= SET_KEY_TOTAL) break;
+     // Load up to BATCH_SIZE k-v pairs
+     UserSession us = UserSession.newSession(idx);
+     String key = us.getUserId();
+     String result = client.sadd(key, setMembers);
+     count += SET_SIZE;
+     if (count / 1000000 >= batch) {
+       System.out.println(Thread.currentThread().getId() +": sadd "+ count);
+       batch++;
+     }
+   }
+   
+   long endTime = System.currentTimeMillis();
+       
+   System.out.println(Thread.currentThread().getId() +": Loaded " + count +" set members,"
+     + " in "+ (endTime - startTime) );
   
+   client.close();
+ } 
+ 
+ private static void runClusterSetIsMember() throws IOException, OperationFailedException {
+   
+   int id = Integer.parseInt(Thread.currentThread().getName());
+   List<String> list = new ArrayList<String>();
+   list.add(clusterNodes.get(id % clusterNodes.size()));
+   RawClusterClient client = new RawClusterClient(list);
+   System.out.println(Thread.currentThread().getName() + " SISMBER started. , connect to :"+ list.get(0));
+
+   long startTime = System.currentTimeMillis();
+   int count = 0;
+   int idx = id;
+   int batch = 1;
+   String[] setMembers = new String[SET_SIZE];
+   populate(setMembers, id);
+   
+   Arrays.sort(setMembers);
+   
+   for (; idx < SET_KEY_TOTAL; idx += NUM_THREADS) {
+     UserSession us = UserSession.newSession(idx);
+     String key = us.getUserId();
+     for(int i = 0; i < SET_SIZE; i++) {
+       String member = setMembers[i];
+       String result = client.sismember(key, member);
+       if (":1\r\n".equals(result) == false) {
+         System.err.println("sismember failed result="+ result);
+         System.exit(-1);
+       }
+     }
+     count += SET_SIZE;
+     if (count / 1000000 >= batch) {
+       System.out.println(Thread.currentThread().getId() +": sismember "+ count);
+       batch++;
+     }
+   }
+   
+   long endTime = System.currentTimeMillis();
+       
+   System.out.println(Thread.currentThread().getId() +": Loaded " + count +" set members,"
+     + " in "+ (endTime - startTime) );
+  
+   client.close();
+ } 
+ 
+ 
+ private static void populate(String[] setMembers, long seed) {
+   Random r = new Random(seed);
+   for (int i = 0; i < setMembers.length; i++) {
+     setMembers[i] = Integer.toString(r.nextInt());
+   }
+ }
+
+
   @SuppressWarnings("unused")
   private static void runClusterGet() throws IOException, OperationFailedException {
     
@@ -489,7 +624,7 @@ public class RedisClusterTestRaw {
       buf.get(bytes);
       return new String (bytes);
     }
-
+    
     public void close() throws IOException {
       for (SocketChannel sc: connList) {
         sc.close();
@@ -558,6 +693,75 @@ public class RedisClusterTestRaw {
       for (SocketChannel sc: connList) {
         flushAll(sc);
       }
+    }
+    
+    public String sscan(String key, long cursor) throws IOException {
+      writeRequest(buf, new String[] {"SSCAN", key, Long.toString(cursor)});
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
+    }
+    
+    public String sadd(String key, String[] args) throws IOException {
+      String[] newArgs = new String[args.length + 2];
+      System.arraycopy(args, 0, newArgs, 2, args.length);
+      newArgs[0] = "SADD";
+      newArgs[1] = key;
+      writeRequest(buf, newArgs);
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
+    }
+    
+    public String sismember(String key, String v) throws IOException {
+      String[] newArgs = new String[3];
+      newArgs[0] = "SISMEMBER";
+      newArgs[1] = key;
+      newArgs[2] = v;
+      
+      writeRequest(buf, newArgs);
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
     }
     
     public void saveAll() throws IOException {

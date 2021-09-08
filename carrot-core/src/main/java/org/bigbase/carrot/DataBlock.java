@@ -1052,8 +1052,26 @@ public final class DataBlock  {
     }
   }
   
+  /**
+   * Checks if this K-V must be stored externally
+   * @param keyLength key length
+   * @param valueLength value length
+   * @return true - if yes, false - otherwise
+   */
+  
   public static boolean mustStoreExternally (int keyLength, int valueLength) {
     return getAllocType(keyLength, valueLength) != AllocType.EMBEDDED;
+  }
+  
+  /**
+   * Get maximum value size for K-V to be embedded into
+   * a data block
+   * @param keySize key size
+   * @return value size (can be negative)
+   */
+  public static int getMaximumEmbeddedValueSize(int keySize) {
+    int valueSize = MAX_BLOCK_SIZE / 2 - keySize - 2 * RECORD_TOTAL_OVERHEAD - 3;
+    return valueSize;
   }
   
   /**

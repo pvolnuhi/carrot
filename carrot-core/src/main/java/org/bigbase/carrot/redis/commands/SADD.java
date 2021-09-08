@@ -17,10 +17,13 @@
  */
 package org.bigbase.carrot.redis.commands;
 
+import java.util.List;
+
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import org.bigbase.carrot.util.Value;
 
 public class SADD implements RedisCommand {
 
@@ -40,9 +43,13 @@ public class SADD implements RedisCommand {
     long keyPtr = inDataPtr;
     inDataPtr += keySize;
     
-    long[] ptrs = Utils.loadPointers(inDataPtr, numArgs - 2);
-    int[] sizes = Utils.loadSizes(inDataPtr, numArgs - 2);
-    int num = Sets.SADD(map, keyPtr, keySize, ptrs, sizes);
+//    long[] ptrs = Utils.loadPointers(inDataPtr, numArgs - 2);
+//    int[] sizes = Utils.loadSizes(inDataPtr, numArgs - 2);
+// 
+//    int num = Sets.SADD(map, keyPtr, keySize, ptrs, sizes);
+//
+    List<Value> kvs = Utils.loadValues(inDataPtr, numArgs - 2);
+    int num = Sets.SADD(map, keyPtr, keySize, kvs);
     
     //INT REPLY
     INT_REPLY(outBufferPtr, num);

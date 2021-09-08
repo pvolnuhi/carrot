@@ -1803,6 +1803,25 @@ public class Utils {
   }
   
   /**
+   * Reads list of values from memory blob
+   * @param inDataPtr address of a memory
+   * @param num number of values to read
+   * @return list of values 
+   */
+  public static List<Value> loadValues(long inDataPtr, int num) {
+    List<Value> values = new ArrayList<Value>();
+    long ptr = inDataPtr;
+    for (int i = 0; i < num; i++) {
+      int keySize = UnsafeAccess.toInt(ptr);
+      ptr += Utils.SIZEOF_INT;
+      long keyPtr = ptr;
+      values.add(new Value(keyPtr, keySize));
+      ptr += keySize;
+    }
+    return values;
+  }
+  
+  /**
    * To upper case
    * @param addr address of a string byte array
    * @param len length of an array

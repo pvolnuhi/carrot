@@ -267,7 +267,10 @@ public class RedisNodeServer implements Runnable {
    * Load data store
    */
   private void loadDataStore() {
+    long start = System.currentTimeMillis();
     store = BigSortedMap.loadStore(host, port);
+    long end = System.currentTimeMillis();
+    System.out.println(Thread.currentThread().getName() + " loaded store in "+ (end - start)+"ms");
     RedisConf conf = RedisConf.getInstance();
     store.setSnapshotDir(conf.getDataDirForNode(host, port));
   }
