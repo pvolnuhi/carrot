@@ -49,11 +49,9 @@ public class SADD implements RedisCommand {
 //    int num = Sets.SADD(map, keyPtr, keySize, ptrs, sizes);
 //
     List<Value> kvs = Utils.loadValues(inDataPtr, numArgs - 2);
-    int num = Sets.SADD(map, keyPtr, keySize, kvs);
-    
+    int num = Sets.SADD(map, keyPtr, keySize, Utils.copyValues(kvs));
     //INT REPLY
     INT_REPLY(outBufferPtr, num);
-    
   }
 
 }

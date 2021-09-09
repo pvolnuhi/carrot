@@ -17,38 +17,16 @@
  */
 package org.bigbase.carrot.util;
 
-
-public class Key implements Comparable<Key>{
-  public long address;
-  public int length;
+public class ValueScore extends Key{
+  public double score;
   
-  public Key(long address, int size){
-    this.address = address;
-    this.length = size;
+  public ValueScore(long ptr, int size, double score) {
+    super(ptr, size);
+    this.score = score;
   }
   
   @Override
-  public int hashCode() {
-    return Math.abs(Utils.murmurHash(address, length, 0));
-  }
-
-  @Override
-  public int compareTo(Key o) {
-    return Utils.compareTo(address, length, o.address, o.length);
-  }
-  
-  @Override 
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (!(o instanceof Key)) {
-      return false;
-    }
-    return compareTo((Key)o) == 0;
-  }
-  
   public String toString() {
-    byte[] buf = new byte[length];
-    UnsafeAccess.copy(address, buf, 0, length);
-    return Bytes.toHex(buf);
+    return super.toString() + " score="+ score;
   }
 }

@@ -34,6 +34,7 @@ import org.bigbase.carrot.examples.util.UserSession;
 import org.bigbase.carrot.ops.OperationFailedException;
 import org.bigbase.carrot.redis.util.Utils;
 
+@SuppressWarnings("unused")
 
 public class RedisClusterTestRaw {
   
@@ -41,11 +42,11 @@ public class RedisClusterTestRaw {
       
   static AtomicLong index = new AtomicLong(0);
   
-  static int NUM_THREADS = 2;
+  static int NUM_THREADS = 1;
   
   static int BATCH_SIZE = 100;
   static int SET_SIZE = 1000;
-  static int SET_KEY_TOTAL = 20000;
+  static int SET_KEY_TOTAL = 10000;
   
   static List<String> clusterNodes = Arrays.asList("localhost:6379" /*, "localhost:6380",
     "localhost:6381", "localhost:6382", "localhost:6383", "localhost:6384", "localhost:6385", "localhost:6386"*/); 
@@ -65,14 +66,14 @@ public class RedisClusterTestRaw {
 //    runClusterMGetCycle();
 //     runClusterSaddCycle();
 //     runClusterSismemberCycle();
-     runClusterHSetCycle();
-     runClusterHexistsCycle();
+//     runClusterHSetCycle();
+//     runClusterHexistsCycle();
+    runClusterZAddCycle();
+    runClusterZScoreCycle();
     shutdownAll(client, true);
     client.close();
   }
   
-  
-  @SuppressWarnings("unused")
   private static void runClusterSetCycle() {
     index.set(0);
 
@@ -92,7 +93,6 @@ public class RedisClusterTestRaw {
     
   }
   
-  @SuppressWarnings("unused")
   private static void runClusterGetCycle() {
     index.set(0);
 
@@ -112,7 +112,6 @@ public class RedisClusterTestRaw {
     
   }
   
-  @SuppressWarnings("unused")
   private static void runClusterMGetCycle() {
     index.set(0);
 
@@ -132,7 +131,6 @@ public class RedisClusterTestRaw {
     
   }
   
-  @SuppressWarnings("unused")
   private static void runClusterMSetCycle() {
     index.set(0);
 
@@ -152,7 +150,6 @@ public class RedisClusterTestRaw {
     
   }
   
-  @SuppressWarnings("unused")
   private static void runClusterPingPongCycle() {
     index.set(0);
 
@@ -171,7 +168,7 @@ public class RedisClusterTestRaw {
     (((long) NUM_THREADS * N) * 1000) / (end - start));
     
   }
-  @SuppressWarnings("unused")
+
   private static void runClusterSaddCycle() {
     index.set(0);
 
@@ -190,7 +187,6 @@ public class RedisClusterTestRaw {
     (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
     
   }
-  
   
   private static void runClusterSismemberCycle() {
     index.set(0);
@@ -249,6 +245,44 @@ public class RedisClusterTestRaw {
     
   }
   
+  private static void runClusterZAddCycle() {
+    index.set(0);
+
+    Runnable r = () -> { try {runClusterZAdd();} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+      workers[i].setName(Integer.toString(i));
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ SET_KEY_TOTAL + " zadd x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    
+  }
+  
+  private static void runClusterZScoreCycle() {
+    index.set(0);
+
+    Runnable r = () -> { try {runClusterZScore();} catch (Exception e) {e.printStackTrace();}};
+    Thread[] workers = new Thread[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+      workers[i] = new Thread(r);
+      workers[i].setName(Integer.toString(i));
+    }
+    long start = System.currentTimeMillis();
+    Arrays.stream(workers).forEach( x -> x.start());
+    Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
+    long end = System.currentTimeMillis();
+    
+    System.out.println("Finished "+ SET_KEY_TOTAL + " hexists x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    
+  }
+  
   private static void flushAll(RawClusterClient client) throws IOException {
     client.flushAll();
   }
@@ -260,7 +294,6 @@ public class RedisClusterTestRaw {
     System.out.println("Save time="+ (end - start));
   }
   
-  @SuppressWarnings("unused")
   private static void runClusterSet() throws IOException, OperationFailedException {
     
     int id = Integer.parseInt(Thread.currentThread().getName());
@@ -510,9 +543,100 @@ public class RedisClusterTestRaw {
    }
  }
 
+ private static void runClusterZAdd() throws IOException, OperationFailedException {
+   
+   int id = Integer.parseInt(Thread.currentThread().getName());
+   List<String> list = new ArrayList<String>();
+   list.add(clusterNodes.get(id % clusterNodes.size()));
+   RawClusterClient client = new RawClusterClient(list);
+   System.out.println(Thread.currentThread().getName() + " ZADD started. , connect to :"+ list.get(0));
 
-  @SuppressWarnings("unused")
-  private static void runClusterGet() throws IOException, OperationFailedException {
+   long startTime = System.currentTimeMillis();
+   int count = 0;
+   int idx = id;
+   int batch = 1;
+   String[] setMembers = new String[SET_SIZE];
+   populate(setMembers, id);
+   double[] scores = new double[SET_SIZE];
+   populate(scores, id);
+   
+   for (; idx < SET_KEY_TOTAL; idx += NUM_THREADS) {
+     UserSession us = UserSession.newSession(idx);
+     String key = us.getUserId();
+     String result = client.zadd(key, scores, setMembers);
+     count += SET_SIZE;
+     if (count / 1000000 >= batch) {
+       System.out.println(Thread.currentThread().getId() +": zadd "+ count);
+       batch++;
+     }
+   }
+   
+   long endTime = System.currentTimeMillis();
+       
+   System.out.println(Thread.currentThread().getId() +": Loaded " + count +" zset members,"
+     + " in "+ (endTime - startTime) );
+  
+   client.close();
+ } 
+ 
+ private static void populate(double[] scores, int id) {
+   Random r = new Random(id);
+   for (int i = 0; i < scores.length; i++) {
+     scores[i] = r.nextDouble() * 1000;
+   }
+ }
+
+
+ private static void runClusterZScore() throws IOException, OperationFailedException {
+   
+   int id = Integer.parseInt(Thread.currentThread().getName());
+   List<String> list = new ArrayList<String>();
+   list.add(clusterNodes.get(id % clusterNodes.size()));
+   RawClusterClient client = new RawClusterClient(list);
+   System.out.println(Thread.currentThread().getName() + " ZSCORE started. , connect to :"+ list.get(0));
+
+   long startTime = System.currentTimeMillis();
+   int count = 0;
+   int idx = id;
+   int batch = 1;
+   String[] setMembers = new String[SET_SIZE];
+   populate(setMembers, id);
+   double[] scores = new double[SET_SIZE];
+   populate(scores, id);
+   
+   for (; idx < SET_KEY_TOTAL; idx += NUM_THREADS) {
+     UserSession us = UserSession.newSession(idx);
+     String key = us.getUserId();
+     for(int i = 0; i < SET_SIZE; i++) {
+       String member = setMembers[i];
+       String result = client.zscore(key, member);
+       if ("$-1\r\n".equals(result) == true) {
+         System.err.println("zscore failed result="+ result);
+         System.exit(-1);
+       }
+       String exp = Double.toString(scores[i]);
+       if (result.indexOf(exp) < 0) {
+         System.err.println("zscore failed result="+ result);
+         System.exit(-1);
+       }
+     }
+     count += SET_SIZE;
+     if (count / 1000000 >= batch) {
+       System.out.println(Thread.currentThread().getId() +": zscore "+ count);
+       batch++;
+     }
+   }
+   
+   long endTime = System.currentTimeMillis();
+       
+   System.out.println(Thread.currentThread().getId() +": Checked " + count +" zset fields,"
+     + " in "+ (endTime - startTime) );
+  
+   client.close();
+ } 
+
+
+ private static void runClusterGet() throws IOException, OperationFailedException {
     
     int id = Integer.parseInt(Thread.currentThread().getName());
     List<String> list = new ArrayList<String>();
@@ -591,7 +715,6 @@ public class RedisClusterTestRaw {
   }
   
   
-  @SuppressWarnings("unused")
   private static void verify(List<String> valList, String s) {
     for (String val: valList) {
       assertTrue(s.indexOf(val) > 0);
@@ -933,6 +1056,60 @@ public class RedisClusterTestRaw {
       buf.get(bytes);
       return new String (bytes);
     }
+
+    public String zadd(String key, double[] scores, String[] fields) throws IOException {
+      String[] newArgs = new String[2 * fields.length + 2];
+      newArgs[0] = "ZADD";
+      newArgs[1] = key;
+      
+      for(int i = 2; i < newArgs.length; i += 2) {
+        newArgs[i] = Double.toString(scores[(i - 2)/2]);
+        newArgs[i + 1] = fields[(i - 2) / 2];
+      }
+      
+      writeRequest(buf, newArgs);
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
+    }
+    
+    public String zscore(String key, String field) throws IOException {
+      String[] newArgs = new String[3];
+      newArgs[0] = "ZSCORE";
+      newArgs[1] = key;
+      newArgs[2] = field;
+      writeRequest(buf, newArgs);
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
+    }
+
     
     public void saveAll() throws IOException {
       for (SocketChannel sc: connList) {

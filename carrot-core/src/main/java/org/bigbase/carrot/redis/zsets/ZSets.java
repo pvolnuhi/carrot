@@ -36,10 +36,13 @@ import org.bigbase.carrot.redis.util.Aggregate;
 import org.bigbase.carrot.redis.util.DataType;
 import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.util.Key;
+import org.bigbase.carrot.util.KeyValue;
 import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.Pair;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import org.bigbase.carrot.util.Value;
+import org.bigbase.carrot.util.ValueScore;
 
 /**
  * Redis Sorted Sets are, similarly to Redis Sets, non repeating collections of Strings. 
@@ -83,23 +86,8 @@ import org.bigbase.carrot.util.Utils;
  */
 public class ZSets {
   
-  private final static int CARD_MEMBER_SIZE = 1;// just 0
-  
-  private static ThreadLocal<Long> cardArena = new ThreadLocal<Long>() {
-    @Override
-    protected Long initialValue() {
-      long ptr = UnsafeAccess.mallocZeroed(1);
-      return ptr;
-    }
-  };
-  
-  private static ThreadLocal<Long> cardValueArena = new ThreadLocal<Long>() {
-    @Override
-    protected Long initialValue() {
-      return UnsafeAccess.malloc(8);
-    }
-  };
-  
+  private final static int CARD_MEMBER_SIZE = 1;// just 0  
+ 
   private static ThreadLocal<Long> keyArena = new ThreadLocal<Long>() {
     @Override
     protected Long initialValue() {
@@ -141,6 +129,14 @@ public class ZSets {
       return 4 * 1024;
     }
   };
+  
+  static ThreadLocal<List<ValueScore>> cachedValueScores = new ThreadLocal<List<ValueScore>>() {
+    @Override
+    protected List<ValueScore> initialValue() {
+      return new ArrayList<ValueScore>();
+    }
+  };
+  
   /**
    * Thread local updates Hash Set
    */
@@ -212,6 +208,14 @@ public class ZSets {
   }
   
   /**
+   * Get thread local value - score list
+   * @return list
+   */
+  public static List<ValueScore> getValueScoreList(){
+    return cachedValueScores.get();
+  }
+  
+  /**
    * Checks key arena size
    * @param required size
    */
@@ -253,6 +257,16 @@ public class ZSets {
     long ptr = UnsafeAccess.realloc(auxArena.get(), required);
     auxArena.set(ptr);
     auxArenaSize.set(required);
+  }
+  
+  /**
+   * Get thread local buffer 
+   * @param required buffer size
+   * @return buffer address
+   */
+  public static long getAuxBuffer(int required) {
+    checkAuxArena(required);
+    return auxArena.get();
   }
   
   /**
@@ -502,6 +516,10 @@ public class ZSets {
    */
   public static long ZADD_GENERIC(BigSortedMap map, long keyPtr, int keySize, double[] scores,
       long[] memberPtrs, int[] memberSizes, boolean changed /* CH */, MutationOptions options) {
+    
+    if (!Sets.keyExists(map, keyPtr, keySize)) {
+      return ZADD_NEW(map, keyPtr, keySize, scores, memberPtrs, memberSizes);
+    }
     Key k = getKey(keyPtr, keySize);
     try {
       
@@ -559,6 +577,82 @@ public class ZSets {
     } finally {
       KeysLocker.writeUnlock(k);
     }
+  }
+  
+  private static long ZADD_NEW(BigSortedMap map, long keyPtr, int keySize, double[] scores,
+      long[] memberPtrs, int[] memberSizes) {
+    //TODO: fix temp garbage waterfall
+    RedisConf conf = RedisConf.getInstance();
+    int maxCompactSize = conf.getMaxZSetCompactSize();
+    List<Value> lv = forSet(scores, memberPtrs, memberSizes);
+    int added = Sets.SADD_NEW(map, keyPtr, keySize, Utils.copyValues(lv));
+    //TODO: memory leak
+    Utils.freeKeys(lv);
+    if (added > maxCompactSize) {
+      List<KeyValue> kvs = forHash(scores, memberPtrs, memberSizes);
+      Hashes.HSET_NEW(map, keyPtr, keySize, Utils.copyKeyValues(kvs));
+      Utils.freeKeyValues(kvs);
+    }
+    return added;
+  }
+
+  
+  public static long ZADD_NEW(BigSortedMap map, long keyPtr, int keySize, List<ValueScore> members) {
+    //TODO: fix temp garbage waterfall
+    RedisConf conf = RedisConf.getInstance();
+    int maxCompactSize = conf.getMaxZSetCompactSize();
+    Utils.sortKeys(members);
+    Utils.dedup(members);
+    List<ValueScore> copy = Utils.copyValueScores(members);
+    
+    int added = Sets.SADD_NEW_ZADD(map, keyPtr, keySize, members);
+    //TODO: memory leak
+    if (added > maxCompactSize) {
+      Hashes.HSET_NEW_ZADD(map, keyPtr, keySize, copy);
+    }
+    return added;
+  }
+  
+  /**
+   * TODO: fix memory abuse
+   * @param scores
+   * @param memberPtrs
+   * @param memberSizes
+   * @return
+   */
+  private static List<Value> forSet(double[] scores, long[] memberPtrs, int[] memberSizes) {
+    List<Value> list = new ArrayList<Value>(scores.length);
+    int len = scores.length;
+    for (int i = 0; i < len; i++) {
+      long ptr = UnsafeAccess.malloc(memberSizes[i] + Utils.SIZEOF_DOUBLE);
+      int size = memberSizes[i] + Utils.SIZEOF_DOUBLE;
+      Utils.doubleToLex(ptr, scores[i]);
+      UnsafeAccess.copy(memberPtrs[i], ptr + Utils.SIZEOF_DOUBLE, memberSizes[i]);
+      list.add( new Value(ptr, size));
+    }
+    return list;
+  }
+  
+  /**
+   * Fix memory abuse
+   * @param scores
+   * @param memberPtrs
+   * @param memberSizes
+   * @return
+   */
+  private static List<KeyValue> forHash(double[] scores, long[] memberPtrs, int[] memberSizes) {
+    List<KeyValue> list = new ArrayList<KeyValue>(scores.length);
+    int len = scores.length;
+    for (int i = 0; i < len; i++) {
+      long fPtr = UnsafeAccess.malloc(memberSizes[i]);
+      int fSize = memberSizes[i];
+      UnsafeAccess.copy(memberPtrs[i], fPtr, fSize);
+      long vPtr = UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
+      int vSize = Utils.SIZEOF_DOUBLE;
+      Utils.doubleToLex(vPtr, scores[i]);
+      list.add( new KeyValue(fPtr, fSize, vPtr, vSize));
+    }
+    return list;
   }
   
   /**

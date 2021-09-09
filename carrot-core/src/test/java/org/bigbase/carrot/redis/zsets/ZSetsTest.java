@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -28,10 +29,12 @@ import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
+import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 import org.bigbase.carrot.util.Value;
+import org.bigbase.carrot.util.ValueScore;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -47,7 +50,8 @@ public class ZSetsTest {
   int maxScore = 100000;
   
   static {
-    //UnsafeAccess.debug = true;
+    //UnsafeAccess.setMallocDebugEnabled(true);
+    //UnsafeAccess.setMallocDebugStackTraceEnabled(true);
   }
   
   private List<Value> getFields(long n) {
@@ -57,7 +61,7 @@ public class ZSetsTest {
     r.setSeed(seed);
     System.out.println("KEYS SEED=" + seed);
     byte[] buf = new byte[fieldSize/2];
-    for (int i=0; i < n; i++) {
+    for (int i = 0; i < n; i++) {
       r.nextBytes(buf);
       long ptr = UnsafeAccess.malloc(fieldSize);
       // Make values compressible
@@ -95,7 +99,7 @@ public class ZSetsTest {
     fields = getFields(n);
     scores = getScores(n);
     Utils.sortKeys(fields);
-    for(int i=1; i< n; i++) {
+    for(int i = 1; i < n; i++) {
       Key prev = fields.get(i-1);
       Key cur = fields.get(i);
       int res = Utils.compareTo(prev.address, prev.length, cur.address, cur.length);
@@ -106,7 +110,7 @@ public class ZSetsTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllNoCompression() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
@@ -119,7 +123,7 @@ public class ZSetsTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
@@ -132,7 +136,7 @@ public class ZSetsTest {
     }
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void runAllCompressionLZ4HC() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
@@ -155,6 +159,85 @@ public class ZSetsTest {
     setUp();
     testAddDeleteMulti();
     tearDown();
+  }
+  
+  @Ignore
+  @Test
+  public void testAddGetScoreMulti () {
+    System.out.println("Test ZSet Add Get Score Multi");
+    map = new BigSortedMap();
+    int total = 3000;
+    Key key = getKey();
+    long[] elemPtrs = new long[total];
+    int[] elemSizes = new int[total];
+    double[] scores = new double[total];
+    int len = scores.length;
+    List<Value> fields = getFields(len);
+    List<Double> scl = getScores(len); 
+    for(int i = 0; i < len; i++) {
+      elemPtrs[i] = fields.get(i).address;
+      elemSizes[i] = fields.get(i).length;
+      scores[i] = scl.get(i);      
+    }
+        
+    long start = System.nanoTime();
+    long num = ZSets.ZADD(map, key.address, key.length, scores, elemPtrs, elemSizes, true);
+    long end = System.nanoTime();
+    System.out.println("call time=" + (end - start)/1000 + "micros");
+    assertEquals(total, (int) num);
+    assertEquals(total, (int) ZSets.ZCARD(map, key.address, key.length));
+        
+    for (int i = 0; i < total; i++) {
+      Double res = ZSets.ZSCORE(map, key.address, key.length, elemPtrs[i], elemSizes[i]);
+      assertEquals(scores[i], res);
+    }
+
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    ZSets.DELETE(map, key.address, key.length);
+    assertEquals(0, (int) ZSets.ZCARD(map, key.address, key.length));
+    map.dispose();
+    UnsafeAccess.free(key.address);
+    fields.stream().forEach(x -> UnsafeAccess.free(x.address));
+    UnsafeAccess.mallocStats.printStats();
+  }
+  
+  //@Ignore
+  @Test
+  public void testAddGetScoreMultiOpt () {
+    System.out.println("Test ZSet Add Get Score Multi (Optimized version)");
+    map = new BigSortedMap();
+    int total = 30000;
+    Key key = getKey();
+
+    List<Value> fields = getFields(total);
+    List<Double> scl = getScores(total); 
+    List<ValueScore> list = new ArrayList<ValueScore>();
+    for (int i = 0; i < total; i++) {
+      Value v = fields.get(i);
+      double score = scl.get(i);
+      list.add( new ValueScore(v.address, v.length, score));
+    }
+        
+    long start = System.nanoTime();
+    long num = ZSets.ZADD_NEW(map, key.address, key.length, list);
+    long end = System.nanoTime();
+    System.out.println("call time=" + (end - start)/1000 + "micros");
+    assertEquals(total, (int) num);
+    assertEquals(total, (int) ZSets.ZCARD(map, key.address, key.length));
+        
+    for (int i = 0; i < total; i++) {
+      Value v = fields.get(i);
+      Double res = ZSets.ZSCORE(map, key.address, key.length, v.address, v.length);
+      assertEquals(scl.get(i), res);
+    }
+
+    BigSortedMap.printGlobalMemoryAllocationStats();
+    ZSets.DELETE(map, key.address, key.length);
+    assertEquals(0, (int) ZSets.ZCARD(map, key.address, key.length));
+    map.dispose();
+    UnsafeAccess.free(key.address);
+    fields.stream().forEach(x -> UnsafeAccess.free(x.address));
+    UnsafeAccess.mallocStats.printStats();
   }
   
   @Ignore

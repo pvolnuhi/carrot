@@ -1230,6 +1230,7 @@ public class Utils {
     }
   }
   /**
+   * TODO: mutable string
    * Converts string representation to double
    * @param ptr address of a string 
    * @param size size of a string
@@ -1559,7 +1560,7 @@ public class Utils {
    * Free memory
    * @param keys
    */
-  public static void freeKeys(List<Key> keys) {
+  public static void freeKeys(List<? extends Key> keys) {
     for (Key k: keys) {
       UnsafeAccess.free(k.address);
     }
@@ -1577,6 +1578,50 @@ public class Utils {
   }
   
   /**
+   * Copy list 
+   * @param list
+   * @return list copy
+   */
+  public static List<Key> copyKeys(final List<Key> list){
+    List<Key> copy = new ArrayList<>(list.size());
+    copy.addAll(list);
+    return copy;
+  }
+  
+  /**
+   * Copy list 
+   * @param list
+   * @return list copy
+   */
+  public static List<Value> copyValues(final List<Value> list){
+    List<Value> copy = new ArrayList<>(list.size());
+    copy.addAll(list);
+    return copy;
+  }
+  
+  /**
+   * Copy list 
+   * @param list
+   * @return list copy
+   */
+  public static List<ValueScore> copyValueScores(final List<ValueScore> list){
+    List<ValueScore> copy = new ArrayList<>();
+    copy.addAll(list);
+    return copy;
+  }
+  
+  /**
+   * Copy list 
+   * @param list
+   * @return list copy
+   */
+  public static List<KeyValue> copyKeyValues(final List<KeyValue> list){
+    List<KeyValue> copy = new ArrayList<>(list.size());
+    copy.addAll(list);
+    return copy;
+  }
+  
+  /**
    * Reads memory as a string
    * @param ptr address
    * @param size size of a memory
@@ -1586,6 +1631,12 @@ public class Utils {
     byte[] buf = new byte[size];
     UnsafeAccess.copy(ptr, buf, 0, size);
     return new String(buf);
+  }
+  
+  public static String toHexString(long ptr, int size) {
+    byte[] buf = new byte[size];
+    UnsafeAccess.copy(ptr, buf, 0, size);
+    return Bytes.toHex(buf);
   }
   
   /**

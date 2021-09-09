@@ -45,7 +45,7 @@ import org.bigbase.carrot.util.KeysLocker;
 import org.bigbase.carrot.util.Pair;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
-import org.bigbase.carrot.util.Value;
+import org.bigbase.carrot.util.ValueScore;
 
 /**
  * Support for packing multiple field-values into one K-V value
@@ -600,6 +600,107 @@ public class Hashes {
       }
       int add = kv.keySize + Utils.sizeUVInt(kv.keySize) +
           kv.valueSize + Utils.sizeUVInt(kv.valueSize);
+      if (size + add > maxValueSize) {
+        return size == NUM_ELEM_SIZE? size + add: size;
+      }
+      size += add;
+      prev = kv;
+    }
+    return size;
+  }
+  
+  /**
+   * Adds multiple elements to an empty (non-existent) hash
+   * This is highly optimized version - ZSets.ZADD version
+   * @param map sorted map storage
+   * @param keyPtr hash's key address
+   * @param keySize hash's key size
+   * @param members list of field - value elements to add
+   * @return number of elements added
+   */
+  public static int HSET_NEW_ZADD(BigSortedMap map, long keyPtr, int keySize, List<ValueScore> members) {
+    Key k = getKey(keyPtr, keySize);
+    int count = 0;
+    try {
+      KeysLocker.writeLock(k);
+      ValueScore first = new ValueScore(ZERO, SIZEOF_BYTE, 0);
+      // Sort all the keys will be done by a caller
+      //Utils.sortKeys(members);
+      //Utils.dedup(members);
+      
+      ValueScore prev = null;
+      while(!members.isEmpty()) {
+        ValueScore kv = prev == null? first: members.get(0);
+        if (prev != null && prev.equals(kv)) {
+          members.remove(0);
+          continue;
+        }
+        int kSize = buildKey(keyPtr, keySize, kv.address, kv.length);
+        long kPtr = keyArena.get();
+        int maxValueSize = getMaxValueSize(kSize);
+        int valueSize = getRequiredValueSize_zadd(members, maxValueSize);
+        checkValueArena(valueSize);
+        long valuePtr = valueArena.get();
+        
+        int num = populate_zadd(members, valuePtr, valueSize);
+        boolean result = map.put(kPtr, kSize, valuePtr, valueSize, 0);
+        if (!result) {
+          break;
+        }
+        count += num;
+        prev = kv;
+      }
+      return count;
+    } finally {
+      KeysLocker.writeUnlock(k);
+    }
+  }
+  
+  private static int populate_zadd(List<ValueScore> members, long valuePtr, int valueSize) {
+    
+    ValueScore prev = null;
+    long ptr = valuePtr + NUM_ELEM_SIZE;
+    int added = 0;
+    int size = NUM_ELEM_SIZE;
+    
+    while(!members.isEmpty()) {
+      ValueScore kv = members.remove(0);
+      if (prev != null && prev.equals(kv)) {
+        continue;
+      }
+      int kSizeSize = Utils.sizeUVInt(kv.length);
+      int vSizeSize = Utils.sizeUVInt(Utils.SIZEOF_DOUBLE);
+      int add = kv.length + kSizeSize + Utils.SIZEOF_DOUBLE + vSizeSize;
+      if (size + add > valueSize) {
+        members.add(0, kv);
+        break;
+      }
+      Utils.writeUVInt(ptr, kv.length);
+      Utils.writeUVInt(ptr + kSizeSize, Utils.SIZEOF_DOUBLE);
+      UnsafeAccess.copy(kv.address, ptr + kSizeSize + vSizeSize, kv.length);
+      Utils.doubleToLex(ptr + kSizeSize + kv.length + vSizeSize, kv.score);
+      size += add;
+      ptr += add;
+      prev = kv;
+      added += 1;
+    }
+    
+    UnsafeAccess.putShort(valuePtr, (short) added);
+    return added;
+  }
+  
+  private static int getRequiredValueSize_zadd(List<ValueScore> members,  int maxValueSize) {
+    int size = NUM_ELEM_SIZE;
+    int i = 0;
+    ValueScore prev = null;
+    while(i < members.size()) {
+      ValueScore kv = members.get(i++);
+      if (prev != null && prev.equals(kv)) {
+        prev = kv;
+        continue;
+      }
+      int add = kv.length + Utils.sizeUVInt(kv.length) +
+          Utils.SIZEOF_DOUBLE + Utils.sizeUVInt(Utils.SIZEOF_DOUBLE);
       if (size + add > maxValueSize) {
         return size == NUM_ELEM_SIZE? size + add: size;
       }

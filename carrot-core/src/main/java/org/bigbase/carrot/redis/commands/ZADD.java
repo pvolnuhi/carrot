@@ -17,11 +17,16 @@
  */
 package org.bigbase.carrot.redis.commands;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.bigbase.carrot.BigSortedMap;
+import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.redis.zsets.ZSets;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
+import org.bigbase.carrot.util.ValueScore;
 
 public class ZADD implements RedisCommand {
   
@@ -90,24 +95,24 @@ public class ZADD implements RedisCommand {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_ARGS_NUMBER);
         return;
       }
+      
+      int number = (numArgs - count) / 2;
 
-      long[] ptrs = new long[(numArgs - count) / 2];
-      int[] ptrSizes = new int[(numArgs - count) / 2];
-      double[] scores = new double[(numArgs - count) / 2];
-
-      int max = (numArgs - count) / 2;
-      for (int i = 0; i < max; i++) {
-        // Read score
-        valSize = UnsafeAccess.toInt(inDataPtr);
-        inDataPtr += Utils.SIZEOF_INT;
-        scores[i] = Utils.strToDouble(inDataPtr, valSize);
-        // Read member
-        inDataPtr += valSize;
-        ptrSizes[i] = UnsafeAccess.toInt(inDataPtr);
-        inDataPtr += Utils.SIZEOF_INT;
-        ptrs[i] = inDataPtr;
-        inDataPtr += ptrSizes[i];
+      // Now check if zset exists and mutation option is not MutationOption.XX
+      // and this is a bulk operation. In this case we call *fast* version
+      if (opt != MutationOptions.XX && number > 1) {
+        if (!Sets.keyExists(map, keyPtr, keySize)) {
+          List<ValueScore> members = populateAndGetValueScores(inDataPtr, number);
+          long num = ZSets.ZADD_NEW(map, keyPtr, keySize, members);
+          INT_REPLY(outBufferPtr, num);
+          return;
+        };
       }
+      // For all other cases still old version (TODO: optimize general case)
+      long[] ptrs = new long[number];
+      int[] ptrSizes = new int[number];
+      double[] scores = new double[number];
+      populate(inDataPtr, ptrs, ptrSizes, scores);
       
       long num = ZSets.ZADD_GENERIC(map, keyPtr, keySize, scores, ptrs, ptrSizes, changed, opt);
       INT_REPLY(outBufferPtr, num);
@@ -115,6 +120,51 @@ public class ZADD implements RedisCommand {
     } catch (NumberFormatException e) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, 
         Errors.ERR_WRONG_NUMBER_FORMAT, ": " + e.getMessage());
+    }
+  }
+
+  private List<ValueScore> populateAndGetValueScores(long inDataPtr, int max) {
+    List<ValueScore> cached = ZSets.getValueScoreList();
+    // Make sure that thread local list is at least 'max' size
+    while(cached.size() < max) {
+      cached.add(new ValueScore(0,0,0));
+    }
+    List<ValueScore> list = new ArrayList<ValueScore>(max);
+    
+    for (int i = 0; i < max; i++) {
+      // Read score
+      int valSize = UnsafeAccess.toInt(inDataPtr);
+      inDataPtr += Utils.SIZEOF_INT;
+      double score = Utils.strToDouble(inDataPtr, valSize);
+      // Read member
+      inDataPtr += valSize;
+      int size = UnsafeAccess.toInt(inDataPtr);
+      inDataPtr += Utils.SIZEOF_INT;
+      long ptr = inDataPtr;
+      ValueScore vs = cached.get(i);
+      vs.address = ptr;
+      vs.length = size;
+      vs.score = score;
+      list.add(vs);
+      inDataPtr += size;
+    }
+    return list;
+  }
+  
+  private void populate(long inDataPtr, long[] ptrs, int[] ptrSizes, double[] scores) {
+    int max = scores.length;
+    int valSize;
+    for (int i = 0; i < max; i++) {
+      // Read score
+      valSize = UnsafeAccess.toInt(inDataPtr);
+      inDataPtr += Utils.SIZEOF_INT;
+      scores[i] = Utils.strToDouble(inDataPtr, valSize);
+      // Read member
+      inDataPtr += valSize;
+      ptrSizes[i] = UnsafeAccess.toInt(inDataPtr);
+      inDataPtr += Utils.SIZEOF_INT;
+      ptrs[i] = inDataPtr;
+      inDataPtr += ptrSizes[i];
     }
   }
 }
