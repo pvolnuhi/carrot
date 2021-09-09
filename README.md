@@ -86,7 +86,7 @@ Carrot was tested with Java Jedis, should work with other clients as well. The c
 
 ## Benchmark summary
 
-Accros all benchmark tests, Redis requires between 2 and 12 times more memory to keep the same data set. Carrot performance is within 5-10% of Redis, when Carrot compression is disabled and 40% less (only for updates and deletes) when compression is on. See performance benchmark tests in the WiKi **TODO**. We have not started code optimization yet, no profiling not hot spot detection*. So, this is preproduction data and, definetely, performance will be improved by the time of the first official release.  
+Accros all benchmark tests, Redis requires between 2 and 12 times more memory to keep the same data set. Carrot performance is within 5-10% of Redis, when Carrot compression is disabled and 40% less (only for updates and deletes) when compression is on. See performance benchmark tests in the WiKi **TODO**. We have not started code optimization yet, no profiling not hot spot detection. So, this is preproduction data and, definetely, performance will be improved by the time of the first official release.  
 
 ## Releases timeline
 
