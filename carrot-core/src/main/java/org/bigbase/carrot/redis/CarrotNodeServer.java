@@ -32,10 +32,10 @@ import org.bigbase.carrot.redis.util.Utils;
 
 /**
  * 
- * Redis node server (single thread)
+ * Carrot node server (single thread)
  *
  */
-public class RedisNodeServer implements Runnable {
+public class CarrotNodeServer implements Runnable {
 
   static int bufferSize = 256 * 1024;
   static CountDownLatch readyToStartLatch;
@@ -68,13 +68,13 @@ public class RedisNodeServer implements Runnable {
    * Constructor with nodeId (server's port)
    * @param nodeId node id (server's port)
    */
-  public RedisNodeServer(String host, int port) {
+  public CarrotNodeServer(String host, int port) {
     this.port = port;
     this.host = host;
   }
   
   public void start() {
-    runner = new Thread(this, "redis-node-"+ port);
+    runner = new Thread(this, "carrot-node-"+ port);
     runner.start();
   }
   
@@ -270,7 +270,7 @@ public class RedisNodeServer implements Runnable {
     long start = System.currentTimeMillis();
     store = BigSortedMap.loadStore(host, port);
     long end = System.currentTimeMillis();
-    System.out.println(Thread.currentThread().getName() + " loaded store in "+ (end - start)+"ms");
+    log(" loaded data store in "+ (end - start)+"ms");
     RedisConf conf = RedisConf.getInstance();
     store.setSnapshotDir(conf.getDataDirForNode(host, port));
   }

@@ -23,6 +23,7 @@ import org.bigbase.carrot.redis.lists.Lists;
 import org.bigbase.carrot.redis.sets.Sets;
 import org.bigbase.carrot.redis.sparse.SparseBitmaps;
 import org.bigbase.carrot.redis.strings.Strings;
+import org.bigbase.carrot.redis.util.MutationOptions;
 import org.bigbase.carrot.redis.zsets.ZSets;
 
 public class Keys {
@@ -120,5 +121,46 @@ public class Keys {
       return 1;
     }
     return 0;
+  }
+  
+  /**
+   * EXPIRE key seconds [NX|XX|GT|LT]
+   *
+   * Available since 1.0.0.
+   * Time complexity: O(1)
+   * Set a timeout on key. After the timeout has expired, the key will automatically be deleted. 
+   * A key with an associated timeout is often said to be volatile in Redis terminology.
+   * The timeout will only be cleared by commands that delete or overwrite the contents of 
+   * the key, including DEL, SET, GETSET and all the *STORE commands. This means that all 
+   * the operations that conceptually alter the value stored at the key without replacing it 
+   * with a new one will leave the timeout untouched. For instance, incrementing the value 
+   * of a key with INCR, pushing a new value into a list with LPUSH, or altering the field 
+   * value of a hash with HSET are all operations that will leave the timeout untouched.
+   * The timeout can also be cleared, turning the key back into a persistent key, using the PERSIST command.
+   * If a key is renamed with RENAME, the associated time to live is transferred to the new key name.
+   * If a key is overwritten by RENAME, like in the case of an existing key Key_A that is overwritten
+   *  by a call like RENAME Key_B Key_A, it does not matter if the original Key_A had a timeout associated 
+   *  or not, the new key Key_A will inherit all the characteristics of Key_B.
+   * Note that calling EXPIRE/PEXPIRE with a non-positive timeout or EXPIREAT/PEXPIREAT with a time 
+   * in the past will result in the key being deleted rather than expired (accordingly, the emitted key 
+   * event will be del, not expired).
+   * 
+   * Options
+   * The EXPIRE command supports a set of options since Redis 7.0:
+   *   NX -- Set expiry only when the key has no expiry
+   *   XX -- Set expiry only when the key has an existing expiry
+   *   GT -- Set expiry only when the new expiry is greater than current one
+   *   LT -- Set expiry only when the new expiry is less than current one
+   * A non-volatile key is treated as an infinite TTL for the purpose of GT and LT. The GT, LT and NX options are mutually exclusive.
+   *
+   * @param map sorted map set
+   * @param keyPtr key address
+   * @param keySize key size
+   * @param seconds seconds to live
+   * @return 1 - success, 0 - was not set, -1 - key does not exist 
+   */
+  public static int EXPIRE(BigSortedMap map, long keyPtr, int keySize, long seconds, MutationOptions opps) {
+    // TODO
+    return 1;
   }
 }

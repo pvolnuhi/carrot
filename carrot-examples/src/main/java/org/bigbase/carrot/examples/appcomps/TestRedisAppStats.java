@@ -61,7 +61,7 @@ import redis.clients.jedis.Jedis;
 
 public class TestRedisAppStats {
   final static String KEY_PREFIX = "stats:profilepage:access:";
-  final static int hoursToKeep = 10 * 365 * 24;
+  final static int hoursToKeep = 1000 * 365 * 24;
   
   public static void main(String[] args) throws IOException {
     runTest();
@@ -69,14 +69,25 @@ public class TestRedisAppStats {
   
   private static void runTest() throws IOException {
     Jedis client = new Jedis("localhost");
+    
+    client.flushAll();
+    
     long start = System.currentTimeMillis();
     for(int i = 0; i < hoursToKeep; i++) {
       Stats st = Stats.newStats(i);
-      //st.saveToRedisNative(client);
-      client.del(st.getKeyBytes());
+      st.saveToRedisNative(client);
+      byte[] key = st.getKeyBytes();
+      //client.expire(key, 100000);
+      if ((i + 1) % 100000 == 0) {
+        System.out.println("loaded "+ (i + 1));
+      }
     }
     long end = System.currentTimeMillis();
     System.out.println("Loaded " + hoursToKeep + " in " + (end - start)+ "ms. Press any button ...");
+    start = System.currentTimeMillis();
+    client.save();
+    end = System.currentTimeMillis();
+    System.out.println("save time="+ (end - start) + "ms");
     System.in.read();
     client.close();
   }

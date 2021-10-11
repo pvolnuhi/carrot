@@ -497,7 +497,7 @@ public class BigSortedMap {
   ReentrantReadWriteLock[] locks = new ReentrantReadWriteLock[11113];
   
   /*
-   * Read-Write Lock for index blcoks. TODO: StampedLock (Java 8)
+   * Read-Write Lock for index blocks. TODO: StampedLock (Java 8)
    */
   ReentrantReadWriteLock[] indexLocks = new ReentrantReadWriteLock[11113];
   
@@ -2176,6 +2176,50 @@ public class BigSortedMap {
     flushAll();
   }
   
+  /**
+   *  Memory compaction API. Compacts both: index and data blocks
+   */
+  
+  public void compact() {
+    // main loop over all index blocks
+    IndexBlock ib = null, cur = null;
+    int version = -1;
+   
+    while (true) {
+      try {
+        if (ib != null) {
+          version = ib.getSeqNumberSplitOrMerge();
+        }
+        cur = nextIndexBlock(ib);
+        if (cur == null) {
+          break;
+        } else if (cur.isValid() == false) {
+          //TODO: is it safe?
+          continue;
+        }
+        // Lock current index block
+        cur.writeLock();
+        if (ib != null && ib.hasRecentUnsafeModification()) {
+          int v = ib.getSeqNumberSplitOrMerge();
+          if (v != version) {
+            // We caught IB split in fly
+            ib = cur;
+            continue;
+          }
+        }
+        // Process index block    
+        cur.compact();
+        ib = cur;
+      } catch (RetryOperationException e) {
+        continue;
+      } finally {
+        if (cur != null) {
+          cur.writeUnlock();
+        }
+      }
+    }
+  }
+  
   /******************************************************************************************************
    * 
    * Persistence API - data store disk snapshot READ-WRITE
@@ -2327,7 +2371,7 @@ public class BigSortedMap {
   // READ DATA
   private static BigSortedMap loadStoreFromSnapshot(String snapshotDir) {
     BigSortedMap map = null;
-    // Check if dir exists
+    // Check if directory exists
     File dir = new File(snapshotDir);
     if (dir.exists() == false) {
       dir.mkdirs();

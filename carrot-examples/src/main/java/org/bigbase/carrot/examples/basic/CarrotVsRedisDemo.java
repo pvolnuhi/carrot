@@ -24,6 +24,7 @@ import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -36,41 +37,63 @@ import org.bigbase.carrot.redis.util.Utils;
 
 @SuppressWarnings("unused")
 
-public class RedisClusterTestRaw {
+public class CarrotVsRedisDemo {
   
   static long N = 10000000;
       
   static AtomicLong index = new AtomicLong(0);
   
-  static int NUM_THREADS = 1;
-  
+  static int NUM_THREADS = 2;
   static int BATCH_SIZE = 100;
   static int SET_SIZE = 1000;
-  static int SET_KEY_TOTAL = 10000;
+  static int SET_KEY_TOTAL = 100000;
+  static AtomicLong loaded = new AtomicLong(0);
+  static long totalLoaded = 0;
   
   static List<String> clusterNodes = Arrays.asList("localhost:6379" /*, "localhost:6380",
     "localhost:6381", "localhost:6382", "localhost:6383", "localhost:6384", "localhost:6385", "localhost:6386"*/); 
   
   public static void main(String[] args) throws IOException, OperationFailedException {
 
-    System.out.println("Run Redis Cluster");
+    System.out.println("Run Carrot vs. Redis Demo");
     RawClusterClient client = new RawClusterClient(clusterNodes);
     long start = System.currentTimeMillis();
     flushAll(client);
     long end = System.currentTimeMillis();
-     System.out.println("flush all "+ (end - start) + "ms");
-//    runClusterPingPongCycle();   
-//    runClusterSetCycle();
-//    runClusterGetCycle();
-//    runClusterMSetCycle();
-//    runClusterMGetCycle();
-//     runClusterSaddCycle();
-//     runClusterSismemberCycle();
-//     runClusterHSetCycle();
-//     runClusterHexistsCycle();
+    System.out.println("flush all " + (end - start) + "ms");
+    
+    // main 3 tests
+    start = System.currentTimeMillis();
+    
+    // Load sets with cardinality 1000 each
+    runClusterSaddCycle();
+    totalLoaded += loaded.get();
+    loaded.set(0);
+    
+    flushAll(client);
+    
+    // Load hashes, each 1000 length
+    runClusterHSetCycle();
+    totalLoaded += loaded.get();
+    loaded.set(0);
+    
+    flushAll(client);
+    
+    // Load ordered sets each 1000 elements length
     runClusterZAddCycle();
-    runClusterZScoreCycle();
+    totalLoaded += loaded.get();
+    
     shutdownAll(client, true);
+
+    end = System.currentTimeMillis();
+    
+    NumberFormat formatter = NumberFormat.getInstance();
+    
+
+    System.out.println("\n************************ RESULTS *************************************");
+    System.out.println("\nTOTAL ELEMENTS LOADED =" + formatter.format(totalLoaded) + " TOTAL TIME =" 
+    + ((double)(end - start))/1000 + "s, EPS ="+  formatter.format((totalLoaded) * 1000/ (end - start)));
+    
     client.close();
   }
   
@@ -183,8 +206,8 @@ public class RedisClusterTestRaw {
     Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
     long end = System.currentTimeMillis();
     
-    System.out.println("Finished "+ SET_KEY_TOTAL + " sadd x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
-    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    System.out.println("Finished "+ (loaded.get()/SET_SIZE) + " sadd x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (loaded.get() * 1000) / (end - start));
     
   }
   
@@ -221,8 +244,8 @@ public class RedisClusterTestRaw {
     Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
     long end = System.currentTimeMillis();
     
-    System.out.println("Finished "+ SET_KEY_TOTAL + " hset x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
-    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    System.out.println("Finished "+ (loaded.get() / SET_SIZE) + " hset x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (loaded.get() * 1000) / (end - start));
     
   }
   
@@ -259,8 +282,8 @@ public class RedisClusterTestRaw {
     Arrays.stream(workers).forEach( x -> {try { x.join();} catch(Exception e) {}});
     long end = System.currentTimeMillis();
     
-    System.out.println("Finished "+ SET_KEY_TOTAL + " zadd x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
-    (((long) SET_KEY_TOTAL * SET_SIZE) * 1000) / (end - start));
+    System.out.println("Finished "+ (loaded.get()/SET_SIZE) + " zadd x ("+ SET_SIZE +") in "+ (end - start) + "ms. RPS="+ 
+    (loaded.get() * 1000) / (end - start));
     
   }
   
@@ -392,7 +415,11 @@ public class RedisClusterTestRaw {
      UserSession us = UserSession.newSession(idx);
      String key = us.getUserId();
      String result = client.sadd(key, setMembers);
-     count += SET_SIZE;
+     int added = toInt(result);
+     count += added;
+     if (added == 0) {
+       break;
+     }
      if (count / 1000000 >= batch) {
        System.out.println(Thread.currentThread().getId() +": sadd "+ count);
        batch++;
@@ -403,7 +430,7 @@ public class RedisClusterTestRaw {
        
    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" set members,"
      + " in "+ (endTime - startTime) );
-  
+   loaded.addAndGet(count);
    client.close();
  } 
  
@@ -469,7 +496,11 @@ public class RedisClusterTestRaw {
      UserSession us = UserSession.newSession(idx);
      String key = us.getUserId();
      String result = client.hset(key, setMembers);
-     count += SET_SIZE;
+     int added = toInt(result);
+     count += added;
+     if (added == 0) {
+       break;
+     }
      if (count / 1000000 >= batch) {
        System.out.println(Thread.currentThread().getId() +": hset "+ count);
        batch++;
@@ -477,7 +508,7 @@ public class RedisClusterTestRaw {
    }
    
    long endTime = System.currentTimeMillis();
-       
+   loaded.addAndGet(count);
    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" hash members,"
      + " in "+ (endTime - startTime) );
   
@@ -564,7 +595,11 @@ public class RedisClusterTestRaw {
      UserSession us = UserSession.newSession(idx);
      String key = us.getUserId();
      String result = client.zadd(key, scores, setMembers);
-     count += SET_SIZE;
+     int added = toInt(result);
+     count += added;
+     if (added == 0) {
+       break;
+     }
      if (count / 1000000 >= batch) {
        System.out.println(Thread.currentThread().getId() +": zadd "+ count);
        batch++;
@@ -572,12 +607,18 @@ public class RedisClusterTestRaw {
    }
    
    long endTime = System.currentTimeMillis();
-       
+   loaded.addAndGet(count);
    System.out.println(Thread.currentThread().getId() +": Loaded " + count +" zset members,"
      + " in "+ (endTime - startTime) );
   
    client.close();
  } 
+ 
+ private static int toInt(String s) {
+   if (s.charAt(0) != ':') return 0;
+   int len = s.length();
+   return Integer.parseInt(s.substring(1, len - 2));
+ }
  
  private static void populate(double[] scores, int id) {
    Random r = new Random(id);
@@ -1057,6 +1098,30 @@ public class RedisClusterTestRaw {
       return new String (bytes);
     }
 
+    public String expire(String key, int seconds) throws IOException {
+      String[] newArgs = new String[3];
+      newArgs[0] = "HEXISTS";
+      newArgs[1] = key;
+      newArgs[2] = Integer.toString(seconds);
+      writeRequest(buf, newArgs);
+      buf.flip();
+      int slot = 0;//Math.abs(key.hashCode()) % connList.size();
+      SocketChannel channel = connList.get(slot);
+      while(buf.hasRemaining()) {
+        channel.write(buf);
+      }
+      buf.clear();
+      
+      while(buf.position() == 0) {
+        // Hack
+        channel.read(buf);
+      }
+      buf.flip();
+      byte[] bytes = new byte[buf.limit()];
+      buf.get(bytes);
+      return new String (bytes);
+    }
+    
     public String zadd(String key, double[] scores, String[] fields) throws IOException {
       String[] newArgs = new String[2 * fields.length + 2];
       newArgs[0] = "ZADD";

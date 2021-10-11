@@ -28,6 +28,7 @@ import java.util.logging.Logger;
 
 import org.bigbase.carrot.compression.Codec;
 import org.bigbase.carrot.compression.CodecFactory;
+import org.bigbase.carrot.redis.RedisConf;
 import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -469,14 +470,16 @@ public final class DataBlock  {
    * sizes of allocation 
    * 256 * 2, 3, 4, ... 16
    */
-  public static int BASE_SIZE = 128;
-  // TODO: align block multipliers with jemalloc
-  // 8K Block
-  //static int[] BASE_MULTIPLIERS = new int[] {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 
-  //    20, 22, 24, 26, 28, 30, 32};
-  // 4K block
-  static int[] BASE_MULTIPLIERS = new int[] {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-      18, 20, 22, 24, 26, 28, 30, 32};
+
+  static int[] BLOCK_SIZES = new int[] {256, 320, 384, 448, 512, 768, 1024, 1280, 1536, 1792, 2048, 
+      2304, 2560, 2816, 3072, 3328, 3584, 3840, 4096};
+  
+  static {
+    RedisConf conf = RedisConf.getInstance();
+    int[] sizes = conf.getDataBlockSizes();
+    if (sizes != null) BLOCK_SIZES = sizes;
+  }
+  
   /*
    * Read-Write Lock TODO: StampedLock (Java 8)
    */
@@ -488,7 +491,7 @@ public final class DataBlock  {
   }
 
   public static int getMaximumBlockSize() {
-    return BASE_SIZE * BASE_MULTIPLIERS[BASE_MULTIPLIERS.length -1];
+    return BLOCK_SIZES[BLOCK_SIZES.length -1];
   }
 
   /**
@@ -498,8 +501,8 @@ public final class DataBlock  {
    * @return min size or -1;
    */
   static int getMinSizeGreaterOrEqualsThan(int max, int current) {
-    for (int i = 0; i < BASE_MULTIPLIERS.length; i++) {
-      int size = BASE_SIZE * BASE_MULTIPLIERS[i];
+    for (int i = 0; i < BLOCK_SIZES.length; i++) {
+      int size = BLOCK_SIZES[i];
       // CHANGE
       if (size >= current) return size;
     }

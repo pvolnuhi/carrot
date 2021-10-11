@@ -26,7 +26,7 @@ import org.bigbase.carrot.redis.lists.Lists;
  * Main service launcher
  *
  */
-public class RedisMain {
+public class CarrotMain {
   
   
   public static void main(String[] args) {
@@ -40,15 +40,15 @@ public class RedisMain {
   private static void startNodes() {
     RedisConf conf = RedisConf.getInstance();
     String[] nodes = conf.getNodes();
-    RedisNodeServer[] nodeServers = new RedisNodeServer[nodes.length];
-    RedisNodeServer.readyToStartLatch = new CountDownLatch(nodes.length);
+    CarrotNodeServer[] nodeServers = new CarrotNodeServer[nodes.length];
+    CarrotNodeServer.readyToStartLatch = new CountDownLatch(nodes.length);
     // Disable global statistics update during snapshot data loading
     BigSortedMap.setStatsUpdatesDisabled(true);
     for (int i = 0; i < nodes.length; i++) {
       String[] parts = nodes[i].split(":");
       String host = parts[0].trim();
       int port = Integer.parseInt(parts[1].trim());
-      nodeServers[i] = new RedisNodeServer(host, port);
+      nodeServers[i] = new CarrotNodeServer(host, port);
       nodeServers[i].start();
     }
 

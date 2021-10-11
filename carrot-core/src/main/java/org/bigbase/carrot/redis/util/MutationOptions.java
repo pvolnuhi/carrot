@@ -21,11 +21,13 @@ package org.bigbase.carrot.redis.util;
  *   NONE - no restriction on mutation
  *   NX -- Only set the key if it does not already exist.
  *   XX -- Only set the key if it already exist.
- *
+ *   GT - only if greater than
+ *   LT - only if less than
  */
 public enum MutationOptions {
-
   NONE, 
   NX, 
-  XX;
+  XX,
+  GT,
+  LT;
 }

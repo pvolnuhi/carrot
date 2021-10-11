@@ -17,6 +17,9 @@
  */
 package org.bigbase.carrot.redis;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -64,4 +67,33 @@ public class TestRedisConf {
     String result = new String(arr);
     System.out.println(result);
   }
+  
+  @Test
+  public void testDataBlockSizes() {
+    Properties p = new Properties();
+    p.setProperty(RedisConf.DATA_BLOCK_SIZES_KEY, "10,20,30");
+    RedisConf conf = new RedisConf(p);
+    
+    int[] sizes = conf.getDataBlockSizes();
+    assertEquals(3, sizes.length);
+    assertEquals(10, sizes[0]);
+    assertEquals(20, sizes[1]);
+    assertEquals(30, sizes[2]);
+    
+    p.clear();
+    p.setProperty(RedisConf.DATA_BLOCK_SIZES_KEY, "  10,20,50 ");
+    sizes = conf.getDataBlockSizes();
+    assertEquals(3, sizes.length);
+    assertEquals(10, sizes[0]);
+    assertEquals(20, sizes[1]);
+    assertEquals(50, sizes[2]);
+    
+    p.clear();
+    // Wrong format
+    p.setProperty(RedisConf.DATA_BLOCK_SIZES_KEY, "10, 20,50");
+    sizes = conf.getDataBlockSizes();
+    assertNull(sizes);
+    
+  }
+  
 }

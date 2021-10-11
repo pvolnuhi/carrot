@@ -83,4 +83,5 @@ public class Stats extends KeyValues {
   public byte[] getKeyBytes() {
     return Bytes.add(getKey().getBytes(), Bytes.toBytes(Long.MAX_VALUE - hourStartTime));
   }
+  
 }

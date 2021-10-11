@@ -432,12 +432,12 @@ public class TestUtils {
     String s = "ABRACADABRAABRACADABRA";
     
     Utils.strToByteBuffer(s, heap);
-    heap.flip();
+    //heap.flip();
     String result = Utils.byteBufferToString(heap);
     assertEquals(s, result);
     
     Utils.strToByteBuffer(s, nativ);
-    nativ.flip();
+    //nativ.flip();
     result = Utils.byteBufferToString(nativ);
     assertEquals(s, result);
     

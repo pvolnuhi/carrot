@@ -1329,7 +1329,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
    * Implement first block Public API, therefore we lock/unlock
    * Caller MUST decompress/compress data after this call
    * Multiple instances UNSAFE
-   * @param blck current blck, can be null
+   * @param blck current block, can be null
    * @return block found or null
    */
   DataBlock nextBlock(DataBlock blck, boolean safe) {
@@ -2510,6 +2510,15 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 		}
 	}
 	
+	void compact() {
+	  DataBlock db = null;
+	  while ((db = nextBlock(db, true)) != null) {
+	    // do we need to de-compress? Seems - no
+	    // Shrink works only when compaction is OFF
+	    // TODO: merge adjacent data blocks
+	    db.shrink();
+	  }
+	}
 	/**
 	 * PERSISTENCE
 	 * @throws IOException 

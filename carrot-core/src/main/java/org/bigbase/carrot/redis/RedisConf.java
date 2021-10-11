@@ -62,6 +62,11 @@ public class RedisConf {
       Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
   public final static int DEFAULT_ZSET_MAX_COMPACT_SIZE = 512;
 
+  
+  /* Data block configuration section */
+  /* Comma separated list of data block sizes*/
+  public final static String DATA_BLOCK_SIZES_KEY = "datablock.sizes"; 
+  
   private static RedisConf conf;
   private Properties props;
   
@@ -291,5 +296,28 @@ public class RedisConf {
       slots[i] = ((i + 1) * slotMax) / n;
     }
     return slots;
+  }
+  /**
+   *  Get data block sizes
+   */
+  
+  public int[] getDataBlockSizes() {
+    String value = props.getProperty(DATA_BLOCK_SIZES_KEY);
+    if (value != null) {
+      value = value.trim();
+      String[] parts = value.split(",");
+      int[] sizes = new int[parts.length];
+      for (int i = 0; i < parts.length; i++) {
+        try {
+          sizes[i] = Integer.parseInt(parts[i]);
+        } catch (NumberFormatException e) {
+          //TODO logging
+          System.err.println("Can not parse configuration value '" + DATA_BLOCK_SIZES_KEY + "'");
+          return null;
+        }
+      }
+      return sizes;
+    }
+    return null;
   }
 }
