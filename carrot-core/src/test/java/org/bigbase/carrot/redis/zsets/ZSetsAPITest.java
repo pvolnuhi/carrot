@@ -212,9 +212,9 @@ public class ZSetsAPITest {
     testIncrement();
     tearDown();
 
-    //setUp();
-    //testADDCorrectness();
-    //tearDown();
+    setUp();
+    testADDCorrectness();
+    tearDown();
     
     setUp();
     testZCOUNT();
@@ -285,8 +285,7 @@ public class ZSetsAPITest {
     
     setUp();
     testZREVRANGE();
-    tearDown();
-    
+    tearDown();    
     long end = System.currentTimeMillis();
     System.out.println("Run time=" + (end - start)+"ms");
   }

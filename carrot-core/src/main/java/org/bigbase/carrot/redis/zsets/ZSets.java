@@ -517,7 +517,7 @@ public class ZSets {
   public static long ZADD_GENERIC(BigSortedMap map, long keyPtr, int keySize, double[] scores,
       long[] memberPtrs, int[] memberSizes, boolean changed /* CH */, MutationOptions options) {
     
-    if (!Sets.keyExists(map, keyPtr, keySize)) {
+    if ( options != MutationOptions.XX && !Sets.keyExists(map, keyPtr, keySize)) {
       return ZADD_NEW(map, keyPtr, keySize, scores, memberPtrs, memberSizes);
     }
     Key k = getKey(keyPtr, keySize);
