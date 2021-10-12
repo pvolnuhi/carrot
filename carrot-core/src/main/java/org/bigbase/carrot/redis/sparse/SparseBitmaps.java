@@ -515,6 +515,9 @@ public class SparseBitmaps {
       int endKeySize = buildKey(keyPtr, keySize, (end) * Utils.BITS_PER_BYTE, endKeyPtr);
       // WRONG      
       endKeyPtr = Utils.prefixKeyEndNoAlloc(endKeyPtr, endKeySize);
+      if(endKeyPtr == 0) {
+        endKeySize = 0;
+      }
       long total = 0;
       try {
         scanner = map.getScanner(keyArena.get() /* start key ptr*/, kSize /* start key size*/, 
@@ -742,7 +745,9 @@ public class SparseBitmaps {
       
       //FIXME
       endKeyPtr = Utils.prefixKeyEndNoAlloc(endKeyPtr, endKeySize);
-
+      if (endKeyPtr == 0) {
+        endKeySize = 0;
+      }
       boolean exists = false;
 
       try {
@@ -947,19 +952,22 @@ public class SparseBitmaps {
       int endKeySize = buildKey(keyPtr, keySize, end * Utils.BITS_PER_BYTE, endKeyPtr);
       // FIXME
       endKeyPtr = Utils.prefixKeyEndNoAlloc(endKeyPtr, endKeySize);
-
-      scanner = map.getScanner(keyArena.get(), kSize, endKeyPtr, endKeySize);
-      if (scanner == null) {
-        // Either we hit a hole of all 0's
-        // Or set does not exists
-        if (EXISTS(map, keyPtr, keySize)) {
-          return rangeSize; // yes - rangeSize - all are 0's
-        } else {
-          return -1; // set does not exists
-        }
+      if (endKeyPtr == 0) {
+        endKeySize = 0;
       }
+  
       long off = start;
       try {
+        scanner = map.getScanner(keyArena.get(), kSize, endKeyPtr, endKeySize);
+        if (scanner == null) {
+          // Either we hit a hole of all 0's
+          // Or set does not exists
+          if (EXISTS(map, keyPtr, keySize)) {
+            return rangeSize; // yes - rangeSize - all are 0's
+          } else {
+            return -1; // set does not exists
+          }
+        }
         // still can be empty
         while (scanner.hasNext()) {
           long valueAddress = scanner.valueAddress();

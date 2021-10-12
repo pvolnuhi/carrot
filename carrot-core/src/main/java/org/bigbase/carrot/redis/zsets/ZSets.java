@@ -1058,34 +1058,38 @@ public class ZSets {
       Utils.doubleToLex(startPtr, min);
       int startSize = Utils.SIZEOF_DOUBLE;
       
-      stopPtr =UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
+      stopPtr = UnsafeAccess.malloc(Utils.SIZEOF_DOUBLE);
       Utils.doubleToLex(stopPtr, max);
       int stopSize = Utils.SIZEOF_DOUBLE;
       if (maxInclusive && max < Double.MAX_VALUE) {
         stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
+        if (stopPtr == 0) {
+          stopSize = 0;
+        }
       }
       if (!minInclusive && min > -Double.MAX_VALUE) {
         startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+        if (startPtr == 0) {
+          startSize = 0;
+        }
       }      
       // TODO: can be optimized for speed: see Sets SCOUNT
       SetScanner scanner = Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, 
         stopPtr, stopSize, false);
-      if (scanner == null) {
-        return 0;
-      }
       try {
+
+        if (scanner == null) {
+          return 0;
+        }
         while(scanner.hasNext()) {
           count++;
-          /*DEBUG*/ 
-          long ptr = scanner.memberAddress();
-          int size = scanner.memberSize();
           scanner.next();
         }
       } catch (IOException e) {
         // Should not be here
       } finally {
         try {
-          scanner.close();
+          if (scanner != null) scanner.close();
         } catch (IOException e) {
         }
       }
@@ -2514,25 +2518,17 @@ public class ZSets {
       int stopSize = Utils.SIZEOF_DOUBLE;
       
       if (maxInclusive && maxScore < Double.MAX_VALUE) {
-        stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
-        
-        //TODO: Investigate why below code does not work for ZSets
-        
-//        long _stopPtr = Utils.prefixKeyEndCorrect(stopPtr, stopSize);
-//        UnsafeAccess.free(stopPtr);
-//        stopPtr = _stopPtr;
-//        stopSize += 1;
+        stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopSize); 
+        if (stopPtr == 0) {
+          stopSize  = 0;
+        }
       }
       
       if (!minInclusive && minScore > -Double.MAX_VALUE) {
         startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
-
-        //TODO: Investigate why below code does not work for ZSets
- 
-//        long _startPtr = Utils.prefixKeyEndCorrect(startPtr, startSize);
-//        UnsafeAccess.free(startPtr);
-//        startPtr = _startPtr;
-//        startSize += 1;
+        if (startPtr == 0) {
+          startSize  = 0;
+        }
       }
       
       scanner =
@@ -3304,10 +3300,12 @@ public class ZSets {
           long buf = auxArena.get();
           startSize = Utils.readUVInt(buf);
           int sizeSize = Utils.sizeUVInt(startSize);
-          startPtr = UnsafeAccess.malloc(startSize);
+          startPtr = UnsafeAccess.malloc(startSize + 1);
           UnsafeAccess.copy(buf + sizeSize, startPtr, startSize);
+          UnsafeAccess.putByte(startPtr + startSize, (byte) 0);
+          startSize += 1;
           // Advance start a bit
-          startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+          //startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
           // Create scanner
           scanner = 
               Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, 0, 0, false);
@@ -3407,9 +3405,11 @@ public class ZSets {
 
     if (maxInclusive && maxScore < Double.MAX_VALUE) {
       stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
+      // Will never be 0
     }
     if (!minInclusive && minScore > -Double.MAX_VALUE) {
       startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+      // will never be 0
     }
 
     long cardinality = ZCARD(map, keyPtr, keySize);
@@ -3466,10 +3466,6 @@ public class ZSets {
           cc++;
           Utils.writeUVInt(ptr, mSize);
           UnsafeAccess.copy(mPtr, ptr + mSizeSize, mSize);
-//          if (deleted == 1) {
-//            /*DEBUG*/ System.out.println("ZREMRANGEBYSCORE start: score="+ Utils.lexToDouble(mPtr) 
-//            + " field=" + Utils.toString(mPtr + mSizeSize + Utils.SIZEOF_DOUBLE, mSize - Utils.SIZEOF_DOUBLE));
-//          }
         }
         
         UnsafeAccess.putInt(buffer, cc);
@@ -3486,10 +3482,12 @@ public class ZSets {
           long buf = auxArena.get();
           startSize = Utils.readUVInt(buf);
           int sizeSize = Utils.sizeUVInt(startSize);
-          startPtr = UnsafeAccess.malloc(startSize);
+          startPtr = UnsafeAccess.malloc(startSize + 1);
           UnsafeAccess.copy(buf + sizeSize, startPtr, startSize);
+          UnsafeAccess.putByte(startPtr + startSize, (byte) 0);
+          startSize += 1;
           // Advance start a bit
-          startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+          //startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
           // Create scanner
           scanner = 
               Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, stopPtr, stopSize, false);
@@ -3521,8 +3519,8 @@ public class ZSets {
         }
       } catch (IOException e) {
       }
-      UnsafeAccess.free(startPtr);
-      UnsafeAccess.free(stopPtr);
+      if (startPtr > 0) UnsafeAccess.free(startPtr);
+      if (stopPtr > 0) UnsafeAccess.free(stopPtr);
       KeysLocker.writeUnlock(k);
     }
     return deleted;
@@ -3739,11 +3737,16 @@ public class ZSets {
      boolean startInclusive, long endPtr, int endSize, boolean endInclusive, long offset, long limit, 
      long buffer, int bufferSize)
  {
+   boolean freeEnd = false, freeStart = false;
    if (endInclusive && endPtr > 0) {
-     endPtr = Utils.prefixKeyEndNoAlloc(endPtr, endSize);
+     endPtr = Utils.prefixKeyEndCorrect(endPtr, endSize);
+     freeEnd = true;
+     endSize += 1;
    }
    if (!startInclusive && startPtr > 0) {
-     startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+     startPtr = Utils.prefixKeyEndCorrect(startPtr, startSize);
+     freeStart = true;
+     startSize += 1;
    }
    Key key = getKey(keyPtr, keySize);
    SetScanner setScanner = null;
@@ -3809,6 +3812,12 @@ public class ZSets {
         setScanner.close();
       } catch (IOException e) {
       }
+     }
+     if (freeStart) {
+       UnsafeAccess.free(startPtr);
+     }
+     if (freeEnd) {
+       UnsafeAccess.free(endPtr);
      }
      KeysLocker.readUnlock(key);
    }
@@ -4236,9 +4245,11 @@ public class ZSets {
       int stopSize = Utils.SIZEOF_DOUBLE;
       if (maxInclusive && maxScore < Double.MAX_VALUE) {
         stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopSize);
+        // Never be 0
       }
       if (!minInclusive && minScore > -Double.MAX_VALUE) {
         startPtr = Utils.prefixKeyEndNoAlloc(startPtr, startSize);
+        // Never be 0
       }
       scanner = Sets.getScanner(map, keyPtr, keySize, startPtr, startSize, stopPtr, stopSize, false,
         true);

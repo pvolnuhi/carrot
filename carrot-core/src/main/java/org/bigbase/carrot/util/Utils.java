@@ -549,7 +549,8 @@ public class Utils {
         return start;
       }
     }
-    return -1;
+    UnsafeAccess.free(start);
+    return 0;
   }
   /**
    * 

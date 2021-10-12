@@ -2397,6 +2397,9 @@ public class Hashes {
     int stopPtrSize = buildKey(keyPtr, keySize, fieldStopPtr, fieldStopSize, stopPtr);
     if (fieldStopPtr == 0) {
       stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopPtrSize);
+      if (stopPtr == 0) {
+        stopPtrSize = 0;
+      }
     }
     if (/*reverse &&*/ fieldStartPtr > 0) {
       // Get floorKey
@@ -2424,7 +2427,7 @@ public class Hashes {
           map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     if (scanner == null) {
       UnsafeAccess.free(startPtr);
-      UnsafeAccess.free(stopPtr);
+      if(stopPtr > 0) UnsafeAccess.free(stopPtr);
       return null;
     }
     
@@ -2435,7 +2438,9 @@ public class Hashes {
     } catch (IOException e) {
       try {
         UnsafeAccess.free(startPtr);
-        UnsafeAccess.free(stopPtr);
+        if (stopPtr > 0) {
+          UnsafeAccess.free(stopPtr);
+        }
         scanner.close();
       } catch (IOException e1) {
       }

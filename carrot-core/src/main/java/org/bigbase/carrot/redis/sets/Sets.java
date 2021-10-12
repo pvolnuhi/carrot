@@ -1886,6 +1886,9 @@ public class Sets {
     
     if (fieldStopPtr == 0) {
       stopPtr = Utils.prefixKeyEndNoAlloc(stopPtr, stopPtrSize);
+      if (stopPtr == 0) {
+        stopPtrSize = 0;
+      }
     }
     
     if (fieldStartPtr > 0) {
@@ -1916,7 +1919,7 @@ public class Sets {
           map.getScanner(startPtr, startPtrSize, stopPtr, stopPtrSize, reverse);
     if (scanner == null) {
       UnsafeAccess.free(startPtr);
-      UnsafeAccess.free(stopPtr);
+      if(stopPtr > 0) UnsafeAccess.free(stopPtr);
       return null;
     }
     try {
@@ -1929,6 +1932,8 @@ public class Sets {
         scanner.close();
       } catch (IOException e1) {
       }
+      UnsafeAccess.free(startPtr);
+      if(stopPtr > 0) UnsafeAccess.free(stopPtr);
       return null;
     }
   }
