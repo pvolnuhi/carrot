@@ -293,6 +293,13 @@ public class Sets {
     }
   }
   
+  @SuppressWarnings("unused")
+  private static void dump(List<Value> members) {
+    for(Value v: members) {
+      System.out.println(Utils.toHexString(v.address, v.length));
+    }
+  }
+  
   private static int populate(List<Value> members, long valuePtr, int valueSize) {
     
     Value prev = null;
@@ -701,8 +708,12 @@ public class Sets {
       KeysLocker.readLock(k);
       startKeyPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE) ;
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1, startKeyPtr);
-      endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, kSize - 1);      
-      BigSortedMapScanner scanner = map.getScanner(startKeyPtr, kSize, endKeyPtr, kSize - 1);
+      int endKeySize  = kSize - 1;
+      endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, endKeySize);
+      if (endKeyPtr == 0) {
+        endKeySize  = 0;
+      }
+      BigSortedMapScanner scanner = map.getScanner(startKeyPtr, kSize, endKeyPtr, endKeySize);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -743,12 +754,17 @@ public class Sets {
       kPtr = UnsafeAccess.malloc(newKeySize);
       buildKey(keyPtr, keySize, Commons.ZERO, 1, kPtr);
       
-      endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
+      int endKeySize  = newKeySize - 1;
+      endKeyPtr = Utils.prefixKeyEnd(kPtr, endKeySize); 
+      if (endKeyPtr == 0) {
+        endKeySize  = 0;
+      }
       
-      BigSortedMapScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
+      BigSortedMapScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, endKeySize);
       if (scanner == null) {
         return true; // empty or does not exists
       }
+      
       long total = 0;
       while (scanner.hasNext()) {
         long valuePtr = scanner.valueAddress();
@@ -789,8 +805,12 @@ public class Sets {
     
     long ptr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
     int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1, ptr);
-    long endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
-    BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
+    int endKeySize = kSize - 1;
+    long endKeyPtr = Utils.prefixKeyEnd(ptr, endKeySize);
+    if (endKeyPtr == 0) {
+      endKeySize  = 0;
+    }
+    BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, endKeySize);
 
     long total = 0;
     try {
@@ -1299,8 +1319,12 @@ public class Sets {
       }
       startKeyPtr = UnsafeAccess.malloc(keySize + KEY_SIZE + 2 * Utils.SIZEOF_BYTE);
       int newKeySize = buildKey(keyPtr, keySize, Commons.ZERO, 1, startKeyPtr);
-      endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, newKeySize - 1);      
-      long deleted = map.deleteRange(startKeyPtr, newKeySize, endKeyPtr, newKeySize - 1);      
+      int endKeySize = newKeySize - 1;
+      endKeyPtr = Utils.prefixKeyEnd(startKeyPtr, endKeySize);      
+      if (endKeyPtr == 0) {
+        endKeySize = 0;
+      }
+      long deleted = map.deleteRange(startKeyPtr, newKeySize, endKeyPtr, endKeySize);      
       return deleted > 0;
     } finally {
       if (startKeyPtr > 0) {
@@ -1769,13 +1793,16 @@ public class Sets {
     UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
     UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE,(byte) 0);
     keySize += KEY_SIZE + 2 * Utils.SIZEOF_BYTE;
-    long endPtr = Utils.prefixKeyEnd(kPtr, keySize - 1);
-    int endKeySize = keySize - 1;     
+    int endKeySize = keySize  - 1;
+    long endPtr = Utils.prefixKeyEnd(kPtr, endKeySize);
+    if (endPtr == 0) {
+      endKeySize = 0;
+    }
     BigSortedMapScanner scanner = safe? 
         map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
           map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
     if (scanner == null) {
-        UnsafeAccess.free(endPtr);
+        if (endPtr > 0) UnsafeAccess.free(endPtr);
         UnsafeAccess.free(kPtr);
         return null;
     }

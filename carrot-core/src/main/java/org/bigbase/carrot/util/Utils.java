@@ -475,6 +475,11 @@ public class Utils {
       }
     });
   }
+
+  public static void sortValueScores(List<? extends ValueScore> list) {
+    Collections.sort(list);
+  }
+
   
   public static void sortKeyValues(List<? extends KeyValue> list) {
     Collections.sort(list, new Comparator<KeyValue> () {
@@ -506,7 +511,7 @@ public class Utils {
       }
     }
     UnsafeAccess.free(end);
-    return -1;
+    return 0;
   }
   
   

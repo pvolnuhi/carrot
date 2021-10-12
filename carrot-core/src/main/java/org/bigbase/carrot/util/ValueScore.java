@@ -29,4 +29,14 @@ public class ValueScore extends Key{
   public String toString() {
     return super.toString() + " score="+ score;
   }
+  
+  @Override
+  public int compareTo(Key o) {
+    ValueScore vs = (ValueScore) o;
+    if (score == vs.score) {
+      return Utils.compareTo(address, length, o.address, o.length);
+    } else {
+      return score > vs.score? 1: -1;
+    }
+  }
 }

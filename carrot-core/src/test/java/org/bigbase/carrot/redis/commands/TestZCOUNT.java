@@ -21,6 +21,8 @@ public class TestZCOUNT extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "ZADD key 10.0 v1 9.0 v2 8.0 v3 7.0 v4 6.0 v5",                         /* 5 */
+      "ZCOUNT key -inf +inf",                                                 /* 10 */ 
+
       "ZADD key 5.0 v6 4.0 v7 3.0 v8 2.0 v9 1.0 v10",                         /* 5 */
       "ZCARD key",                                                            /* 10 */
       "ZCOUNT key -inf +inf",                                                 /* 10 */ 
@@ -39,6 +41,8 @@ public class TestZCOUNT extends CommandBase {
   protected String[] validResponses = new String[] {
       ":5\r\n",
       ":5\r\n",
+      ":5\r\n",
+      
       ":10\r\n",
       ":10\r\n",
       

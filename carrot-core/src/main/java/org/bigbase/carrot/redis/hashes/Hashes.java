@@ -282,10 +282,14 @@ public class Hashes {
       UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE, (byte)0);
-      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1);            
-      long total = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
+      int endKeySize = newKeySize - 1;
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, endKeySize);
+      if (endKeyPtr == 0) {
+        endKeySize = 0;
+      }
+      long total = map.deleteRange(kPtr, newKeySize, endKeyPtr, endKeySize);
       UnsafeAccess.free(kPtr);
-      UnsafeAccess.free(endKeyPtr);
+      if (endKeyPtr > 0) UnsafeAccess.free(endKeyPtr);
       return total > 0;
     } finally {
       if (lock) KeysLocker.writeUnlock(k);
@@ -823,8 +827,12 @@ public class Hashes {
       readLock(k);
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
       long ptr = keyArena.get();
-      endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
-      BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize - 1);
+      int endKeySize = kSize - 1;
+      endKeyPtr = Utils.prefixKeyEnd(ptr, endKeySize);
+      if (endKeyPtr == 0) {
+        endKeySize = 0;
+      }
+      BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, endKeySize);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -869,9 +877,14 @@ public class Hashes {
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.putByte(kPtr + keySize + KEY_SIZE + Utils.SIZEOF_BYTE, (byte)0);
       
-      endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
+      int endKeySize = newKeySize - 1;
       
-      BigSortedMapScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, newKeySize - 1);
+      endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize - 1); 
+      if (endKeyPtr == 0) {
+        endKeySize = 0;
+      }
+      
+      BigSortedMapScanner scanner = map.getScanner(kPtr, newKeySize, endKeyPtr, endKeySize);
       if (scanner == null) {
         return true; // empty or does not exists
       }
@@ -914,8 +927,12 @@ public class Hashes {
       readLock(k);      
       int kSize = buildKey(keyPtr, keySize, Commons.ZERO, 1);
       long ptr = keyArena.get();
-      endKeyPtr = Utils.prefixKeyEnd(ptr, kSize - 1);
-      BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, kSize -1);
+      int endKeySize = kSize - 1;
+      endKeyPtr = Utils.prefixKeyEnd(ptr, endKeySize);
+      if (endKeyPtr == 0) {
+        endKeySize = 0;
+      }
+      BigSortedMapScanner scanner = map.getScanner(ptr, kSize, endKeyPtr, endKeySize);
       if (scanner == null) {
         return 0; // empty or does not exists
       }
@@ -2261,42 +2278,6 @@ public class Hashes {
   }
   
   /**
-   * TODO: pattern matching
-   * Create scanner from  a cursor, which defined by pairs of last 
-   * seen key and field
-   * @param map ordered map
-   * @param lastSeenKeyPtr last seen key address
-   * @param lastSeenKeySize  last seen key size
-   * @param lastFieldSeenPtr last seen field address, if 0 - start from beginning
-   * @param lastFieldSeenSize last seen field size
-   * @return hash scanner
-   */
-  public static HashScanner getScanner(BigSortedMap map, long lastSeenKeyPtr, 
-      int lastSeenKeySize, long lastFieldSeenPtr, int lastFieldSeenSize) {
-    
-    
-    //TODO: this code is not OK
-    
-    
-    int startKeySize = keySizeWithPrefix(lastSeenKeyPtr);
-    long stopKeyPtr = Utils.prefixKeyEnd(lastSeenKeyPtr, startKeySize);
-    if (stopKeyPtr == -1) {
-      return null;
-    }
-    BigSortedMapScanner scanner = map.getScanner(lastSeenKeyPtr, lastSeenKeySize, 
-      stopKeyPtr, startKeySize);
-    // TODO - test this call
-    HashScanner hs = null;
-    try {
-      hs = new HashScanner(scanner);
-    } catch (IOException e) {
-      return null;
-    }
-    //TODO: Memory deallocation?
-    return hs;
-  }
-  
-  /**
    * Get hash scanner for hash operations, as since we can create multiple
    * hash scanners in the same thread we can not use thread local variables
    * WARNING: we can not create multiple scanners in a single thread
@@ -2334,12 +2315,14 @@ public class Hashes {
     
     long endPtr = Utils.prefixKeyEnd(kPtr, keySize - 1);
     int endKeySize = keySize - 1; 
-        
+    if (endPtr == 0) {
+      endKeySize = 0;
+    }
     BigSortedMapScanner scanner = safe? 
         map.getSafeScanner(kPtr, keySize, endPtr, endKeySize, reverse): 
           map.getScanner(kPtr, keySize, endPtr, endKeySize, reverse);
     if (scanner == null) {
-      UnsafeAccess.free(endPtr);
+      if (endPtr > 0) UnsafeAccess.free(endPtr);
       UnsafeAccess.free(kPtr);
       return null;
     }
@@ -2349,7 +2332,7 @@ public class Hashes {
       hs.setDisposeKeysOnClose(true);
     } catch (IOException e) {
       try {
-        UnsafeAccess.free(endPtr);
+        if(endPtr > 0) UnsafeAccess.free(endPtr);
         UnsafeAccess.free(kPtr);
         scanner.close();
       } catch (IOException e1) {

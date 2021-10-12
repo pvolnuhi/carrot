@@ -212,9 +212,9 @@ public class ZSetsAPITest {
     testIncrement();
     tearDown();
 
-    setUp();
-    testADDCorrectness();
-    tearDown();
+    //setUp();
+    //testADDCorrectness();
+    //tearDown();
     
     setUp();
     testZCOUNT();

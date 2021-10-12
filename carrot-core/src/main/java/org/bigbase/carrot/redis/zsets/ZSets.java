@@ -596,13 +596,13 @@ public class ZSets {
     return added;
   }
 
-  
   public static long ZADD_NEW(BigSortedMap map, long keyPtr, int keySize, List<ValueScore> members) {
     //TODO: fix temp garbage waterfall
     RedisConf conf = RedisConf.getInstance();
     int maxCompactSize = conf.getMaxZSetCompactSize();
-    Utils.sortKeys(members);
+    Utils.sortValueScores(members);
     Utils.dedup(members);
+
     List<ValueScore> copy = Utils.copyValueScores(members);
     
     int added = Sets.SADD_NEW_ZADD(map, keyPtr, keySize, members);
@@ -613,6 +613,11 @@ public class ZSets {
     return added;
   }
   
+  private static void dump(List<ValueScore> members) {
+    for(ValueScore v: members) {
+      System.out.println(v.score + " : "+ Utils.toHexString(v.address, v.length));
+    }
+  }
   /**
    * TODO: fix memory abuse
    * @param scores
@@ -798,7 +803,6 @@ public class ZSets {
     return ZADD_GENERIC(map, keyPtr, keySize, scores, memberPtrs, memberSizes, 
       changed, MutationOptions.NONE);
   }
-  
   
   /**
    * Creates Hash from Set. Normal mode has two data structures: Hash and Set
@@ -1072,6 +1076,9 @@ public class ZSets {
       try {
         while(scanner.hasNext()) {
           count++;
+          /*DEBUG*/ 
+          long ptr = scanner.memberAddress();
+          int size = scanner.memberSize();
           scanner.next();
         }
       } catch (IOException e) {
@@ -2912,6 +2919,7 @@ public class ZSets {
   
   /**
    * TODO: VERIFY NEW CARDINALITY CODE
+   * TODO: memory leaks
    * 
    * When all the elements in a sorted set are inserted with the same score, in order 
    * to force lexicographical ordering, this command removes all elements in the sorted set 
@@ -3040,7 +3048,7 @@ public class ZSets {
             size = Utils.readUVInt(buf);
             sizeSize = Utils.sizeUVInt(size);
             startPtr = Utils.prefixKeyEnd(buf + sizeSize + Utils.SIZEOF_DOUBLE, size - Utils.SIZEOF_DOUBLE);
-            startSize = size - Utils.SIZEOF_DOUBLE;
+            startSize = startPtr == 0? 0: size - Utils.SIZEOF_DOUBLE;
             hashScanner =
                 Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
             if (hashScanner == null) {
@@ -3110,7 +3118,7 @@ public class ZSets {
             int size = Utils.readUVInt(buf);
             int sizeSize = Utils.sizeUVInt(size);
             sPtr = Utils.prefixKeyEnd(buf + sizeSize, size);
-            sSize = size;
+            sSize = sPtr == 0? 0: size;
             setScanner = Sets.getScanner(map, keyPtr, keySize, sPtr, sSize, 0, 0, false);
             if (setScanner == null) { 
               break; 

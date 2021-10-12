@@ -36,6 +36,7 @@ import org.bigbase.carrot.redis.db.DBSystem;
 import org.bigbase.carrot.redis.util.Utils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public abstract class CommandBase {
@@ -90,6 +91,7 @@ public abstract class CommandBase {
     }
   }
   
+  @Ignore
   @Test
   public void testValidRequestsNetworkMode() throws UnknownHostException, IOException, InterruptedException {
     // Start server

@@ -2077,9 +2077,7 @@ public class BigSortedMap {
   
   public BigSortedMapScanner getPrefixScanner(long startRowPtr, int startRowLength) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
-    if (endRowPtr == -1) {
-      endRowPtr = 0;
-    }
+    
     int endRowLength = endRowPtr == 0? 0: startRowLength;
     BigSortedMapScanner scanner =
         getScanner(startRowPtr, startRowLength, endRowPtr, endRowLength);
@@ -2101,9 +2099,7 @@ public class BigSortedMap {
   
   public BigSortedMapScanner getPrefixScanner(long startRowPtr, int startRowLength, boolean reverse) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
-    if (endRowPtr == -1) {
-      endRowPtr = 0;
-    }
+    
     int endRowLength = endRowPtr == 0? 0: startRowLength;
 
     BigSortedMapScanner scanner =
@@ -2127,11 +2123,12 @@ public class BigSortedMap {
   
   public BigSortedMapScanner getSafePrefixScanner(long startRowPtr, int startRowLength) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
-    if (endRowPtr == -1) {
-      return null;
+    int endRowLength = startRowLength;
+    if (endRowPtr == 0) {
+      endRowLength = 0;
     }
     
-    return getSafeScanner(startRowPtr, startRowLength, endRowPtr, startRowLength);
+    return getSafeScanner(startRowPtr, startRowLength, endRowPtr, endRowLength);
   }
   
   /**
@@ -2145,11 +2142,12 @@ public class BigSortedMap {
   public BigSortedMapScanner getSafePrefixScanner(long startRowPtr, int startRowLength, 
       boolean reverse) {
     long endRowPtr = Utils.prefixKeyEnd(startRowPtr, startRowLength);
-    if (endRowPtr == -1) {
-      return null;
+    int endRowLength = startRowLength;
+    if (endRowPtr == 0) {
+      endRowLength = 0;;
     }
     
-    return getSafeScanner(startRowPtr, startRowLength, endRowPtr, startRowLength, reverse);
+    return getSafeScanner(startRowPtr, startRowLength, endRowPtr, endRowLength, reverse);
   }
   /**
    * Disposes map, deallocate all the memory

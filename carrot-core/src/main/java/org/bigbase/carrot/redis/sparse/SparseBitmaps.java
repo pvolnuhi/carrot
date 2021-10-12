@@ -443,10 +443,14 @@ public class SparseBitmaps {
       UnsafeAccess.putByte(kPtr, (byte)DataType.SBITMAP.ordinal());
       UnsafeAccess.putInt(kPtr + Utils.SIZEOF_BYTE, keySize);
       UnsafeAccess.copy(keyPtr, kPtr + KEY_SIZE + Utils.SIZEOF_BYTE, keySize);
-      long endKeyPtr = Utils.prefixKeyEnd(kPtr, newKeySize);
-      long deleted = map.deleteRange(kPtr, newKeySize, endKeyPtr, newKeySize);
+      int endKeySize  = newKeySize;
+      long endKeyPtr = Utils.prefixKeyEnd(kPtr, endKeySize);
+      if (endKeyPtr == 0) {
+        endKeySize  = 0;
+      }
+      long deleted = map.deleteRange(kPtr, newKeySize, endKeyPtr, endKeySize);
       UnsafeAccess.free(kPtr);
-      UnsafeAccess.free(endKeyPtr);
+      if (endKeyPtr > 0) UnsafeAccess.free(endKeyPtr);
       return deleted > 0;
     } finally {
       KeysLocker.writeUnlock(k);
