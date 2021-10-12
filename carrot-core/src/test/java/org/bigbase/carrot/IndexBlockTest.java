@@ -37,7 +37,7 @@ import org.junit.Ignore;
 public class IndexBlockTest {
   
   static {
-    //UnsafeAccess.debug = true;
+    UnsafeAccess.debug = true;
   }
   
   @Test

@@ -1677,29 +1677,20 @@ public final class DataBlock  {
    * @return true if only exact overwrite, false - otherwise
    */
   private boolean compactExpandIfNecessary(int kvLength) {
-    if (kvLength <=0) return false;
+    if (kvLength <= 0) return false;
     int dataSize = getDataInBlockSize();
     int blockSize = getBlockSize();
     if (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize) {
-      // try compact first (remove deleted, updated)
-      //compact(true);
-      // Get data size again
-      //dataSize = getDataInBlockSize();
-      //if (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize) {
-        // try to expand block
-        boolean res = expand(dataSize + kvLength + RECORD_TOTAL_OVERHEAD);
-        blockSize = getBlockSize();
-        if (!res || (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize)) {
-          // Still not enough room
-          // Only exact overwrite (key & value) and only if
-          // there are no conflicting Tx or snapshots exist
-          return true;
-        }
-      //}
+      boolean res = expand(dataSize + kvLength + RECORD_TOTAL_OVERHEAD);
+      blockSize = getBlockSize();
+      if (!res || (dataSize + kvLength + RECORD_TOTAL_OVERHEAD > blockSize)) {
+        // Still not enough room
+        // Only exact overwrite (key & value) 
+        return true;
+      }
     }
     return false;
-  }
-  
+  }  
   
   private static long getRecordSeqId(long recordAddress) {
   //  short keyLen = blockKeyLength(recordAddress);
@@ -1987,14 +1978,14 @@ public final class DataBlock  {
     boolean freeValue = false;
     // TODO: result check
     int newKVLength = INT_SIZE + ADDRESS_SIZE +
-        (type == AllocType.EXT_VALUE? keyLength:0);// 4 - contains overall length, 8 - address 
+        (type == AllocType.EXT_VALUE? keyLength: 0);// 4 - contains overall length, 8 - address 
 
     setMutationOp(true);
 
     try {
       writeLock();
-      
-      onlyExactOverwrite = compactExpandIfNecessary(newKVLength);
+      // This call is not needed if keyOverwite = true
+      //onlyExactOverwrite = compactExpandIfNecessary(newKVLength);
       int dataSize = getDataInBlockSize();
       int blockSize = getBlockSize();
       
@@ -2032,14 +2023,23 @@ public final class DataBlock  {
       // Overwrite only if there are no conflicting Tx or snapshots
       boolean overwrite = recordOverwrite;
 
-      if (onlyExactOverwrite && !overwrite && insert) {
-        // Failed to put - split the block
-        // Do not free value
-        return false;
-      }
+//      if (onlyExactOverwrite && !overwrite && insert) {
+//        // Failed to put - split the block
+//        // Do not free value
+//        return false;
+//      }
             
       long recAddress = 0;
       if (insert) {
+        onlyExactOverwrite = compactExpandIfNecessary(newKVLength);
+        if (onlyExactOverwrite) {
+          return false;
+        }
+        if (blockSize != getBlockSize()) {
+          blockSize = getBlockSize();
+          addr = search(keyPtr, keyLength, version);
+        }
+        dataSize = getDataInBlockSize();
         // New K-V INSERT or we can't overwrite because of active Tx or snapshot
         // move from offset to offset + moveDist
         if (type == AllocType.EXT_KEY_VALUE) {
@@ -2089,6 +2089,7 @@ public final class DataBlock  {
         // are external allocations of the same type
         // UPDATE existing - both are external records
         // We do overwrite of existing record and use existing external allocation
+        // As since this is a full overwrite - no need to expand data block
         recAddress = getExternalRecordAddress(addr);
         freeValue = true;
         if (type == AllocType.EXT_KEY_VALUE) {
@@ -2119,11 +2120,21 @@ public final class DataBlock  {
         int existRecLength = keylen + vallen + RECORD_TOTAL_OVERHEAD;
         
         int toMove = newRecLength - existRecLength;
-        if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
-          // failed to insert, split is required
-          return false;
+//        if (onlyExactOverwrite && (dataSize + toMove > blockSize)) {
+//          // failed to insert, split is required
+//          return false;
+//        }
+        if (dataSize + toMove > blockSize) {
+          boolean result = expand(dataSize + toMove);
+          if (!result) {
+            return false;
+          }
+          if (blockSize != getBlockSize()) {
+            blockSize = getBlockSize();
+            addr = search(keyPtr, keyLength, version);
+
+          }
         }
-        
         if (type == AllocType.EXT_KEY_VALUE) {
           recAddress = allocateAndCopyExternalKeyValue(keyPtr, keyLength, valuePtr, 
             valueLength);
@@ -2174,7 +2185,8 @@ public final class DataBlock  {
         // As since keys are the same, both new and old records have the same type of 
         // external allocation, either EXT_VALUE or EXT_KEY_VALUE
         // Deallocate existing allocation
-
+        // Keys are the same - both records have the same allocation type
+        // No need to expand
         if (type == AllocType.EXT_KEY_VALUE) {
           //TODO: realloc reconsider
           freeValue = true;

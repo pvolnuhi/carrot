@@ -138,7 +138,9 @@ public class IndexBlockLargeKVsTest extends IndexBlockTest{
     /*DEBUG*/ System.out.println("FILL SEED="  + seed);
     int maxSize = 4096;
     boolean result = true;
+    int count = 0;
     while(result == true) {
+      /*DEBUG*/ System.out.println(count++);
       byte[] key = new byte[r.nextInt(maxSize) + 2];
       r.nextBytes(key);
       long ptr = UnsafeAccess.malloc(key.length);
