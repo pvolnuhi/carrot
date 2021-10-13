@@ -91,19 +91,30 @@ public abstract class CommandBase {
     }
   }
   
-  @Ignore
+  private static boolean serverStarted = false;
+  private static Socket client;
+  private static DataOutputStream os;
+  private static DataInputStream is;
+ 
+  //@Ignore
   @Test
   public void testValidRequestsNetworkMode() throws UnknownHostException, IOException, InterruptedException {
     // Start server
-    RedisServer.start();    
-    
     // Connect client
-    Socket client = new Socket("localhost", RedisConf.getInstance().getServerPort());
-    DataOutputStream os =new DataOutputStream(client.getOutputStream());
-    DataInputStream is = new DataInputStream(client.getInputStream());
     
-    String[] validRequests = getValidRequests();
-    String[] validResponses = getValidResponses();
+    if (!serverStarted) {
+      RedisServer.start(); 
+      // Connect client
+      client = new Socket("localhost", RedisConf.getInstance().getServerPort());
+      os = new DataOutputStream(client.getOutputStream());
+      is = new DataInputStream(client.getInputStream());
+      serverStarted = true;
+
+    }
+    
+    
+    String[] validRequests = addFlushallRequest(getValidRequests());
+    String[] validResponses = addFlushallResponce(getValidResponses());
     
     for (int i = 0; i < validRequests.length; i++) {
       while(is.available() > 0) {
@@ -131,8 +142,22 @@ public abstract class CommandBase {
       }
     }
     
-    client.close();
-    RedisServer.shutdown();
+    //client.close();
+    //RedisServer.shutdown();
+  }
+  
+  private String[] addFlushallRequest(String[] requests) {
+    String[] arr = new String[requests.length + 1];
+    arr[0] = "flushall";
+    System.arraycopy(requests, 0, arr, 1,  requests.length);
+    return arr;
+  }
+  
+  private String[] addFlushallResponce(String[] resp) {
+    String[] arr = new String[resp.length + 1];
+    arr[0] = "+OK\r\n";
+    System.arraycopy(resp, 0, arr, 1,  resp.length);
+    return arr;
   }
   
   //@Ignore
