@@ -17,6 +17,8 @@
  */
 package org.bigbase.carrot.redis.commands;
 
+import org.bigbase.carrot.redis.db.DBSystem;
+import org.junit.After;
 
 public class TestBGSAVE extends CommandBase {
   
@@ -56,5 +58,9 @@ public class TestBGSAVE extends CommandBase {
   }
   protected String[] getInvalidResponses() {
     return invalidResponses;
+  }
+  @After
+  public void tearDown() {
+    DBSystem.reset();
   }
 }

@@ -18,7 +18,7 @@
 package org.bigbase.carrot.redis.commands;
 
 //TODO: fix this test
-public abstract class TestSAVE extends CommandBase {
+public class TestSAVE extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "SAVE"               /* OK  */
@@ -30,12 +30,12 @@ public abstract class TestSAVE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "save x y",                      /* unsupported command */
+      "sav x y",                      /* unsupported command */
       "SAVE COUNT X",                  /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: save\r\n",
+    "-ERR: Unsupported command: SAV\r\n",
     "-ERR: Wrong number of arguments\r\n",
   };
   

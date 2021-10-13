@@ -2230,6 +2230,10 @@ public class BigSortedMap {
   // WRITE DATA  
   public void snapshot() {
     // Check if dir exists
+    // Check if snapshotDir is NULL - during tests
+    if (snapshotDir == null) {
+      snapshotDir = RedisConf.getInstance().getDataDir(0);
+    }
     File dir = new File(snapshotDir);
     if (dir.exists() == false) {
       if (dir.mkdirs() == false) {
@@ -2260,7 +2264,9 @@ public class BigSortedMap {
     int version = -1;
     ByteBuffer buf = ByteBuffer.allocateDirect(BUFFER_SIZE);//bb.get();
     buf.clear();
+    boolean locked = false;
     while (true) {
+      locked = false;
       try {
         if (ib != null) {
           version = ib.getSeqNumberSplitOrMerge();
@@ -2274,6 +2280,7 @@ public class BigSortedMap {
         }
         // Lock current index block
         cur.readLock();
+        locked = true;
         if (ib != null && ib.hasRecentUnsafeModification()) {
           int v = ib.getSeqNumberSplitOrMerge();
           if (v != version) {
@@ -2293,7 +2300,7 @@ public class BigSortedMap {
         e.printStackTrace();
         return;
       } finally {
-        if (cur != null) {
+        if (cur != null && locked) {
           cur.readUnlock();
         }
       }

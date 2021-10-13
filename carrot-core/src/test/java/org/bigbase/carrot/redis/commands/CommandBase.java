@@ -66,6 +66,7 @@ public abstract class CommandBase {
   //@Ignore
   @Test
   public void testValidRequests() {
+    /*DEBUG*/ System.out.println("testValidRequests starts");
     String[] validRequests = getValidRequests();
     String[] validResponses = getValidResponses();
     
@@ -89,6 +90,8 @@ public abstract class CommandBase {
         assertEquals(validResponses[i], result);
       }
     }
+    /*DEBUG*/ System.out.println("testValidRequests finishes");
+
   }
   
   private static boolean serverStarted = false;
@@ -101,7 +104,8 @@ public abstract class CommandBase {
   public void testValidRequestsNetworkMode() throws UnknownHostException, IOException, InterruptedException {
     // Start server
     // Connect client
-    
+    /*DEBUG*/ System.out.println("testValidRequestsNetworkMode starts");
+
     if (!serverStarted) {
       RedisServer.start(); 
       // Connect client
@@ -111,7 +115,6 @@ public abstract class CommandBase {
       serverStarted = true;
 
     }
-    
     
     String[] validRequests = addFlushallRequest(getValidRequests());
     String[] validResponses = addFlushallResponce(getValidResponses());
@@ -141,9 +144,8 @@ public abstract class CommandBase {
         assertEquals(validResponses[i], result);
       }
     }
-    
-    //client.close();
-    //RedisServer.shutdown();
+    /*DEBUG*/ System.out.println("testValidRequestsNetworkMode finishes");
+
   }
   
   private String[] addFlushallRequest(String[] requests) {
@@ -163,6 +165,8 @@ public abstract class CommandBase {
   //@Ignore
   @Test
   public void testValidRequestsInline() {
+    /*DEBUG*/ System.out.println("testValidRequestsInline starts");
+
     String[] validRequests = getValidRequests();
     String[] validResponses = getValidResponses();
     for (int i = 0; i < validRequests.length; i++) {
@@ -179,11 +183,15 @@ public abstract class CommandBase {
         assertEquals(validResponses[i], result);
       }    
     }
+    /*DEBUG*/ System.out.println("testValidRequestsInline finishes");
+
   }
   
   //@Ignore
   @Test
   public void testValidRequestsDirectBuffer() {
+    /*DEBUG*/ System.out.println("testValidRequestsDirectBuffer starts");
+
     String[] validRequests = getValidRequests();
     String[] validResponses = getValidResponses();
     for (int i = 0; i < validRequests.length; i++) {
@@ -200,11 +208,15 @@ public abstract class CommandBase {
         assertEquals(validResponses[i], result);
       }
     }
+    /*DEBUG*/ System.out.println("testValidRequestsDirectBuffer finishes");
+
   }
   
   //@Ignore
   @Test
   public void testValidRequestsInlineDirectBuffer() {
+    /*DEBUG*/ System.out.println("testValidRequestsInlineDirectBuffer starts");
+
     String[] validRequests = getValidRequests();
     String[] validResponses = getValidResponses();
     for (int i = 0; i < validRequests.length; i++) {
@@ -221,10 +233,12 @@ public abstract class CommandBase {
         assertEquals(validResponses[i], result);
       }
     }
+    /*DEBUG*/ System.out.println("testValidRequestsInlineDirectBuffer starts");
+
   }
   // INVALID REQUESTS
   
- // @Ignore
+  //@Ignore
   @Test
   public void testInValidRequests() {
     String[] invalidRequests = getInvalidRequests();

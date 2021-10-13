@@ -18,8 +18,7 @@
 package org.bigbase.carrot.redis.commands;
 
 
-//TODO : fix it
-public abstract class TestLASTSAVE extends CommandBase {
+public class TestLASTSAVE extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "SAVE"               /* OK  */,
@@ -33,12 +32,12 @@ public abstract class TestLASTSAVE extends CommandBase {
   
   
   protected String[] invalidRequests = new String[] {
-      "lastsave x y",                      /* unsupported command */
+      "lastsav x y",                      /* unsupported command */
       "LASTSAVE COUNT X",                  /* wrong number of arguments*/
   };
   
   protected String[] invalidResponses = new String[] {
-    "-ERR Unsupported command: lastsave\r\n",
+    "-ERR: Unsupported command: LASTSAV\r\n",
     "-ERR: Wrong number of arguments\r\n",
   };
   

@@ -216,11 +216,19 @@ public class Server {
    * >= 3.2.2: Added the SCHEDULE option.
    * @param map sorted map storage
    */
+  static Thread snapshotThread;
+  
   public static void BGSAVE(BigSortedMap map) {
-    //SnapshotManager manager = SnapshotManager.getInstance();
-    //manager.takeSnapshot(map, false);   
+    if (snapshotThread != null && snapshotThread.isAlive()) {
+      try {
+        snapshotThread.join();
+      } catch(InterruptedException e) {
+        // Doo - doo - doo
+      }
+    }
     Runnable r = () -> map.snapshot();
-    new Thread(r).start();
+    snapshotThread = new Thread(r);
+    snapshotThread.start();
   }
   
   /**
