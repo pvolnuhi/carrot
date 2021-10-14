@@ -23,7 +23,7 @@ import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
 
 public class FLUSHALL implements RedisCommand {
-
+  // TODO: ASYNC support
   @Override
   public void execute(BigSortedMap map, long inDataPtr, long outBufferPtr, int outBufferSize) {
     int numArgs = UnsafeAccess.toInt(inDataPtr);
@@ -41,7 +41,9 @@ public class FLUSHALL implements RedisCommand {
       inDataPtr += Utils.SIZEOF_INT;
       
       if (Utils.compareTo(SYNC_FLAG, SYNC_LENGTH, inDataPtr, size) != 0 && 
-          Utils.compareTo(ASYNC_FLAG, ASYNC_LENGTH, inDataPtr, size) != 0) {
+          Utils.compareTo(SYNC_FLAG_LOWER, SYNC_LENGTH, inDataPtr, size) != 0 &&
+          Utils.compareTo(ASYNC_FLAG, ASYNC_LENGTH, inDataPtr, size) != 0 && 
+          Utils.compareTo(ASYNC_FLAG_LOWER, ASYNC_LENGTH, inDataPtr, size) != 0 ) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_UNSUPPORTED_COMMAND, ": FLUSHALL " + 
             Utils.toString(inDataPtr, size));
         return;

@@ -80,7 +80,8 @@ public class SET implements RedisCommand {
         // Check GET
         int size = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
-        if (Utils.compareTo(GET_FLAG, GET_LENGTH, inDataPtr, size) == 0) {
+        if (Utils.compareTo(GET_FLAG, GET_LENGTH, inDataPtr, size) == 0 ||
+            Utils.compareTo(GET_FLAG_LOWER, GET_LENGTH, inDataPtr, size) == 0) {
           withGet = true;
           argsCount += 1;
           if (argsCount < numArgs) {

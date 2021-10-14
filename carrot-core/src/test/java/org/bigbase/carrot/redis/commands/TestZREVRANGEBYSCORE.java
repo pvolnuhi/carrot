@@ -55,7 +55,7 @@ public class TestZREVRANGEBYSCORE extends CommandBase {
       "ZREVRANGEBYSCORE key (7.0 9.9 WITHSCORES",                                               /* 1 */
       "ZREVRANGEBYSCORE key 7.0 9.9 WITHSCORES",                                                /* 2 */
       "ZREVRANGEBYSCORE key (8.0 9.9 WITHSCORES",                                               /* 0 */
-      "zrevrangebyscore key 8.0 9.9 WITHSCORES"                                                 /* 1 */
+      "zrevrangebyscore key 8.0 9.9 withscores"                                                 /* 1 */
       
   };
   

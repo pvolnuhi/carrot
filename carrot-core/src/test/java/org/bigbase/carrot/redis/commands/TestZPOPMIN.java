@@ -52,7 +52,7 @@ public class TestZPOPMIN extends CommandBase {
       
       "ZADD key 10.0 c1 9.0 c2 8.0 c3 7.0 c4 6.0 c5",                         /* 5 */
       "ZADD key 5.0 c6 4.0 c7 3.0 c8 2.0 c9 1.0 c10",                         /* 5 */
-      "ZPOPMIN key 11",                                                       /* ALL */
+      "zpopmin key 11",                                                       /* ALL */
       "ZCARD key",                                                            /* 0 */
       "ZADD key 10.0 c1 9.0 c2 8.0 c3 7.0 c4 6.0 c5",                         /* 5 */
       "ZADD key 5.0 c6 4.0 c7 3.0 c8 2.0 c9 1.0 c10",                         /* 5 */ 

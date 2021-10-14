@@ -116,12 +116,14 @@ public class HSCAN implements RedisCommand {
         int size = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
         
-        if (Utils.compareTo(MATCH_FLAG, MATCH_LENGTH, inDataPtr, size) == 0) {
+        if (Utils.compareTo(MATCH_FLAG, MATCH_LENGTH, inDataPtr, size) == 0 || 
+            Utils.compareTo(MATCH_FLAG_LOWER, MATCH_LENGTH, inDataPtr, size) == 0) {
           inDataPtr += size;
           size = UnsafeAccess.toInt(inDataPtr);
           inDataPtr += Utils.SIZEOF_INT;
           regex = Utils.toString(inDataPtr, size);
-        } else if (Utils.compareTo(COUNT_FLAG, COUNT_LENGTH, inDataPtr, size) == 0) {
+        } else if (Utils.compareTo(COUNT_FLAG, COUNT_LENGTH, inDataPtr, size) == 0 ||
+            Utils.compareTo(COUNT_FLAG_LOWER, COUNT_LENGTH, inDataPtr, size) == 0) {
           inDataPtr += size;
           size = UnsafeAccess.toInt(inDataPtr);
           inDataPtr += Utils.SIZEOF_INT;
@@ -133,7 +135,8 @@ public class HSCAN implements RedisCommand {
       } else if (numArgs == 7) {
         int size = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
-        if (Utils.compareTo(MATCH_FLAG, MATCH_LENGTH, inDataPtr, size) == 0) {
+        if (Utils.compareTo(MATCH_FLAG, MATCH_LENGTH, inDataPtr, size) == 0 ||
+            Utils.compareTo(MATCH_FLAG_LOWER, MATCH_LENGTH, inDataPtr, size) == 0) {
           inDataPtr += size;
           size = UnsafeAccess.toInt(inDataPtr);
           inDataPtr += Utils.SIZEOF_INT;
@@ -145,7 +148,8 @@ public class HSCAN implements RedisCommand {
         }
         size = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
-        if (Utils.compareTo(COUNT_FLAG, COUNT_LENGTH, inDataPtr, size) == 0) {
+        if (Utils.compareTo(COUNT_FLAG, COUNT_LENGTH, inDataPtr, size) == 0 ||
+            Utils.compareTo(COUNT_FLAG_LOWER, COUNT_LENGTH, inDataPtr, size) == 0) {
           inDataPtr += size;
           size = UnsafeAccess.toInt(inDataPtr);
           inDataPtr += Utils.SIZEOF_INT;

@@ -28,13 +28,13 @@ public class TestSSCAN extends CommandBase {
       "SSCAN key 2",
       "SSCAN key 3",
       "SSCAN key 4",
-      "SSCAN key 0 COUNT 11",
+      "sscan key 0 count 11",
       "SSCAN key 6 COUNT 11",
       "SSCAN key 7 COUNT 11",
       "SSCAN key 8 COUNT 11",
       "SSCAN key 9 COUNT 11",
       // Scan all which start with 'a'
-      "SSCAN key 0 MATCH ^a.* COUNT 10",
+      "sscan key 0 match ^a.* count 10",
       "SSCAN key 11 MATCH ^a.* COUNT 10",
       "SSCAN key 12 MATCH ^a.* COUNT 10",
       

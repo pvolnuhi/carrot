@@ -24,9 +24,9 @@ public class TestLMOVE extends CommandBase {
       "RPUSH key2 v21 v22 v23 v24 v25",       /* 5 */
       
       "LMOVE key1 key2 LEFT LEFT",        /* v11 , v21 ... v25*/
-      "LMOVE key1 key2 LEFT RIGHT",       /* v11, v21 .. v25 , v12*/
+      "lmove key1 key2 left right",       /* v11, v21 .. v25 , v12*/
       "LMOVE key1 key2 RIGHT LEFT",       /* v15, v11, v21 .. v25, v12 */
-      "LMOVE key1 key2 RIGHT RIGHT",      /* v15, v11, v21 .. v25, v12, v14*/
+      "lmove key1 key2 right right",      /* v15, v11, v21 .. v25, v12, v14*/
       "LLEN key1",                        /* 1 */
       "LLEN key2",                        /* 9 */
       
@@ -37,8 +37,8 @@ public class TestLMOVE extends CommandBase {
       
       "LMOVE key1 key2 LEFT RIGHT",        /* NULL */
       
-      "LMOVE key2 key1 RIGHT LEFT",       /* v14 */
-      "LMOVE key2 key1 LEFT LEFT",        /* v13, v14*/
+      "lmove key2 key1 right left",       /* v14 */
+      "lmove key2 key1 left left",        /* v13, v14*/
       "LMOVE key2 key1 RIGHT LEFT",       /* v12, v13, v14 */
       "LMOVE key2 key1 LEFT RIGHT",       /* v12, v13, v14, v15 */
       "LMOVE key2 key1 LEFT LEFT",        /* v11, v12, v13, v14, v15 */

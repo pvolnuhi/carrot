@@ -49,7 +49,7 @@ public class TestZRANGE extends CommandBase {
       "ZRANGE key 2 5",                                                    /* 4 */
       "ZRANGE key 3 9",                                                    /* 7 */
       "ZRANGE key 2 5 WITHSCORES",                                         /* 4 */
-      "zrange key 3 9 WITHSCORES",                                         /* 7 */
+      "zrange key 3 9 withscores",                                         /* 7 */
   };
   
   protected String[] validResponses = new String[] {

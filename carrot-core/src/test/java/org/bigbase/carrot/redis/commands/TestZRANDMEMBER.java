@@ -33,7 +33,7 @@ public class TestZRANDMEMBER extends CommandBase {
       "ZRANDMEMBER key 100", 
       "ZRANDMEMBER key 1000", 
 
-      "ZRANDMEMBER key 10 WITHSCORES", 
+      "zrandmember key 10 withscores", 
       "ZRANDMEMBER key 100 WITHSCORES", 
       "ZRANDMEMBER key 1000 WITHSCORES", 
  
@@ -71,7 +71,7 @@ public class TestZRANDMEMBER extends CommandBase {
       "ZRANDMEMBER key -6 WITHSCORES",
       "ZRANDMEMBER key -7 WITHSCORES",
       "ZRANDMEMBER key -8 WITHSCORES",
-      "ZRANDMEMBER key -9 WITHSCORES"
+      "zrandmember key -9 withscores"
       
   };
   

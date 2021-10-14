@@ -22,11 +22,11 @@ public class TestGETEX extends CommandBase {
   protected String[] validRequests = new String[] {
       "SET key value",              /* OK */
       "GETEX key",                  /* VALUE */
-      "GETEX key EX 1000",          /* VALUE */
-      "GETEX key PX 10000",         /* VALUE */
-      "GETEX key EXAT 100000",      /* VALUE */
-      "GETEX key PXAT 1000000",     /* VALUE */
-      "GETEX key PERSIST",          /* VALUE */
+      "GETEX key ex 1000",          /* VALUE */
+      "GETEX key px 10000",         /* VALUE */
+      "GETEX key exat 100000",      /* VALUE */
+      "GETEX key pxat 1000000",     /* VALUE */
+      "GETEX key persist",          /* VALUE */
       "GETEX key1",                  /* NULL */
       "GETEX key1 EX 1000",          /* NULL */
       "GETEX key1 PX 10000",         /* NULL */

@@ -27,69 +27,69 @@ public class TestSET extends CommandBase {
       "SET key value PXAT 1000000",     /* OK */
       "SET key value KEEPTTL",          /* OK */
 
-      "SET key value NX",               /* NULL */
-      "SET key value XX",               /* OK */
+      "set key value nx",               /* NULL */
+      "set key value xx",               /* OK */
       "SET key1 value XX",              /* NULL*/
       "SET key1 value NX",              /* OK */ 
       
       
-      "SET key value EX 1000 NX",       /* NULL */
-      "SET key value EX 1000 XX",       /* OK */
+      "set key value ex 1000 nx",       /* NULL */
+      "set key value ex 1000 xx",       /* OK */
       "SET key2 value EX 1000 XX",      /* NULL */
       "SET key2 value EX 1000 NX",      /* OK */
      
 
-      "set key value PX 1000 NX",       /* NULL */
-      "SET key value PX 1000 XX",       /* OK */
+      "set key value px 1000 nx",       /* NULL */
+      "set key value px 1000 xx",       /* OK */
       "SET key3 value PX 1000 XX",      /* NULL */
       "SET key3 value PX 1000 NX",      /* OK */
 
-      "SET key value EXAT 1000 NX",     /* NULL */
-      "SET key value EXAT 1000 XX",     /* OK */
+      "set key value exat 1000 nx",     /* NULL */
+      "set key value exat 1000 xx",     /* OK */
       "SET key4 value EXAT 1000 XX",    /* NULL*/
       "SET key4 value EXAT 1000 NX",    /* OK */
       
-      "SET key value PXAT 1000 NX",     /* NULL */
-      "SET key value PXAT 1000 XX",     /* OK */
+      "set key value pxat 1000 nx",     /* NULL */
+      "set key value pxat 1000 xx",     /* OK */
       "SET key5 value PXAT 1000 XX",    /* NULL */
       "SET key5 value PXAT 1000 NX",    /* OK */
       
-      "SET key value KEEPTTL NX",       /* NULL */
-      "SET key value KEEPTTL XX",       /* OK */
+      "set key value keepttl nx",       /* NULL */
+      "set key value keepttl xx",       /* OK */
       "SET key6 value KEEPTTL XX",      /* NULL */
       "SET key6 value KEEPTTL NX",      /* OK */
       
       "SET key value GET",              /* VALUE */
 
       
-      "SET key value NX GET",           /* VALUE */
-      "SET key value XX GET",           /* VALUE */
+      "set key value nx get",           /* VALUE */
+      "set key value xx get",           /* VALUE */
       "SET key7 value NX GET",          /* NULL */
       "SET key7 value XX GET",          /* VALUE */
 
       
-      "SET key value EX 1000 NX GET",   /* VALUE */
-      "SET key value EX 1000 XX GET",   /* VALUE */
+      "set key value ex 1000 nx get",   /* VALUE */
+      "set key value ex 1000 xx get",   /* VALUE */
       "SET key8 value EX 1000 NX GET",  /* NULL */
       "SET key8 value EX 1000 XX GET",  /* VALUE*/
       
-      "SET key value PX 1000 NX GET",
-      "SET key value PX 1000 XX GET",
+      "set key value px 1000 nx get",
+      "set key value px 1000 xx get",
       "SET key9 value PX 1000 NX GET",
       "SET key9 value PX 1000 XX GET",
 
-      "SET key value EXAT 1000 NX GET",
-      "SET key value EXAT 1000 XX GET",
+      "set key value exat 1000 nx get",
+      "set key value exat 1000 xx get",
       "SET key10 value EXAT 1000 NX GET",
       "SET key10 value EXAT 1000 XX GET",
       
-      "SET key value PXAT 1000 NX GET",
-      "SET key value PXAT 1000 XX GET",
+      "set key value pxat 1000 nx get",
+      "set key value pxat 1000 xx get",
       "SET key11 value PXAT 1000 NX GET",
       "SET key11 value PXAT 1000 XX GET",
       
-      "SET key value KEEPTTL NX GET",
-      "SET key value KEEPTTL XX GET",
+      "set key value keepttl nx get",
+      "set key value keepttl xx get",
       "SET key12 value KEEPTTL NX GET",
       "SET key12 value KEEPTTL XX GET"
   };

@@ -28,7 +28,7 @@ public class TestZLEXCOUNT extends CommandBase {
       "ZLEXCOUNT key - (d",                                                   /* 10 */
       "ZLEXCOUNT key - [d",                                                   /* 10 */
       "ZLEXCOUNT key - [c",                                                   /* 0 */
-      "ZLEXCOUNT key - (c",                                                   /* 0 */
+      "zlexcount key - (c",                                                   /* 0 */
       
       "ZLEXCOUNT key (c1 [c99",                                               /* 9 */
       "ZLEXCOUNT key [c1 [c99",                                               /* 10 */

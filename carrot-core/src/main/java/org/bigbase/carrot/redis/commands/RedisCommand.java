@@ -122,32 +122,43 @@ public interface RedisCommand {
   }
 
   static final long PERSISTS_FLAG = UnsafeAccess.allocAndCopy("PERSIST", 0, "PERSIST".length());
+  static final long PERSISTS_FLAG_LOWER = UnsafeAccess.allocAndCopy("persist", 0, "persist".length());
   static final int PERSISTS_LENGTH = "PERSIST".length();
+  
   static final long EXAT_FLAG = UnsafeAccess.allocAndCopy("EXAT", 0, "EXAT".length());
+  static final long EXAT_FLAG_LOWER = UnsafeAccess.allocAndCopy("exat", 0, "exat".length());
   static final int EXAT_LENGTH = "EXAT".length();
 
   static final long PXAT_FLAG = UnsafeAccess.allocAndCopy("PXAT", 0, "PXAT".length());
+  static final long PXAT_FLAG_LOWER = UnsafeAccess.allocAndCopy("pxat", 0, "pxat".length());  
   static final int PXAT_LENGTH = "PXAT".length();
 
   static final long EX_FLAG = UnsafeAccess.allocAndCopy("EX", 0, "EX".length());
+  static final long EX_FLAG_LOWER = UnsafeAccess.allocAndCopy("ex", 0, "ex".length());
   static final int EX_LENGTH = "EX".length();
 
   static final long PX_FLAG = UnsafeAccess.allocAndCopy("PX", 0, "PX".length());
+  static final long PX_FLAG_LOWER = UnsafeAccess.allocAndCopy("px", 0, "px".length());
   static final int PX_LENGTH = "PX".length();
   
   static final long KEEPTTL_FLAG = UnsafeAccess.allocAndCopy("KEEPTTL", 0, "KEEPTTL".length());
+  static final long KEEPTTL_FLAG_LOWER = UnsafeAccess.allocAndCopy("keepttl", 0, "keepttl".length());
   static final int KEEPTTL_LENGTH = "KEEPTTL".length();
   
   static final long NX_FLAG = UnsafeAccess.allocAndCopy("NX", 0, "NX".length());
+  static final long NX_FLAG_LOWER = UnsafeAccess.allocAndCopy("nx", 0, "nx".length());
   static final int NX_LENGTH = "NX".length();
 
   static final long XX_FLAG = UnsafeAccess.allocAndCopy("XX", 0, "XX".length());
+  static final long XX_FLAG_LOWER = UnsafeAccess.allocAndCopy("xx", 0, "xx".length());
   static final int XX_LENGTH = "XX".length();
   
   static final long GET_FLAG = UnsafeAccess.allocAndCopy("GET", 0, "GET".length());
+  static final long GET_FLAG_LOWER = UnsafeAccess.allocAndCopy("get", 0, "get".length());
   static final int GET_LENGTH = "GET".length();
   
   static final long WITHVALUES_FLAG = UnsafeAccess.allocAndCopy("WITHVALUES", 0, "WITHVALUES".length());
+  static final long WITHVALUES_FLAG_LOWER = UnsafeAccess.allocAndCopy("withvalues", 0, "withvalues".length());
   static final int WITHVALUES_LENGTH = "WITHVALUES".length();
 
   static final long OK_REPLY = UnsafeAccess.allocAndCopy("+OK\r\n", 0, "+OK\r\n".length());
@@ -160,24 +171,31 @@ public interface RedisCommand {
   static final int NULL_ARRAY_REPLY_LENGTH = "*-1\r\n".length();
   
   static final long MATCH_FLAG = UnsafeAccess.allocAndCopy("MATCH", 0, "MATCH".length());
+  static final long MATCH_FLAG_LOWER = UnsafeAccess.allocAndCopy("match", 0, "match".length());
   static final int MATCH_LENGTH = "MATCH".length();
 
   static final long COUNT_FLAG = UnsafeAccess.allocAndCopy("COUNT", 0, "COUNT".length());
+  static final long COUNT_FLAG_LOWER = UnsafeAccess.allocAndCopy("count", 0, "count".length());
   static final int COUNT_LENGTH = "COUNT".length();
   
   static final long BEFORE_FLAG = UnsafeAccess.allocAndCopy("BEFORE", 0, "BEFORE".length());
+  static final long BEFORE_FLAG_LOWER = UnsafeAccess.allocAndCopy("before", 0, "before".length());
   static final int BEFORE_LENGTH = "BEFORE".length();
 
   static final long AFTER_FLAG = UnsafeAccess.allocAndCopy("AFTER", 0, "AFTER".length());
+  static final long AFTER_FLAG_LOWER = UnsafeAccess.allocAndCopy("after", 0, "after".length());
   static final int AFTER_LENGTH = "AFTER".length();
   
   static final long LEFT_FLAG = UnsafeAccess.allocAndCopy("LEFT", 0, "LEFT".length());
+  static final long LEFT_FLAG_LOWER = UnsafeAccess.allocAndCopy("left", 0, "left".length());
   static final int LEFT_LENGTH = "LEFT".length();
   
   static final long RIGHT_FLAG = UnsafeAccess.allocAndCopy("RIGHT", 0, "RIGHT".length());
+  static final long RIGHT_FLAG_LOWER = UnsafeAccess.allocAndCopy("right", 0, "right".length());
   static final int RIGHT_LENGTH = "RIGHT".length();
   
   static final long WITHSCORES_FLAG = UnsafeAccess.allocAndCopy("WITHSCORES", 0, "WITHSCORES".length());
+  static final long WITHSCORES_FLAG_LOWER = UnsafeAccess.allocAndCopy("withscores", 0, "withscores".length());
   static final int WITHSCORES_LENGTH = "WITHSCORES".length();
 
   static final long NEG_INFINITY_FLAG = UnsafeAccess.allocAndCopy("-inf", 0, "-inf".length());
@@ -187,31 +205,35 @@ public interface RedisCommand {
   static final int POS_INFINITY_LENGTH = "+inf".length();
   
   static final long CH_FLAG = UnsafeAccess.allocAndCopy("CH", 0, "CH".length());
+  static final long CH_FLAG_LOWER = UnsafeAccess.allocAndCopy("ch", 0, "ch".length());
   static final int CH_LENGTH = "CH".length();
   
   static final long SAVE_FLAG = UnsafeAccess.allocAndCopy("SAVE", 0, "SAVE".length());
+  static final long SAVE_FLAG_LOWER = UnsafeAccess.allocAndCopy("save", 0, "save".length());
   static final int SAVE_LENGTH = "SAVE".length();
   
   static final long NOSAVE_FLAG = UnsafeAccess.allocAndCopy("NOSAVE", 0, "NOSAVE".length());
+  static final long NOSAVE_FLAG_LOWER = UnsafeAccess.allocAndCopy("nosave", 0, "nosave".length());
   static final int NOSAVE_LENGTH = "NOSAVE".length();
   
   static final long SCHEDULE_FLAG = UnsafeAccess.allocAndCopy("SCHEDULE", 0, "SCHEDULE".length());
+  static final long SCHEDULE_FLAG_LOWER = UnsafeAccess.allocAndCopy("schedule", 0, "schedule".length());
   static final int SCHEDULE_LENGTH = "SCHEDULE".length();
   
   static final long SYNC_FLAG = UnsafeAccess.allocAndCopy("SYNC", 0, "SYNC".length());
+  static final long SYNC_FLAG_LOWER = UnsafeAccess.allocAndCopy("sync", 0, "sync".length());
   static final int SYNC_LENGTH = "SYNC".length();
   
   static final long ASYNC_FLAG = UnsafeAccess.allocAndCopy("ASYNC", 0, "SYNC".length());
+  static final long ASYNC_FLAG_LOWER = UnsafeAccess.allocAndCopy("async", 0, "async".length());
   static final int ASYNC_LENGTH = "ASYNC".length();
   
   static final long SLOTS_FLAG = UnsafeAccess.allocAndCopy("SLOTS", 0, "SLOTS".length());
-  static final long SLOTS_LOWER_CASE_FLAG = UnsafeAccess.allocAndCopy("slots", 0, "slots".length());
-
+  static final long SLOTS_FLAG_LOWER = UnsafeAccess.allocAndCopy("slots", 0, "slots".length());
   static final int SLOTS_LENGTH = "SLOTS".length();
   
   static final long MEMORY_FLAG = UnsafeAccess.allocAndCopy("MEMORY", 0, "MEMORY".length());
   static final long MEMORY_LOWER_CASE_FLAG = UnsafeAccess.allocAndCopy("memory", 0, "memory".length());
-  
   static final int MEMORY_LENGTH = "MEMORY".length();
   
   default void SIMPLE_STRING_REPLY(long ptr, String s) {
@@ -312,28 +334,32 @@ public interface RedisCommand {
     int size = UnsafeAccess.toInt(ptr);
     ptr += Utils.SIZEOF_INT;
     if (argsRemaining >= 2) {
-      if (size == EX_LENGTH && Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
+      if (size == EX_LENGTH && (Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0 ||
+          Utils.compareTo(EX_FLAG_LOWER, EX_LENGTH, ptr, size) == 0)) {
         // Read seconds
         ptr += size;
         int vSize = UnsafeAccess.toInt(ptr);
         ptr += Utils.SIZEOF_INT;
         long secs = Utils.strToLong(ptr, vSize);
         return System.currentTimeMillis() + secs * 1000;
-      } else if (size == PX_LENGTH && Utils.compareTo(PX_FLAG, PX_LENGTH, ptr, size) == 0) {
+      } else if (size == PX_LENGTH && (Utils.compareTo(PX_FLAG, PX_LENGTH, ptr, size) == 0 ||
+          Utils.compareTo(PX_FLAG_LOWER, PX_LENGTH, ptr, size) == 0)) {
         // Read milliseconds
         ptr += size;
         int vSize = UnsafeAccess.toInt(ptr);
         ptr += Utils.SIZEOF_INT;
         long ms = Utils.strToLong(ptr, vSize);
         return System.currentTimeMillis() + ms;
-      } else if (size == EXAT_LENGTH && Utils.compareTo(EXAT_FLAG, EXAT_LENGTH, ptr, size) == 0) {
+      } else if (size == EXAT_LENGTH && (Utils.compareTo(EXAT_FLAG, EXAT_LENGTH, ptr, size) == 0 ||
+          Utils.compareTo(EXAT_FLAG_LOWER, EXAT_LENGTH, ptr, size) == 0)) {
         // Read seconds
         ptr += size;
         int vSize = UnsafeAccess.toInt(ptr);
         ptr += Utils.SIZEOF_INT;
         long secs = Utils.strToLong(ptr, vSize);
         return secs * 1000;
-      } else if (size == PXAT_LENGTH && Utils.compareTo(PXAT_FLAG, PXAT_LENGTH, ptr, size) == 0) {
+      } else if (size == PXAT_LENGTH && (Utils.compareTo(PXAT_FLAG, PXAT_LENGTH, ptr, size) == 0 ||
+          Utils.compareTo(PXAT_FLAG_LOWER, PXAT_LENGTH, ptr, size) == 0)) {
         // Read seconds
         ptr += size;
         int vSize = UnsafeAccess.toInt(ptr);
@@ -342,10 +368,13 @@ public interface RedisCommand {
         return ms;
       }
     } else
+      
       if (persists && size == PERSISTS_LENGTH
-        && Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0) {
+        && (Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(PERSISTS_FLAG_LOWER, PERSISTS_LENGTH, ptr, size) == 0)) {
         return 0;// reset expiration
-      } else if (!persists && size == KEEPTTL_LENGTH && Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
+      } else if (!persists && size == KEEPTTL_LENGTH && (Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0 ||
+          Utils.compareTo(KEEPTTL_FLAG_LOWER, KEEPTTL_LENGTH, ptr, size) == 0)) {
         // expire = -1 - means, do not overwrite existing expire - keepTTL
         return -1;
       }
@@ -377,17 +406,24 @@ public interface RedisCommand {
     int size = UnsafeAccess.toInt(ptr);
     int retValue = 0;
     ptr += Utils.SIZEOF_INT;
-    if (!persists && Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0) {
+        
+    if (!persists && (Utils.compareTo(KEEPTTL_FLAG, KEEPTTL_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(KEEPTTL_FLAG_LOWER, KEEPTTL_LENGTH, ptr, size) == 0)) {
        retValue = 1;
-    } else if(persists && Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0) {
+    } else if(persists && (Utils.compareTo(PERSISTS_FLAG, PERSISTS_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(PERSISTS_FLAG_LOWER, PERSISTS_LENGTH, ptr, size) == 0)) {
       retValue = 1;
-   } else if (Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0) {
+   } else if (Utils.compareTo(EX_FLAG, EX_LENGTH, ptr, size) == 0 ||
+       Utils.compareTo(EX_FLAG_LOWER, EX_LENGTH, ptr, size) == 0) {
       retValue = 2;
-    } else if (Utils.compareTo(PX_FLAG, PX_LENGTH, ptr, size) == 0) {
+    } else if (Utils.compareTo(PX_FLAG, PX_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(PX_FLAG_LOWER, PX_LENGTH, ptr, size) == 0) {
       retValue = 2;
-    } else if (Utils.compareTo(EXAT_FLAG, EXAT_LENGTH, ptr, size) == 0) {
+    } else if (Utils.compareTo(EXAT_FLAG, EXAT_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(EXAT_FLAG_LOWER, EXAT_LENGTH, ptr, size) == 0) {
       retValue = 2;
-    } else if (Utils.compareTo(PXAT_FLAG, PXAT_LENGTH, ptr, size) == 0) {
+    } else if (Utils.compareTo(PXAT_FLAG, PXAT_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(PXAT_FLAG_LOWER, PXAT_LENGTH, ptr, size) == 0) {
       retValue = 2;
     } 
     
@@ -397,9 +433,11 @@ public interface RedisCommand {
   default int mutationSectionSize(long ptr) {
     int size = UnsafeAccess.toInt(ptr);
     ptr += Utils.SIZEOF_INT;
-    if (Utils.compareTo(NX_FLAG, NX_LENGTH, ptr, size) == 0) {
+    if (Utils.compareTo(NX_FLAG, NX_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(NX_FLAG_LOWER, NX_LENGTH, ptr, size) == 0) {
       return 1;
-    } else if (Utils.compareTo(XX_FLAG, XX_LENGTH, ptr, size) == 0) {
+    } else if (Utils.compareTo(XX_FLAG, XX_LENGTH, ptr, size) == 0 || 
+        Utils.compareTo(XX_FLAG_LOWER, XX_LENGTH, ptr, size) == 0) {
       return 1;
     } 
     return 0;
@@ -408,9 +446,11 @@ public interface RedisCommand {
   default MutationOptions getMutationOptions(long ptr) throws IllegalArgumentException{
     int size = UnsafeAccess.toInt(ptr);
     ptr += Utils.SIZEOF_INT;
-    if (size == NX_LENGTH && Utils.compareTo(NX_FLAG, NX_LENGTH, ptr, size) == 0) {
+    if (size == NX_LENGTH && (Utils.compareTo(NX_FLAG, NX_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(NX_FLAG_LOWER, NX_LENGTH, ptr, size) == 0)) {
       return MutationOptions.NX;
-    } else if (size == XX_LENGTH && Utils.compareTo(XX_FLAG, XX_LENGTH, ptr, size) == 0) {
+    } else if (size == XX_LENGTH && (Utils.compareTo(XX_FLAG, XX_LENGTH, ptr, size) == 0 ||
+        Utils.compareTo(XX_FLAG_LOWER, XX_LENGTH, ptr, size) == 0)) {
       return MutationOptions.XX;
     }
     

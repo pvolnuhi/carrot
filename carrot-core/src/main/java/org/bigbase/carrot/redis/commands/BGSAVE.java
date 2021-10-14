@@ -43,7 +43,8 @@ public class BGSAVE implements RedisCommand {
     if (numArgs == 2) {
       int size = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
-      if (Utils.compareTo(SCHEDULE_FLAG, SCHEDULE_LENGTH, inDataPtr, size) != 0) {
+      if (Utils.compareTo(SCHEDULE_FLAG, SCHEDULE_LENGTH, inDataPtr, size) != 0 &&
+          Utils.compareTo(SCHEDULE_FLAG_LOWER, SCHEDULE_LENGTH, inDataPtr, size) != 0) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_UNSUPPORTED_COMMAND, ": BGSAVE " + 
             Utils.toString(inDataPtr, size));
         return;

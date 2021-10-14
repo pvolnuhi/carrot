@@ -1883,7 +1883,7 @@ public class Utils {
    * @param addr address of a string byte array
    * @param len length of an array
    */
-  public static void toUpperCase(long addr, int len) {
+  public static long toUpperCase(long addr, int len) {
     int min = 'a'; // 97
     int max = 'z'; // 122
     for (int i = 0; i < len; i++) {
@@ -1893,6 +1893,7 @@ public class Utils {
         UnsafeAccess.putByte(addr + i,  v);
       }
     }
+    return addr;
   }
   
   public static String toString(double d, int afterDecimalPoint) {

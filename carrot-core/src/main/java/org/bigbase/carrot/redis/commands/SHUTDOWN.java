@@ -38,10 +38,12 @@ public class SHUTDOWN implements RedisCommand {
       int size = UnsafeAccess.toInt(inDataPtr);
       inDataPtr += Utils.SIZEOF_INT;
       
-      if (Utils.compareTo(SAVE_FLAG, SAVE_LENGTH, inDataPtr, size) == 0) {
+      if (Utils.compareTo(SAVE_FLAG, SAVE_LENGTH, inDataPtr, size) == 0 ||
+          Utils.compareTo(SAVE_FLAG_LOWER, SAVE_LENGTH, inDataPtr, size) == 0) {
         save = true;
        
-      } else  if (Utils.compareTo(NOSAVE_FLAG, NOSAVE_LENGTH, inDataPtr, size) == 0) {
+      } else  if (Utils.compareTo(NOSAVE_FLAG, NOSAVE_LENGTH, inDataPtr, size) == 0 ||
+          Utils.compareTo(NOSAVE_FLAG_LOWER, NOSAVE_LENGTH, inDataPtr, size) == 0) {
         save = false;
       } else {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_UNSUPPORTED_COMMAND, ": SHUTDOWN " + 

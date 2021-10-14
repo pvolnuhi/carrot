@@ -59,15 +59,18 @@ public class ZADD implements RedisCommand {
       inDataPtr += Utils.SIZEOF_INT;
       long valPtr = inDataPtr;
 
-      if (Utils.compareTo(NX_FLAG, NX_LENGTH, valPtr, valSize) == 0) {
+      if (Utils.compareTo(NX_FLAG, NX_LENGTH, valPtr, valSize) == 0 || 
+          Utils.compareTo(NX_FLAG_LOWER, NX_LENGTH, valPtr, valSize) == 0) {
         opt = MutationOptions.NX;
         inDataPtr += valSize;
         count++;
-      } else if (Utils.compareTo(XX_FLAG, XX_LENGTH, valPtr, valSize) == 0) {
+      } else if (Utils.compareTo(XX_FLAG, XX_LENGTH, valPtr, valSize) == 0 ||
+          Utils.compareTo(XX_FLAG_LOWER, XX_LENGTH, valPtr, valSize) == 0) {
         opt = MutationOptions.XX;
         inDataPtr += valSize;
         count++;
-      } else if (Utils.compareTo(CH_FLAG, CH_LENGTH, valPtr, valSize) == 0) {
+      } else if (Utils.compareTo(CH_FLAG, CH_LENGTH, valPtr, valSize) == 0 ||
+          Utils.compareTo(CH_FLAG_LOWER, CH_LENGTH, valPtr, valSize) == 0) {
         changed = true;
         inDataPtr += valSize;
         count++;
@@ -81,7 +84,8 @@ public class ZADD implements RedisCommand {
         valSize = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
         valPtr = inDataPtr;
-        if (Utils.compareTo(CH_FLAG, CH_LENGTH, valPtr, valSize) == 0) {
+        if (Utils.compareTo(CH_FLAG, CH_LENGTH, valPtr, valSize) == 0 ||
+            Utils.compareTo(CH_FLAG_LOWER, CH_LENGTH, valPtr, valSize) == 0) {
           changed = true;
           inDataPtr += valSize;
           count++;

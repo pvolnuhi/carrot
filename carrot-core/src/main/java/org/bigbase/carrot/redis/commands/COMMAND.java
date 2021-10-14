@@ -37,7 +37,8 @@ public class COMMAND implements RedisCommand {
     inDataPtr = skip(inDataPtr, 1);
     int size = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
-    if (Utils.compareTo(COUNT_FLAG, COUNT_LENGTH, inDataPtr, size) != 0) {
+    if (Utils.compareTo(COUNT_FLAG, COUNT_LENGTH, inDataPtr, size) != 0 &&
+        Utils.compareTo(COUNT_FLAG_LOWER, COUNT_LENGTH, inDataPtr, size) != 0) {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_UNSUPPORTED_COMMAND, ": COMMAND " + 
       Utils.toString(inDataPtr, size));
       return;

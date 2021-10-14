@@ -17,15 +17,16 @@
  */
 package org.bigbase.carrot.redis.commands;
 
-//TODO: fix this test
 public class TestSAVE extends CommandBase {
   
   protected String[] validRequests = new String[] {
-      "SAVE"               /* OK  */
+      "SAVE"               /* OK  */,
+      "save"
   };
   
   protected String[] validResponses = new String[] {
       "+OK\r\n",
+      "+OK\r\n"
   };
   
   

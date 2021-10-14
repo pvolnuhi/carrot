@@ -59,7 +59,8 @@ public class ZRANDMEMBER implements RedisCommand {
         int valSize = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
         long valPtr = inDataPtr;
-        if (Utils.compareTo(WITHSCORES_FLAG, WITHSCORES_LENGTH, valPtr, valSize) == 0) {
+        if (Utils.compareTo(WITHSCORES_FLAG, WITHSCORES_LENGTH, valPtr, valSize) == 0 ||
+            Utils.compareTo(WITHSCORES_FLAG_LOWER, WITHSCORES_LENGTH, valPtr, valSize) == 0) {
           withScores = true;
         } else {
           throw new IllegalArgumentException(Utils.toString(valPtr, valSize));

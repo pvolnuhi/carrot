@@ -27,11 +27,13 @@ public class TestBGSAVE extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "BGSAVE"               /* OK */,
-      "BGSAVE SCHEDULE"      /* OK */
+      "BGSAVE SCHEDULE"      /* OK */,
+      "bgsave schedule"      /* OK */  
   };
   
   protected String[] validResponses = new String[] {
       "+Background saving started\r\n",
+      "+Background saving scheduled\r\n",
       "+Background saving scheduled\r\n"
   };
   

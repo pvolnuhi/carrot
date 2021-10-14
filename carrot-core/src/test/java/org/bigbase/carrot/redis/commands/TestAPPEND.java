@@ -21,7 +21,7 @@ public class TestAPPEND extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "APPEND key value",               /* 5 */
-      "APPEND key value"                /* 10 */
+      "append key value"                /* 10 */
   };
   
   protected String[] validResponses = new String[] {

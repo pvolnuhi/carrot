@@ -55,7 +55,7 @@ public class TestZRANGEBYSCORE extends CommandBase {
       "ZRANGEBYSCORE key (7.0 9.9 WITHSCORES",                                               /* 1 */
       "ZRANGEBYSCORE key 7.0 9.9 WITHSCORES",                                                /* 2 */
       "ZRANGEBYSCORE key (8.0 9.9 WITHSCORES",                                               /* 0 */
-      "zrangebyscore key 8.0 9.9 WITHSCORES"                                                 /* 1 */
+      "zrangebyscore key 8.0 9.9 withscores"                                                 /* 1 */
       
   };
   

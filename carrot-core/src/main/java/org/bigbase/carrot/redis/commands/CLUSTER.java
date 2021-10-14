@@ -58,7 +58,7 @@ public class CLUSTER implements RedisCommand {
     inDataPtr += Utils.SIZEOF_INT;
       
     if (Utils.compareTo(SLOTS_FLAG, SLOTS_LENGTH, inDataPtr, size) != 0 && 
-        Utils.compareTo(SLOTS_LOWER_CASE_FLAG, SLOTS_LENGTH, inDataPtr, size) != 0) {
+        Utils.compareTo(SLOTS_FLAG_LOWER, SLOTS_LENGTH, inDataPtr, size) != 0) {
         Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_UNSUPPORTED_COMMAND, ": CLUSTER " + 
             Utils.toString(inDataPtr, size));
         autoConvert = true;

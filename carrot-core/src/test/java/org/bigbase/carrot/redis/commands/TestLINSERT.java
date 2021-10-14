@@ -32,8 +32,8 @@ public class TestLINSERT extends CommandBase {
       "LINSERT key AFTER v5 v55",                                 /* 15 */      
       "LINDEX key 7",                                             /* v55 */
 
-      "LINSERT key BEFORE v555 v155",                              /* -1 */      
-      "LINSERT key AFTER v5555 v155",                              /* -1 */      
+      "linsert key before v555 v155",                              /* -1 */      
+      "linsert key after v5555 v155",                              /* -1 */      
       "LINSERT key1 BEFORE v555 v155",                             /* -1 */      
       "linsert key1 AFTER v5555 v155",                             /* -1 */      
 

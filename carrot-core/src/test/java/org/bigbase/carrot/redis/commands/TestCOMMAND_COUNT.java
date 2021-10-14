@@ -22,11 +22,13 @@ import org.bigbase.carrot.redis.RedisConf;
 public class TestCOMMAND_COUNT extends CommandBase {
   
   protected String[] validRequests = new String[] {
-      "COMMAND COUNT"               /* 106 */
+      "COMMAND COUNT",               /* 106 */
+      "command count"
   };
   
   protected String[] validResponses = new String[] {
       ":"+ RedisConf.getInstance().getCommandsCount()+"\r\n",
+      ":"+ RedisConf.getInstance().getCommandsCount()+"\r\n"
   };
   
   

@@ -33,7 +33,7 @@ public class TestBITCOUNT extends CommandBase {
       "BITCOUNT key 0 1000",            /* 5 */
       "BITCOUNT key 0 -1",              /* 5 */
       "BITCOUNT key 105 110",           /* 0 */
-      "BITCOUNT key1",                  /* 0 */
+      "bitcount key1",                  /* 0 */
       
   };
   

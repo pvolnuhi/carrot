@@ -23,17 +23,17 @@ public class TestZADD extends CommandBase {
       "ZADD key 1234 v1 1.9E-6 v2 0.123 v3 12.15 v4",                         /* 4 */
       "ZADD key 1234 v1 1.9E-6 v2 0.123 v5 12.15 v6",                         /* 2 */
       "ZCARD key",                                                            /* 6 */
-      "ZADD key CH 1234 v1 1.9E-6 v2 0.123 v5 12.16 v6 1.0 v7 2.0 v8",        /* 3 */
+      "zadd key ch 1234 v1 1.9E-6 v2 0.123 v5 12.16 v6 1.0 v7 2.0 v8",        /* 3 */
       "ZCARD key",                                                            /* 8 */
       "ZADD key NX 1234 v1 1.9E-6 v2 0.123 v5 12.15 v6 1.0 v7 2.0 v8",        /* 0 */
       "ZCARD key",                                                            /* 8 */
       "ZADD key XX 1234 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81",  /* 0 */
       "ZCARD key",                                                            /* 8 */
-      "ZADD key NX 1234 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81",  /* 6 */
+      "zadd key nx 1234 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81",  /* 6 */
       "ZCARD key",                                                            /* 14 */
-      "ZADD key XX CH 12345 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81 22.0 v9 11.0 v10 ",  /* 1 */
+      "zadd key xx ch 12345 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81 22.0 v9 11.0 v10 ",  /* 1 */
       "ZCARD key",                                                            /* 14 */
-      "zadd key NX CH 1234 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81 22.0 v9 11.0 v10",  /* 2 */
+      "zadd key nx ch 1234 v11 1.9E-6 v21 0.123 v51 12.15 v61 1.0 v71 2.0 v81 22.0 v9 11.0 v10",  /* 2 */
       "ZCARD key"                                                            /* 16 */
   };
   

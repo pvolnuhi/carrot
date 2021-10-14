@@ -21,12 +21,15 @@ public class TestMGET extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "MSET key1 value1 key2 value2 key3 value3 key4 value4",        /* OK */
-      "MGET key1 key11 key2 key22 key3 key33 key4 key44"
+      "MGET key1 key11 key2 key22 key3 key33 key4 key44",
+      "mget key1 key11 key2 key22 key3 key33 key4 key44"
+
   };
   
   protected String[] validResponses = new String[] {
       "+OK\r\n",
       "*8\r\n$6\r\nvalue1\r\n$-1\r\n$6\r\nvalue2\r\n$-1\r\n$6\r\nvalue3\r\n$-1\r\n$6\r\nvalue4\r\n$-1\r\n",
+      "*8\r\n$6\r\nvalue1\r\n$-1\r\n$6\r\nvalue2\r\n$-1\r\n$6\r\nvalue3\r\n$-1\r\n$6\r\nvalue4\r\n$-1\r\n"
   };
   
   protected String[] invalidRequests = new String[] {

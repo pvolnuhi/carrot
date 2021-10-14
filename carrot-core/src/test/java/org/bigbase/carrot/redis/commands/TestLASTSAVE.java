@@ -22,11 +22,13 @@ public class TestLASTSAVE extends CommandBase {
   
   protected String[] validRequests = new String[] {
       "SAVE"               /* OK  */,
-      "LASTSAVE"
+      "LASTSAVE",
+      "lastsave"
   };
   
   protected String[] validResponses = new String[] {
       "+OK\r\n",
+      SKIP_VERIFY,
       SKIP_VERIFY
   };
   

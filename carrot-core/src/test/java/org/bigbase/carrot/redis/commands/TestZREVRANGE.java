@@ -49,7 +49,7 @@ public class TestZREVRANGE extends CommandBase {
       "ZREVRANGE key 2 5",                                                    /* 4 */
       "ZREVRANGE key 3 9",                                                    /* 7 */
       "ZREVRANGE key 2 5 WITHSCORES",                                         /* 4 */
-      "zrevrange key 3 9 WITHSCORES",                                         /* 7 */
+      "zrevrange key 3 9 withscores"                                         /* 7 */
   };
   
   protected String[] validResponses = new String[] {

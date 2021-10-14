@@ -28,7 +28,7 @@ public class TestHRANDFIELD extends CommandBase {
       "HRANDFIELD key2 2",
       "HRANDFIELD key2 -2",
       "HRANDFIELD key2 2 WITHVALUES",
-      "HRANDFIELD key2 -2 WITHVALUES",
+      "hrandfield key2 -2 withvalues",
       
       "HRANDFIELD key1 2",
       "HRANDFIELD key1 2 WITHVALUES",

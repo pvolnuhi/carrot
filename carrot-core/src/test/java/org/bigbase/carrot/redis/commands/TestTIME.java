@@ -21,10 +21,12 @@ package org.bigbase.carrot.redis.commands;
 public class TestTIME extends CommandBase {
   
   protected String[] validRequests = new String[] {
-      "TIME"               /* OK  */
+      "TIME"               /* OK  */,
+      "time"               /* OK  */
   };
   
   protected String[] validResponses = new String[] {
+      SKIP_VERIFY,
       SKIP_VERIFY
   };
   

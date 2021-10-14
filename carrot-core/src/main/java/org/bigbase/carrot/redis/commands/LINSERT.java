@@ -44,9 +44,11 @@ public class LINSERT implements RedisCommand {
     int flagSize = UnsafeAccess.toInt(inDataPtr);
     inDataPtr += Utils.SIZEOF_INT;
     long flagPtr = inDataPtr;
-    if (Utils.compareTo(BEFORE_FLAG, BEFORE_LENGTH, flagPtr, flagSize) == 0) {
+    if (Utils.compareTo(BEFORE_FLAG, BEFORE_LENGTH, flagPtr, flagSize) == 0 ||
+        Utils.compareTo(BEFORE_FLAG_LOWER, BEFORE_LENGTH, flagPtr, flagSize) == 0) {
       after = false;
-    } else if (Utils.compareTo(AFTER_FLAG, AFTER_LENGTH, flagPtr, flagSize) == 0) { 
+    } else if (Utils.compareTo(AFTER_FLAG, AFTER_LENGTH, flagPtr, flagSize) == 0 ||
+        Utils.compareTo(AFTER_FLAG_LOWER, AFTER_LENGTH, flagPtr, flagSize) == 0) { 
       after = true;
     } else {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, 

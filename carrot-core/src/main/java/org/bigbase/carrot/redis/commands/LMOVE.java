@@ -57,9 +57,11 @@ public class LMOVE implements RedisCommand {
     long flagPtr = inDataPtr;
     inDataPtr += flagSize;
     
-    if (Utils.compareTo(LEFT_FLAG, LEFT_LENGTH, flagPtr, flagSize) == 0) {
+    if (Utils.compareTo(LEFT_FLAG, LEFT_LENGTH, flagPtr, flagSize) == 0 ||
+        Utils.compareTo(LEFT_FLAG_LOWER, LEFT_LENGTH, flagPtr, flagSize) == 0) {
       srcSide = Side.LEFT;
-    } else if (Utils.compareTo(RIGHT_FLAG, RIGHT_LENGTH, flagPtr, flagSize) == 0) { 
+    } else if (Utils.compareTo(RIGHT_FLAG, RIGHT_LENGTH, flagPtr, flagSize) == 0 ||
+        Utils.compareTo(RIGHT_FLAG_LOWER, RIGHT_LENGTH, flagPtr, flagSize) == 0) { 
       srcSide = Side.RIGHT;
     } else {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT,
@@ -72,9 +74,11 @@ public class LMOVE implements RedisCommand {
     flagPtr = inDataPtr;
     inDataPtr += flagSize;
     
-    if (Utils.compareTo(LEFT_FLAG, LEFT_LENGTH, flagPtr, flagSize) == 0) {
+    if (Utils.compareTo(LEFT_FLAG, LEFT_LENGTH, flagPtr, flagSize) == 0 ||
+        Utils.compareTo(LEFT_FLAG_LOWER, LEFT_LENGTH, flagPtr, flagSize) == 0) {
       dstSide = Side.LEFT;
-    } else if (Utils.compareTo(RIGHT_FLAG, RIGHT_LENGTH, flagPtr, flagSize) == 0) { 
+    } else if (Utils.compareTo(RIGHT_FLAG, RIGHT_LENGTH, flagPtr, flagSize) == 0 ||
+        Utils.compareTo(RIGHT_FLAG_LOWER, RIGHT_LENGTH, flagPtr, flagSize) == 0) { 
       dstSide = Side.RIGHT;
     } else {
       Errors.write(outBufferPtr, Errors.TYPE_GENERIC, Errors.ERR_WRONG_COMMAND_FORMAT, 

@@ -42,7 +42,7 @@ public class TestZSCAN extends CommandBase {
       // Scan all which start with 'a'
       "ZSCAN key 0 MATCH ^a.* COUNT 10",
       "ZSCAN key 15 MATCH ^a.* COUNT 10",
-      "zscan key 16 MATCH ^a.* COUNT 10",
+      "zscan key 16 match ^a.* count 10"
       
   };
   

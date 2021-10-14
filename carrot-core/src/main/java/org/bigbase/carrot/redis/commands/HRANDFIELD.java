@@ -52,7 +52,8 @@ public class HRANDFIELD implements RedisCommand {
       if (numArgs > 3) {
         int size = UnsafeAccess.toInt(inDataPtr);
         inDataPtr += Utils.SIZEOF_INT;
-        if (Utils.compareTo(WITHVALUES_FLAG, WITHVALUES_LENGTH, inDataPtr, size) == 0) {
+        if (Utils.compareTo(WITHVALUES_FLAG, WITHVALUES_LENGTH, inDataPtr, size) == 0 ||
+            Utils.compareTo(WITHVALUES_FLAG_LOWER, WITHVALUES_LENGTH, inDataPtr, size) == 0) {
           withValues = true;
         } else {
           throw new IllegalArgumentException(Utils.toString(inDataPtr, size));

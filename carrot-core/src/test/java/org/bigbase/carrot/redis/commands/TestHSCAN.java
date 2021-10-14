@@ -37,12 +37,12 @@ public class TestHSCAN extends CommandBase {
       "HSCAN key 10 COUNT 20",
       "HSCAN key 11 COUNT 20",
       "HSCAN key 12 COUNT 20",
-      "HSCAN key 13 COUNT 20",
+      "hscan key 13 count 20",
       
       // Scan all which start with 'a'
       "HSCAN key 0 MATCH ^a.* COUNT 20",
       "HSCAN key 15 MATCH ^a.* COUNT 20",
-      "HSCAN key 16 MATCH ^a.* COUNT 20",
+      "hscan key 16 match ^a.* count 20",
       
   };
   
