@@ -19,6 +19,10 @@ package org.bigbase.carrot.redis.server;
 
 import static org.bigbase.carrot.redis.util.Commons.KEY_SIZE;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.redis.RedisConf;
 import org.bigbase.carrot.redis.util.DataType;
@@ -192,9 +196,9 @@ public class Server {
    * @return true on success, false -otherwise
    */
   public static boolean SAVE(BigSortedMap map) {
-    //SnapshotManager manager = SnapshotManager.getInstance();
-    //return manager.takeSnapshot(map, true);
-    map.snapshot();
+    ensureBgSnapshot();
+    snapshotThread.workOn(map);
+    snapshotThread.waitUntilDone();
     return true;
   }
 
@@ -216,21 +220,82 @@ public class Server {
    * >= 3.2.2: Added the SCHEDULE option.
    * @param map sorted map storage
    */
-  static Thread snapshotThread;
   
-  public static void BGSAVE(BigSortedMap map) {
-    if (snapshotThread != null && snapshotThread.isAlive()) {
-      try {
-        snapshotThread.join();
-      } catch(InterruptedException e) {
-        // Doo - doo - doo
+  static class SnapshotThread extends Thread {
+    
+    List<BigSortedMap> schedules = 
+        (List<BigSortedMap>) Collections.synchronizedList(new ArrayList<BigSortedMap>());
+    public SnapshotThread() {
+      super("carrot-snapshot-thread");
+    }
+    
+    public void workOn(BigSortedMap map) {
+      schedules.add(map);
+    }
+    
+    public void run() {
+      while(true) {
+        waitForWork();
+        /*DEBUG*/
+        System.out.println("["+ Thread.currentThread().getName() + "] BGSAVE started");
+        BigSortedMap map = schedules.get(0);
+        map.snapshot();
+        schedules.remove(0);
       }
     }
-    Runnable r = () -> map.snapshot();
-    snapshotThread = new Thread(r);
-    snapshotThread.start();
+
+    private void waitForWork() {
+      while(schedules.isEmpty()) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+        }
+      }
+    }
+    
+    boolean isWorking() {
+      return !schedules.isEmpty();
+    }
+    
+    void waitUntilDone() {
+      while(!schedules.isEmpty()) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+        }
+      }    
+    }
   }
   
+  static SnapshotThread snapshotThread;
+  
+  /**
+   * BGSAVE command
+   * @param map sorted map storage
+   * @param schedule schedule if true
+   * @return false - error, true - ok
+   */
+  public static boolean BGSAVE(BigSortedMap map, boolean schedule) {
+    
+    ensureBgSnapshot();
+    if (snapshotThread.isWorking() && !schedule) {
+      return false;
+    }
+    snapshotThread.workOn(map);
+    // do not wait
+    return true;
+  }
+  
+  static void ensureBgSnapshot() {
+    if (snapshotThread == null) {
+      synchronized (Server.class) {
+        if (snapshotThread == null) {
+          snapshotThread = new SnapshotThread();
+          snapshotThread.start();
+        }
+      }
+    }
+  }
   /**
    * Available since 1.0.0.
    * Return the UNIX TIME of the last DB save executed with success. A client may check if a BGSAVE command 

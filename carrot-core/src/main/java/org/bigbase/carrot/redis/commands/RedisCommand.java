@@ -106,6 +106,7 @@ import org.bigbase.carrot.util.Utils;
 public interface RedisCommand {
   static enum ReplyType {
     OK, 
+    SIMPLE,
     INTEGER, 
     DOUBLE, 
     BULK_STRING, 
@@ -212,6 +213,13 @@ public interface RedisCommand {
   static final long MEMORY_LOWER_CASE_FLAG = UnsafeAccess.allocAndCopy("memory", 0, "memory".length());
   
   static final int MEMORY_LENGTH = "MEMORY".length();
+  
+  default void SIMPLE_STRING_REPLY(long ptr, String s) {
+    UnsafeAccess.putByte(ptr,  (byte) ReplyType.SIMPLE.ordinal());
+    UnsafeAccess.putInt(ptr + Utils.SIZEOF_BYTE, s.length());
+    byte[] data = s.getBytes();
+    UnsafeAccess.copy(data, 0, ptr + Utils.SIZEOF_BYTE + Utils.SIZEOF_INT, data.length);
+  }
   
   default void NULL_STRING_REPLY (long ptr) {
     UnsafeAccess.putByte(ptr,  (byte) ReplyType.BULK_STRING.ordinal());

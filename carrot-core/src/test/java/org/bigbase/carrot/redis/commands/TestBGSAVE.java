@@ -17,6 +17,9 @@
  */
 package org.bigbase.carrot.redis.commands;
 
+import java.io.IOException;
+import java.net.UnknownHostException;
+
 import org.bigbase.carrot.redis.db.DBSystem;
 import org.junit.After;
 
@@ -28,8 +31,8 @@ public class TestBGSAVE extends CommandBase {
   };
   
   protected String[] validResponses = new String[] {
-      "+OK\r\n",
-      "+OK\r\n"
+      "+Background saving started\r\n",
+      "+Background saving scheduled\r\n"
   };
   
   
@@ -59,6 +62,51 @@ public class TestBGSAVE extends CommandBase {
   protected String[] getInvalidResponses() {
     return invalidResponses;
   }
+  
+  
+  
+  @Override
+  public void testValidRequests() {
+    // TODO Auto-generated method stub
+    super.testValidRequests();
+  }
+
+  @Override
+  public void testValidRequestsNetworkMode()
+      throws UnknownHostException, IOException, InterruptedException {
+    // TODO Auto-generated method stub
+    // Wait 100 msec
+    Thread.sleep(100);
+    super.testValidRequestsNetworkMode();
+  }
+
+  @Override
+  public void testValidRequestsInline() {
+    try {
+      Thread.sleep(100);
+    } catch (InterruptedException e) {
+    }
+    super.testValidRequestsInline();
+  }
+
+  @Override
+  public void testValidRequestsDirectBuffer() {
+    try {
+      Thread.sleep(100);
+    } catch (InterruptedException e) {
+    }
+    super.testValidRequestsDirectBuffer();
+  }
+
+  @Override
+  public void testValidRequestsInlineDirectBuffer() {
+    try {
+      Thread.sleep(100);
+    } catch (InterruptedException e) {
+    }
+    super.testValidRequestsInlineDirectBuffer();
+  }
+
   @After
   public void tearDown() {
     DBSystem.reset();

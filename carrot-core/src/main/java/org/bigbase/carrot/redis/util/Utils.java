@@ -50,6 +50,7 @@ public class Utils {
   static final byte INT_TYPE = (byte) ':';
   static final byte BULK_TYPE = (byte) '$';
   static final byte ERR_TYPE = (byte) '-';
+  static final byte PLUS = (byte) '+';
   
   static final byte[] OK_RESP = "+OK\r\n".getBytes();
   static final byte[] CRLF = "\r\n".getBytes();
@@ -376,6 +377,9 @@ public class Utils {
       case OK: 
         okResponse(ptr, buf);
         break;
+      case SIMPLE:
+        simpleResponse(ptr, buf);
+        break;
       case INTEGER: 
         intResponse(ptr, buf);
         break;
@@ -409,6 +413,13 @@ public class Utils {
     }
   }
   
+  private static void simpleResponse(long ptr, ByteBuffer buf) {
+    buf.put(PLUS);
+    int len = UnsafeAccess.toInt(ptr + SIZEOF_BYTE);
+    UnsafeAccess.copy(ptr + SIZEOF_BYTE + SIZEOF_INT, buf, len);
+    buf.put(CRLF);
+  }
+
   private static void multiBulkResponse(long ptr, ByteBuffer buf) {
     buf.put(ARR_TYPE);
     longToStr(2, buf, buf.position());

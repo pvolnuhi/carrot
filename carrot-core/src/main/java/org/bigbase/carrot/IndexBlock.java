@@ -2526,7 +2526,7 @@ public final class IndexBlock implements Comparable<IndexBlock> {
 	
 	void saveData(FileChannel fc, ByteBuffer buf) throws IOException {
 	  DataBlock db = null;
-	  while ((db = nextBlock(db, true)) != null) {
+	  while ((db = nextBlock(db, false)) != null) {
 	    db.saveData(fc, buf);
 	  }
 	}

@@ -2916,6 +2916,8 @@ public class ZSets {
   /**
    * TODO: VERIFY NEW CARDINALITY CODE
    * TODO: memory leaks
+   * TODO: Test both Set and Hash path
+   * TODO: Test large deletion - large than value buffer size for both: Set and Hash path
    * 
    * When all the elements in a sorted set are inserted with the same score, in order 
    * to force lexicographical ordering, this command removes all elements in the sorted set 
