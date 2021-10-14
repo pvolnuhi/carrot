@@ -332,10 +332,8 @@ public class Hashes {
         set.setKeySize(kSize);
         set.setFieldValue(valuePtr, valueSize);
         set.setOptions(MutationOptions.NONE);
-        // version?
-        if(map.execute(set)) {
-          count++;
-        }
+        map.execute(set);
+        count += set.getAdded();
       }
       return count;
     } finally {
@@ -375,9 +373,9 @@ public class Hashes {
         set.setFieldValue(valuePtr, valueSize);
         set.setOptions(MutationOptions.NONE);
         // version?
-        if(map.execute(set)) {
-          count++;
-        }
+        map.execute(set);
+        count += set.getAdded();
+        
         if (count % 100000 == 0) {
           System.out.println("Loaded "+ count);
         }
@@ -478,10 +476,8 @@ public class Hashes {
       set.setKeySize(kSize);
       set.setFieldValue(valuePtr, valueSize);
       set.setOptions(MutationOptions.NONE);
-      // version?
-      if (map.execute(set)) {
-        count++;
-      }
+      map.execute(set);
+      count += set.getAdded();
       return count;
     } finally {
       if (lock) writeUnlock(k);
@@ -787,8 +783,8 @@ public class Hashes {
       set.setKeySize(kSize);
       set.setFieldValue(valuePtr, valueSize);
       set.setOptions(MutationOptions.NX);
-      // version?    
-      return map.execute(set) == false? 0: 1;
+      map.execute(set) ;
+      return set.getAdded();
     } finally {
       writeUnlock(k);
     }

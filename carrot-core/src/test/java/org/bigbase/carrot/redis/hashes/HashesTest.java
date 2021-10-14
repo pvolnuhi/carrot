@@ -104,7 +104,7 @@ public class HashesTest {
   }
   
 
-  @Ignore
+  //@Ignore
   @Test
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
@@ -117,7 +117,7 @@ public class HashesTest {
     }
   }
   
-  @Ignore
+ // @Ignore
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
@@ -165,6 +165,7 @@ public class HashesTest {
     return map.countRecords();
   }
   
+  @Ignore
   @Test
   public void testMultiSet() {
     System.out.println("\nTest Multi Set");

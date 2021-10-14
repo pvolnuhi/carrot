@@ -63,7 +63,8 @@ public class HashSet extends Operation{
   private int fieldValueSize;
   
   private MutationOptions opts;
-    
+  
+  private int added = 0;
   /**
    * Checks key arena size
    * @param required size
@@ -108,6 +109,14 @@ public class HashSet extends Operation{
     setFloorKey(true);
   }
   
+  /**
+   * Get number of added fields
+   * @return number of added fields
+   */
+  public int getAdded() {
+    return added;
+  }
+  
   @Override
   public void reset() {
     super.reset();
@@ -115,6 +124,7 @@ public class HashSet extends Operation{
     this.fieldValueAddress = 0;
     this.fieldValueSize = 0;
     this.opts = null;
+    this.added = 0;
   }
   
   /**
@@ -177,7 +187,7 @@ public class HashSet extends Operation{
     int newValueSize = valueSize + toAdd;
     
     boolean needSplit = DataBlock.mustStoreExternally(foundKeySize, newValueSize);
-
+    if (!exists) added = 1;
     if (!needSplit) {
       Hashes.checkValueArena(newValueSize);
       insertFieldValue(valueAddress, valueSize, addr, fieldPtr, fieldSize);    
@@ -245,6 +255,7 @@ public class HashSet extends Operation{
    * @param fieldSize field size
    */
   private void insertNewKVandFieldValue(long fieldPtr, int fieldSize) {
+    added = 1;
     // Get real keySize
     int kSize = keySize(keyAddress);
     checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE + fieldSize); 
@@ -281,6 +292,7 @@ public class HashSet extends Operation{
    * @param fieldSize field size
    */
   private void insertFirstKVandFieldValue(long fieldPtr, int fieldSize) {
+    added = 1;
     // Get real keySize
     int kSize = keySize(keyAddress);
     checkKeyArena(kSize + KEY_SIZE + Utils.SIZEOF_BYTE + 1 /*ZERO*/); 
