@@ -3043,8 +3043,8 @@ public class ZSets {
             long buf = auxArena.get();
             size = Utils.readUVInt(buf);
             sizeSize = Utils.sizeUVInt(size);
-            startPtr = Utils.prefixKeyEnd(buf + sizeSize + Utils.SIZEOF_DOUBLE, size - Utils.SIZEOF_DOUBLE);
-            startSize = startPtr == 0? 0: size - Utils.SIZEOF_DOUBLE;
+            startPtr = Utils.prefixKeyEndCorrect(buf + sizeSize + Utils.SIZEOF_DOUBLE, size - Utils.SIZEOF_DOUBLE);
+            startSize = startPtr == 0? 0: size - Utils.SIZEOF_DOUBLE + 1;
             hashScanner =
                 Hashes.getScanner(map, keyPtr, keySize, startPtr, startSize, endPtr, endSize, false);
             if (hashScanner == null) {
@@ -3113,8 +3113,8 @@ public class ZSets {
             long buf = auxArena.get();
             int size = Utils.readUVInt(buf);
             int sizeSize = Utils.sizeUVInt(size);
-            sPtr = Utils.prefixKeyEnd(buf + sizeSize, size);
-            sSize = sPtr == 0? 0: size;
+            sPtr = Utils.prefixKeyEndCorrect(buf + sizeSize, size);
+            sSize = sPtr == 0? 0: size + 1;
             setScanner = Sets.getScanner(map, keyPtr, keySize, sPtr, sSize, 0, 0, false);
             if (setScanner == null) { 
               break; 
