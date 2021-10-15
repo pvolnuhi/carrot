@@ -81,6 +81,17 @@ public class BigSortedMapScannerTest {
     return result;
   }
   
+  
+  private int countStartsWith(String prefix) {
+    int count = 0;
+    for (int i = 0; i < MAX_ROWS; i++) {
+      String key = "KEY" + i;
+      if (key.startsWith(prefix)) {
+        count++;
+      }
+    }
+    return count;
+  }
    
   long countRecords() throws IOException {
     BigSortedMapScanner scanner = map.getScanner(0, 0, 0, 0);
@@ -94,6 +105,8 @@ public class BigSortedMapScannerTest {
   }
  
   private void allTests() throws IOException {
+    testPrefixScanners();
+    testPrefixReverseScanners();    
     testDirectMemoryAllRangesMapScanner();
     testDirectMemoryAllRangesMapScannerReverse();
     testDirectMemoryFullMapScanner();
@@ -101,8 +114,7 @@ public class BigSortedMapScannerTest {
     testDirectMemoryFullMapScannerWithDeletes();
     testDirectMemoryFullMapScannerWithDeletesReverse();
     testDirectMemoryScannerSameStartStopRow();
-    testDirectMemoryScannerSameStartStopRowReverse();
-  
+    testDirectMemoryScannerSameStartStopRowReverse();  
   }
   
   @Test
@@ -131,17 +143,122 @@ public class BigSortedMapScannerTest {
     }
   }
   
+  @Ignore
   @Test
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
     for (int i=0; i < 1; i++) {
-      System.out.println("\n********* " + i+" ********** Codec = LZ4HC\n");
+      System.out.println("\n********* " + i + " ********** Codec = LZ4HC\n");
       setUp();
       allTests();
       tearDown();
       BigSortedMap.printGlobalMemoryAllocationStats();
       UnsafeAccess.mallocStats();
     }
+  }
+  
+  @Ignore
+  @Test
+  public void testPrefixScanners() throws IOException {
+    System.out.println("testPrefixScanners ");
+
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("SEED =" + seed);
+    for (int i = 0; i < 10; i++) {
+      int n = r.nextInt((int) MAX_ROWS/100) + 1;
+      String prefix = "KEY" + n;
+      int expected = countStartsWith(prefix);
+      int size = prefix.length();
+      long ptr = UnsafeAccess.allocAndCopy(prefix, 0, size);
+      BigSortedMapScanner scanner = map.getPrefixScanner(ptr, size);
+      int count = (int) countRows(scanner);
+      if (count != expected) {
+        System.err.println(prefix);
+      }
+      assertEquals(expected, count);
+      scanner.close();
+      UnsafeAccess.free(ptr);
+      System.out.println("prefix="+ prefix+" count="+ count);
+    }
+    testPrefixEdges(10);
+  }
+  
+  private void addPrefixEdges(int n) {
+    byte[] key = new byte[n];
+    for(int i = 0; i < n; i++) {
+      key[i] = (byte) 0xff;
+      int size = i + 1;
+      map.put(key, 0, size, key, 0, size, 0);
+    }
+  }
+  
+  private void removePrefixEdges(int n) {
+    byte[] key = new byte[n];
+    for(int i = 0; i < n; i++) {
+      key[i] = (byte) 0xff;
+      int size = i + 1;
+      long ptr = UnsafeAccess.allocAndCopy(key, 0, size);
+      map.delete(ptr, size);
+      UnsafeAccess.free(ptr);
+    }
+  }
+  
+  
+  private void testPrefixEdges(int n) throws IOException {
+    addPrefixEdges(n);
+    byte[] key = new byte[n];
+    for(int i = 0; i < n; i++) {
+      key[i] = (byte) 0xff;
+      int size = i + 1;
+      long ptr = UnsafeAccess.allocAndCopy(key, 0, size);
+      BigSortedMapScanner scanner = map.getPrefixScanner(ptr, size);
+      int rows = (int) countRows(scanner);
+      assertEquals(n - i, rows);
+      scanner.close();
+    }
+    removePrefixEdges(n);
+  }
+  
+  private void testPrefixEdgesReverse(int n) throws IOException {
+    addPrefixEdges(n);
+    byte[] key = new byte[n];
+    for(int i = 0; i < n; i++) {
+      key[i] = (byte) 0xff;
+      int size = i + 1;
+      long ptr = UnsafeAccess.allocAndCopy(key, 0, size);
+      BigSortedMapScanner scanner = map.getPrefixScanner(ptr, size, true);
+      int rows = (int) countRowsReverse(scanner);
+      assertEquals(n - i, rows);
+      scanner.close();
+    }
+    removePrefixEdges(n);
+  }
+  
+  @Ignore
+  @Test
+  public void testPrefixReverseScanners() throws IOException {
+    System.out.println("testPrefixReverseScanners ");
+
+    Random r = new Random();
+    long seed = r.nextLong();
+    r.setSeed(seed);
+    System.out.println("SEED =" + seed);
+    for (int i = 0; i < 10; i++) {
+      int n = r.nextInt((int) MAX_ROWS/100) + 1;
+      String prefix = "KEY" + n;
+      int expected = countStartsWith(prefix);
+      int size = prefix.length();
+      long ptr = UnsafeAccess.allocAndCopy(prefix, 0, size);
+      BigSortedMapScanner scanner = map.getPrefixScanner(ptr, size, true);
+      int count = (int) countRowsReverse(scanner);
+      assertEquals(expected, count);
+      scanner.close();
+      UnsafeAccess.free(ptr);
+      System.out.println("prefix="+ prefix+" count="+ count);
+    }
+    testPrefixEdgesReverse(10);
   }
   
   @Ignore
