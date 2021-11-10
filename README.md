@@ -34,7 +34,7 @@ First release introduces new data type: **sparsed bitset**. The sparse bitset ha
 
 #### B-tree data type
 
-Release 0.2 will introduce B-Tree data type, which will allow range queries with filters and aggregations. Stay tuned   
+Release 0.3 will introduce B-Tree data type, which will allow range queries with filters and aggregations. Stay tuned   
 
 ### New features in existing data types
 
