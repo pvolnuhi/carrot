@@ -222,7 +222,7 @@ public class TestUtils {
   }
   
   @Test
-  public void testUnsignedVaribaleInt() {
+  public void testUnsignedVariableInt() {
     int [] values = new int[1000];
     fillRandom(values, 1 << 7);
     verify(values);

@@ -27,7 +27,7 @@ public class SparseBitmapTest {
   int size = 4096;
 
   
-  @Ignore
+  //@Ignore
   @Test
   public void runTest() {
     CodecFactory factory = CodecFactory.getInstance();
@@ -46,6 +46,7 @@ public class SparseBitmapTest {
     }
   }
 
+  @Ignore
   @Test  
   public void runOneByteCompressionLZ4() {
     CodecFactory factory = CodecFactory.getInstance();
@@ -63,6 +64,7 @@ public class SparseBitmapTest {
     System.out.println("LZ4 1-byte compression ratio=" + (((float)size)/compressedSize));
   }
   
+  @Ignore
   @Test
   public void runTwoBytesCompressionLZ4() {
     CodecFactory factory = CodecFactory.getInstance();
@@ -80,6 +82,7 @@ public class SparseBitmapTest {
     System.out.println("LZ4 2-byte compression ratio=" + (((float)size)/compressedSize));
   }
   
+  @Ignore
   @Test  
   public void runOneByteCompressionLZ4HC() {
     CodecFactory factory = CodecFactory.getInstance();
@@ -98,6 +101,7 @@ public class SparseBitmapTest {
     System.out.println("LZ4HC 1-byte compression ratio=" + (((float)size)/compressedSize));
   }
   
+  @Ignore
   @Test
   public void runTwoBytesCompressionLZ4HC() {
     CodecFactory factory = CodecFactory.getInstance();

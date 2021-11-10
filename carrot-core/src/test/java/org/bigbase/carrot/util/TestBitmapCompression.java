@@ -17,91 +17,116 @@
  */
 package org.bigbase.carrot.util;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.DoubleStream;
 
 import org.junit.Test;
+import org.roaringbitmap.buffer.MutableRoaringBitmap;
 
 public class TestBitmapCompression {
 
   
   @Test
-  public void testBitmapCodecs() {
+  public void testBitmapCodecs() throws IOException {
     
-    byte[] arr = null;
-    double startFraction = 0.001; 
-    double incr = 0.001;
-    System.out.println("\n*********** 16 bits ***********\n");
-    double stopFraction = 0.16;
-
-    double fraction = startFraction;
-    while(fraction <= stopFraction) {
-      arr = new byte[256 * 256];
-      populate(arr, fraction);
-      int size = calculateSize16(arr);
-      int diffSize = calculateSize16Diff(arr);
-      System.out.println(fraction + " : " + size + " comp ratio = " + ((double)256 * 256)/ size + " diff size=" 
-        + diffSize + " diff comp ratio = " + ((double)256 * 256)/ diffSize);
-      fraction += incr;
+    String[] names = new String[] {"Roaring", "16bit", "16bit diff", "8bit", "8bit diff", "4bit", "2bit"};
+    double[][] results = new double[names.length][];
+    results[0] = mainLoop(TestBitmapCompression::calculateRoaring, "\nROARING BITMAP\n");
+    results[1] = mainLoop(TestBitmapCompression::calculateSize16, "\n16-bit codec\n");
+    results[2] = mainLoop(TestBitmapCompression::calculateSize16Diff, "\n16-bit DIFF codec\n");
+    results[3] = mainLoop(TestBitmapCompression::calculateSize8, "\n8-bit codec\n");
+    results[4] = mainLoop(TestBitmapCompression::calculateSize8Diff, "\n8-bit DIFF codec\n");
+    results[5] = mainLoop(TestBitmapCompression::calculateSize4, "\n4-bit codec\n");
+    results[6] = mainLoop(TestBitmapCompression::calculateSize2, "\n2-bit codec\n");
+    
+    System.out.printf("\n%-20s%-20s%-20s%-20s\n\n","Density","Compression","Codec", "XRoaring");
+    int n = results[0].length;
+    int i = 0;
+    for(; i < n ; i++) {
+      int index = maxIndex(results, i);
+      if (index >=0) {
+        System.out.printf("%-20f%-20f%-20s%-20f\n", ((double)(i + 1)/1000), results[index][i], 
+          names[index], results[index][i] / results[0][i]);
+      } else {
+        break;
+      }
     }
     
-    fraction = startFraction;
-    stopFraction = 0.20;
-    System.out.println("\n******** 8 bits ***********\n");
-    while(fraction <= stopFraction) {
-      arr = new byte[256 * 256];
-      populate(arr, fraction);
-      int size = calculateSize8(arr);
-      int sizeDiff = calculateSize8Diff(arr);
-      System.out.println(fraction + " : " + size + " comp ratio = " + ((double)256 * 256)/ size + " diff size=" + 
-          sizeDiff + " diff comp ratio=" + ((double)256 * 256)/ sizeDiff);
-      fraction += incr;
-    }
+    System.out.printf("\n%-15s%-15s%-15s%-15s%-15s%-15s%-15s%-15s\n\n", "Density",
+      names[0], names[1], names[2], names[3], names[4], names[5], names[6]);
     
-    fraction = startFraction;
-    stopFraction = 0.25;
-
-    System.out.println("\n********* 4 bits ************\n");
-    while(fraction <= stopFraction) {
-      arr = new byte[256 * 256];
-      populate(arr, fraction);
-      int size = calculateSize4(arr);
-      System.out.println(fraction + " : " + size + " comp ratio = " + ((double)256 * 256)/ size );
-      fraction += incr;
+    for(int k = 0; k < i ; k++) {      
+      System.out.printf("%-15f%-15f%-15f%-15f%-15f%-15f%-15f%-15f\n", ((double)(k + 1)/1000),
+        results[0][k], results[1][k], results[2][k], results[3][k], results[4][k], results[5][k], results[6][k]);
     }
-    
-    fraction = startFraction;
-    stopFraction = 0.3;
-    System.out.println("\n********** 2 bits ***********\n");
-    while(fraction <= stopFraction) {
-      arr = new byte[256 * 256];
-      populate(arr, fraction);
-      int size = calculateSize2(arr);
-      System.out.println(fraction + " : " + size + " comp ratio = " + ((double)256 * 256)/ size);
-      fraction += incr;
+  }
+  
+  static int maxIndex(double[][] results, int i) {
+    int index = -1;
+    double max = 0;
+    for (int j = 0; j< results.length; j++) {
+      if (results[j][i] <= 1.) continue;
+      if (results[j][i] > max) {
+        index = j; max = results[j][i];
+      }
     }
-//    
-//    fraction = startFraction;
-//    stopFraction = 0.4;
-//    System.out.println("1 bits");
-//    while(fraction <= stopFraction) {
-//      arr = new byte[256 * 256];
-//      populate(arr, fraction);
-//      int size = calculateSize1(arr);
-//      System.out.println(fraction + " : " + size + " comp ratio = " + ((double)256 * 256)/ size);
-//      fraction += incr;
-//    }
+    return index;
   }
   
   
-  private static int calculateSize1(byte[] arr) {
-    // Calculate by chunk of size 2 - 1 bit
-    int size = 0;
-    for (int i = 0; i < arr.length; i += 2) {
-      int sz = bitCount(arr, i, 2) == 0? 1: 3;
-      size += sz;
+  private double[] mainLoop(Function<byte[], Integer> f, String header) {
+    System.out.println(header);
+
+    int n = 300, loops = 200;
+    double[] result = new double[n];
+    double[] fractions = new double[n];
+    // Initialize fraction array
+    for (int i = 0; i < fractions.length; i++) {
+      fractions[i] = (double)(i + 1)/ 1000;
     }
-    return size; 
+    
+    for (int k = 0; k < loops; k++) {
+      for (int i = 0; i < fractions.length; i++) {
+        byte[] arr = new byte[256 * 256];
+        populate(arr, fractions[i]);
+        int size = f.apply(arr);
+        result[i] += size;
+      }
+    }
+    // Normalize result
+    AtomicInteger index = new AtomicInteger(0);
+    DoubleStream ds = Arrays.stream(result).map( x -> (256 * 256) / (x / loops));
+    double[] dd = ds.toArray();
+    Arrays.stream(dd).forEach( x -> System.out.println(fractions[index.getAndIncrement()] + 
+      " : " + x));
+    return dd;
   }
+  
+  private  static int calculateRoaring(byte[] arr)  {
+    MutableRoaringBitmap rr = MutableRoaringBitmap.bitmapOf();
+    
+    for (int i = 0; i < arr.length; i++) {
+      if (arr[i] > 0) {
+        rr.add(i);
+      }
+    }
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    DataOutputStream dos = new DataOutputStream(bos);
+    try {
+      rr.serialize(dos);
+      dos.close();
+    } catch (IOException e) {
+      // tootoo
+    }
+    return bos.toByteArray().length * 8;
+  }
+  
   
   private static int calculateSize2(byte[] arr) {
     // Calculate by chunk of size 4 - 2 bits
@@ -133,8 +158,7 @@ public class TestBitmapCompression {
     }
     return size;
   }
-  
-  
+   
   /**
    * For testing only array size = 64K
    * @param arr array represents bits: 0, 1
@@ -157,7 +181,6 @@ public class TestBitmapCompression {
         size += sz;
       }
     }
-    //System.out.println("max bit count per 256 = "+ maxBitCount);
     return size;
   }
   
@@ -171,8 +194,6 @@ public class TestBitmapCompression {
     int size = 0;
     int maxBits = 0;
     int maxBitCount = 0;
-    int maxMax  = 0;
-    int bitCountMax = 0;
     for (int i = 0; i < arr.length; i += 256) {
       int[] index = indexArray(arr, i, 256);
       if (index.length > 0) {
@@ -180,11 +201,8 @@ public class TestBitmapCompression {
         int max = max(diffArray);
         int lead = Integer.numberOfLeadingZeros(max);
         int bits = 32  - lead;
-        //System.out.print(bits + " ");
         if (bits > maxBits) {
           maxBits = bits;
-          maxMax = max;
-          bitCountMax = diffArray.length;
         }
         
         // For 256 bit slices we use 6 bit to keep number of elements ( 1's)
@@ -212,9 +230,6 @@ public class TestBitmapCompression {
         size += 1; // just length = 0, one bit = 0 
       }
     }
-    //System.out.println();
-    //System.out.println("diff bits=" + maxBits + " max bit count=" + maxBitCount + " maxMax=" + maxMax + 
-    //  " bitCountMax=" + bitCountMax);
     return size;
   }
   
@@ -248,9 +263,11 @@ public class TestBitmapCompression {
      int max = max(diffArray);
      int lead = Integer.numberOfLeadingZeros(max);
      int bits = 32 - lead;
-     //System.out.println("max = "+ max + " lead =" + lead + " bits=" + bits);
      int size = 14 /*number of elements*/ + 
           /* first element*/ + 4 /* bits number */ + (diffArray.length) * bits;
+     if (size > arr.length) {
+       return arr.length;
+     }
      return size;
   }
   
