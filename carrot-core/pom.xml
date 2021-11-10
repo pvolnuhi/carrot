@@ -71,6 +71,12 @@
              <version>1.7.25</version>
              <scope>test</scope>
         </dependency>
+<!-- https://mvnrepository.com/artifact/org.roaringbitmap/RoaringBitmap -->
+                <dependency>
+                        <groupId>org.roaringbitmap</groupId>
+                        <artifactId>RoaringBitmap</artifactId>
+                        <version>0.9.15</version>
+                </dependency>
 	<!--dependency>
     		<groupId>org.junit.jupiter</groupId>
     		<artifactId>junit-jupiter-engine</artifactId>
