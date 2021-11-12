@@ -36,7 +36,6 @@ import org.bigbase.carrot.redis.db.DBSystem;
 import org.bigbase.carrot.redis.util.Utils;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 public abstract class CommandBase {
@@ -63,7 +62,6 @@ public abstract class CommandBase {
     outDirect = ByteBuffer.allocateDirect(4096);
   }
   
-  //@Ignore
   @Test
   public void testValidRequests() {
     /*DEBUG*/ System.out.println("testValidRequests starts");
@@ -99,9 +97,9 @@ public abstract class CommandBase {
   private static DataOutputStream os;
   private static DataInputStream is;
  
-  //@Ignore
   @Test
   public void testValidRequestsNetworkMode() throws UnknownHostException, IOException, InterruptedException {
+    if(System.getProperty("surefire") != null) return;
     // Start server
     // Connect client
     /*DEBUG*/ System.out.println("testValidRequestsNetworkMode starts");
@@ -162,7 +160,6 @@ public abstract class CommandBase {
     return arr;
   }
   
-  //@Ignore
   @Test
   public void testValidRequestsInline() {
     /*DEBUG*/ System.out.println("testValidRequestsInline starts");
@@ -187,7 +184,6 @@ public abstract class CommandBase {
 
   }
   
-  //@Ignore
   @Test
   public void testValidRequestsDirectBuffer() {
     /*DEBUG*/ System.out.println("testValidRequestsDirectBuffer starts");
@@ -212,7 +208,6 @@ public abstract class CommandBase {
 
   }
   
-  //@Ignore
   @Test
   public void testValidRequestsInlineDirectBuffer() {
     /*DEBUG*/ System.out.println("testValidRequestsInlineDirectBuffer starts");
@@ -238,7 +233,6 @@ public abstract class CommandBase {
   }
   // INVALID REQUESTS
   
-  //@Ignore
   @Test
   public void testInValidRequests() {
     String[] invalidRequests = getInvalidRequests();
@@ -260,7 +254,6 @@ public abstract class CommandBase {
     }
   }
   
-  //@Ignore
   @Test
   public void testInValidRequestsInline() {
     String[] invalidRequests = getInvalidRequests();
@@ -281,7 +274,6 @@ public abstract class CommandBase {
     }
   }
   
-  //@Ignore
   @Test
   public void testInValidRequestsDirectBuffer() {
     String[] invalidRequests = getInvalidRequests();
@@ -302,7 +294,6 @@ public abstract class CommandBase {
     }
   }
   
-  //@Ignore
   @Test
   public void testInValidRequestsInlineDirectBuffer() {
     String[] invalidRequests = getInvalidRequests();

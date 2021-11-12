@@ -37,6 +37,12 @@
                                 <exclude>**/ZSetsMultithreadedTest.java</exclude>
                                 <exclude>**/SparseBitmapTest.java</exclude>                                
           		</excludes>
+			<systemProperties>
+            			<property>
+              				<name>surefire</name>
+              				<value>true</value>
+           			 </property>
+          		</systemProperties>
     		</configuration>
 	    </plugin>
             <plugin>
