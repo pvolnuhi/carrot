@@ -85,7 +85,7 @@ public class SetScannerTest {
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
       BigSortedMap.printGlobalMemoryAllocationStats();      
@@ -98,7 +98,7 @@ public class SetScannerTest {
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
       BigSortedMap.printGlobalMemoryAllocationStats();      

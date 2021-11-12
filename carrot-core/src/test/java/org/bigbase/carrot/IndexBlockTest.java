@@ -43,7 +43,7 @@ public class IndexBlockTest {
   @Test
   public void testAll() throws RetryOperationException, IOException {
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 10; i++) {
       System.out.println("\nRun " + (i+1)+"\n");
       testPutGet();
       testPutGetWithCompressionLZ4();

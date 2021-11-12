@@ -21,7 +21,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -29,7 +28,6 @@ import org.bigbase.carrot.BigSortedMap;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.compression.CodecFactory;
 import org.bigbase.carrot.compression.CodecType;
-import org.bigbase.carrot.util.Bytes;
 import org.bigbase.carrot.util.Key;
 import org.bigbase.carrot.util.UnsafeAccess;
 import org.bigbase.carrot.util.Utils;
@@ -44,7 +42,7 @@ public class ZSetsTest {
   long buffer;
   int bufferSize = 64;
   int fieldSize = 16;
-  long n = 1000000;
+  long n = 100000;
   List<Value> fields;
   List<Double> scores;
   int maxScore = 100000;
@@ -110,12 +108,12 @@ public class ZSetsTest {
     }
   }
   
-  @Ignore
+  //@Ignore
   @Test
   public void runAllNoCompression() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
       BigSortedMap.printGlobalMemoryAllocationStats();
@@ -123,12 +121,12 @@ public class ZSetsTest {
     }
   }
   
-  @Ignore
+  //@Ignore
   @Test
   public void runAllCompressionLZ4() {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
       BigSortedMap.printGlobalMemoryAllocationStats();
@@ -153,12 +151,14 @@ public class ZSetsTest {
     setUp();
     testAddGetScore();
     tearDown();
+    testAddGetScoreMulti();
     setUp();
     testAddRemove();
     tearDown();
     setUp();
     testAddDeleteMulti();
     tearDown();
+    //testAddGetScoreMultiOpt();
   }
   
   @Ignore
@@ -201,7 +201,7 @@ public class ZSetsTest {
     UnsafeAccess.mallocStats.printStats();
   }
   
-  //@Ignore
+  @Ignore
   @Test
   public void testAddGetScoreMultiOpt () {
     System.out.println("Test ZSet Add Get Score Multi (Optimized version)");
@@ -226,6 +226,7 @@ public class ZSetsTest {
     assertEquals(total, (int) ZSets.ZCARD(map, key.address, key.length));
         
     for (int i = 0; i < total; i++) {
+      /*DEBUG*/ System.out.println(i);
       Value v = fields.get(i);
       Double res = ZSets.ZSCORE(map, key.address, key.length, v.address, v.length);
       assertEquals(scl.get(i), res);

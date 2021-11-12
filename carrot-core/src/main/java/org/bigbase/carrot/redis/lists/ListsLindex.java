@@ -59,7 +59,7 @@ public class ListsLindex extends Operation {
   private long index = -1;
   
   public ListsLindex() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override
@@ -130,6 +130,6 @@ public class ListsLindex extends Operation {
     this.bufferSize = 0;
     this.index = -1;
     this.length = -1;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
 }

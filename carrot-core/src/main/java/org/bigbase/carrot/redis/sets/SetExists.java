@@ -39,14 +39,14 @@ public class SetExists extends Operation{
 
   public SetExists() {
     setFloorKey(true);
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override
   public void reset() {
     super.reset();
     setFloorKey(true);
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
     
   @Override

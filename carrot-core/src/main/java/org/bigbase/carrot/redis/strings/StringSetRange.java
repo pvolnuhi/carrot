@@ -20,7 +20,6 @@ package org.bigbase.carrot.redis.strings;
 import org.bigbase.carrot.DataBlock;
 import org.bigbase.carrot.ops.Operation;
 import org.bigbase.carrot.util.UnsafeAccess;
-import org.bigbase.carrot.util.Utils;
 
 /**
  * String SETRANGE operation.
@@ -62,6 +61,7 @@ public class StringSetRange extends Operation {
         UnsafeAccess.copy(valuePtr, vPtr + offset, valueSize);
         this.length = vSize;
         this.updatesCount = 0;
+        setUpdateInPlace(true);
         return true;
       } else {
         this.length = (int) (offset + valueSize);

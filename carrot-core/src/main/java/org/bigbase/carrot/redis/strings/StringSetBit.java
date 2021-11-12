@@ -83,7 +83,9 @@ public class StringSetBit extends Operation {
       this.reuseValues[0] = true;
 
     }
-    
+    if (this.updatesCount == 0) {
+      setUpdateInPlace(true);
+    }
     this.bit = getsetbit(valuePtr, valueSize);
     return true;
   }

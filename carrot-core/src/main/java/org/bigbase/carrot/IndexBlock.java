@@ -2023,6 +2023,12 @@ public final class IndexBlock implements Comparable<IndexBlock> {
     DataBlock dataBlock = block.get();
     dataBlock.compressDataBlockIfNeeded();
 	}
+	
+	public void compressLastUsedDataBlockForced() {
+	  DataBlock dataBlock = block.get();
+	  dataBlock.setMutationOp(true);
+	  dataBlock.compressDataBlockIfNeeded();
+	}
 	 /**
    * Get key-value address
    * 

@@ -1046,7 +1046,7 @@ public class BigSortedMap {
     kvBlock.putForSearch(op.getKeyAddress(), op.getKeySize(), version);
     IndexBlock b = null;
     boolean lowerKey = false;
-    boolean readOnly = op.isReadOnlyOrUpdateInPlace();
+    boolean readOnly = op.isReadOnly();
     int seqNumber;
     while (true) {
       try {
@@ -1092,12 +1092,24 @@ public class BigSortedMap {
         op.setFoundRecordAddress(recordAddress);
         // Execute operation
         boolean result = op.execute();
+        boolean updateInPlace = op.isUpdateInPlace();
+        boolean compressionEnabled = isCompressionEnabled();
         int updatesCount = op.getUpdatesCount();
 
-        if (result == false || updatesCount == 0) {
+        if (result == false || (updatesCount == 0 && !compressionEnabled)) {
           b.compressLastUsedDataBlock();
           return result;
-        }         
+        }
+        
+        if (updateInPlace && compressionEnabled) {
+          b.compressLastUsedDataBlockForced();
+          return result;
+        } else if (updatesCount == 0) {
+          b.compressLastUsedDataBlock();
+          return result;
+        }
+        
+     
         // updates count > 0
         // execute first update (update to existing key)
         long keyPtr = op.keys()[0];

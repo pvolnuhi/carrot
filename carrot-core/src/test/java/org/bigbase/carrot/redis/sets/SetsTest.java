@@ -185,9 +185,7 @@ public class SetsTest {
     tearDown();
     long end = System.currentTimeMillis();    
     System.out.println("\nRUN in " + (end -start) + "ms");
-//   testMemoryUsageForInts();
-//   testCompressionSortedIntSet();
-//    testPerformance();
+
   }
   
   @Ignore

@@ -44,7 +44,7 @@ public class StringBitCount extends Operation {
   boolean startEndSet = false;
   
   public StringBitCount() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override
@@ -117,7 +117,7 @@ public class StringBitCount extends Operation {
     this.end = 0;
     this.count = 0;
     this.startEndSet = false;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   

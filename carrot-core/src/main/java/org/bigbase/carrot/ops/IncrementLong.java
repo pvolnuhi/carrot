@@ -38,7 +38,7 @@ public class IncrementLong extends Operation {
   long value;
   
   public IncrementLong() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   /**
@@ -68,7 +68,7 @@ public class IncrementLong extends Operation {
   public void reset() {
     super.reset();
     value = 0;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override

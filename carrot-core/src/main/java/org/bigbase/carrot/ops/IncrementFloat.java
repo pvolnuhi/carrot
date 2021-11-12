@@ -40,7 +40,7 @@ public class IncrementFloat extends Operation {
   
   float value;
   public IncrementFloat() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   /**
@@ -70,7 +70,7 @@ public class IncrementFloat extends Operation {
   public void reset() {
     super.reset();
     value = 0;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override

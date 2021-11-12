@@ -38,6 +38,7 @@ public class StringGetEx extends Operation {
   
   @Override
   public boolean execute() {
+    setUpdateInPlace(true);
     if (foundRecordAddress > 0) {
       int vLength = DataBlock.valueLength(foundRecordAddress);
       this.size = vLength;
@@ -48,6 +49,8 @@ public class StringGetEx extends Operation {
       long vPtr = DataBlock.valueAddress(foundRecordAddress);
       UnsafeAccess.copy(vPtr, bufferPtr, vLength);
       // Update expire field
+      // FIXME: does not work when compression is on, b/c we update only
+      // thread-local buffer
       DataBlock.setRecordExpire(foundRecordAddress, this.expire);
     } else {
       // Does not exist
@@ -70,6 +73,7 @@ public class StringGetEx extends Operation {
     return this.size;
   }
   
+
   @Override
   public void reset() {
     super.reset();

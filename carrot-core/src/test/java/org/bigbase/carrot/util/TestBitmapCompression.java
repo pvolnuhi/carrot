@@ -30,7 +30,6 @@ import org.junit.Test;
 import org.roaringbitmap.buffer.MutableRoaringBitmap;
 
 public class TestBitmapCompression {
-
   
   @Test
   public void testBitmapCodecs() throws IOException {

@@ -89,7 +89,7 @@ public class HashScannerTest {
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=NULL");
       allTests();
       BigSortedMap.printGlobalMemoryAllocationStats();      
@@ -102,7 +102,7 @@ public class HashScannerTest {
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
     System.out.println();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4");
       allTests();
       BigSortedMap.printGlobalMemoryAllocationStats();      
@@ -115,7 +115,7 @@ public class HashScannerTest {
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
     System.out.println();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("*************** RUN = " + (i + 1) +" Compression=LZ4HC");
       allTests();
       BigSortedMap.printGlobalMemoryAllocationStats();
@@ -164,8 +164,9 @@ public class HashScannerTest {
   } 
 
   private void loadData(Key key, List<KeyValue> values) {
+    int expected = values.size();
     int loaded = Hashes.HSET(map, key, values);
-    assertEquals(values.size(), loaded);
+    assertEquals(expected, loaded);
   }
   
   @Ignore
@@ -249,8 +250,9 @@ public class HashScannerTest {
     System.out.println("Test edge conditions "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    List<KeyValue> copy = copy(values);
     long start = System.currentTimeMillis();
-    loadData(key, values);
+    loadData(key, copy);
     long end = System.currentTimeMillis();
 
     Utils.sortKeyValues(values);
@@ -414,11 +416,12 @@ public class HashScannerTest {
     System.out.println("Test single partial scanner - one key "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    Utils.sortKeyValues(values);
+
     long start = System.currentTimeMillis();
+    List<KeyValue> copy = copy(values);    
     loadData(key, values);
     long end = System.currentTimeMillis();
-    Utils.sortKeyValues(values);
-    List<KeyValue> copy = copy(values);    
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (fieldSize + valSize) + " byte values. Overhead="+ 
@@ -482,11 +485,12 @@ public class HashScannerTest {
     System.out.println("Test single partial scanner open start - one key "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    Utils.sortKeyValues(values);
+    List<KeyValue> copy = copy(values);    
+
     long start = System.currentTimeMillis();
     loadData(key, values);
     long end = System.currentTimeMillis();
-    Utils.sortKeyValues(values);
-    List<KeyValue> copy = copy(values);    
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (fieldSize + valSize) + " byte values. Overhead="+ 
@@ -550,11 +554,12 @@ public class HashScannerTest {
     System.out.println("Test single partial scanner open end - one key "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    Utils.sortKeyValues(values);
+    List<KeyValue> copy = copy(values); 
     long start = System.currentTimeMillis();
     loadData(key, values);
     long end = System.currentTimeMillis();
-    Utils.sortKeyValues(values);
-    List<KeyValue> copy = copy(values);    
+   
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (fieldSize + valSize) + " byte values. Overhead="+ 
@@ -618,11 +623,12 @@ public class HashScannerTest {
     System.out.println("Test single partial scanner reverse - one key "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    Utils.sortKeyValues(values);
+    List<KeyValue> copy = copy(values); 
     long start = System.currentTimeMillis();
     loadData(key, values);
     long end = System.currentTimeMillis();
-    Utils.sortKeyValues(values);
-    List<KeyValue> copy = copy(values);    
+       
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (fieldSize + valSize) + " byte values. Overhead="+ 
@@ -687,11 +693,12 @@ public class HashScannerTest {
     System.out.println("Test single partial scanner reverse open start - one key "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    Utils.sortKeyValues(values);
+    List<KeyValue> copy = copy(values); 
     long start = System.currentTimeMillis();
     loadData(key, values);
     long end = System.currentTimeMillis();
-    Utils.sortKeyValues(values);
-    List<KeyValue> copy = copy(values);    
+       
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (fieldSize + valSize) + " byte values. Overhead="+ 
@@ -755,12 +762,12 @@ public class HashScannerTest {
     System.out.println("Test single partial scanner reverse open end - one key "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    Utils.sortKeyValues(values);
+    List<KeyValue> copy = copy(values);  
     long start = System.currentTimeMillis();
     loadData(key, values);
     long end = System.currentTimeMillis();
-    Utils.sortKeyValues(values);
-    List<KeyValue> copy = copy(values);    
-    
+      
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
     + " for "+ n + " " + (fieldSize + valSize) + " byte values. Overhead="+ 
         ((double)BigSortedMap.getGlobalAllocatedMemory()/n - fieldSize - valSize)+
@@ -819,12 +826,13 @@ public class HashScannerTest {
   @Ignore
   @Test
   public void testDirectScannerPerformance() throws IOException {
-    int n = 5000000; // 5M elements
+    int n = 5000; // 5M elements
     System.out.println("Test direct scanner performance "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    List<KeyValue> copy = copy(values);
     long start = System.currentTimeMillis();
-    loadData(key, values);
+    loadData(key, copy);
     long end = System.currentTimeMillis();
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 
@@ -852,12 +860,14 @@ public class HashScannerTest {
   @Ignore
   @Test
   public void testReverseScannerPerformance() throws IOException {
-    int n = 5000000; // 5M elements
+    int n = 5000; // 5M elements
     System.out.println("Test reverse scanner performance "+ n + " elements");
     Key key = getKey();
     List<KeyValue> values = getKeyValues(n);
+    List<KeyValue> copy = copy(values);
+
     long start = System.currentTimeMillis();
-    loadData(key, values);
+    loadData(key, copy);
     long end = System.currentTimeMillis();
     
     System.out.println("Total allocated memory ="+ BigSortedMap.getGlobalAllocatedMemory() 

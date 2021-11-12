@@ -97,8 +97,12 @@ public abstract class Operation {
    * Read - only or update in place operation
    * WARNING: updates in place with compression enabled do not work yet
    */
-  protected boolean readOnlyOrUpdateInPlace = false;
+  protected boolean readOnly = false;
   
+  /**
+   * Update in place (do not execute PUT but compress block if needed)
+   */
+  protected boolean updateInPlace = false;
   /*
    * Constructor
    */
@@ -175,16 +179,32 @@ public abstract class Operation {
    * This operation is read-only
    * @param b
    */
-  public final void setReadOnlyOrUpdateInPlace(boolean b) {
-    this.readOnlyOrUpdateInPlace = b;
+  public final void setReadOnly(boolean b) {
+    this.readOnly = b;
   }
  
   /**
    * Is operation read-only
    * @return read only
    */
-  public boolean isReadOnlyOrUpdateInPlace() {
-    return this.readOnlyOrUpdateInPlace;
+  public boolean isReadOnly() {
+    return this.readOnly;
+  }
+  
+  /**
+   * This operation is update in place
+   * @param b
+   */
+  public final void setUpdateInPlace(boolean b) {
+    this.updateInPlace = b;
+  }
+ 
+  /**
+   * Is operation update in place
+   * @return read only
+   */
+  public boolean isUpdateInPlace() {
+    return this.updateInPlace;
   }
   
   public void reset() {
@@ -205,7 +225,8 @@ public abstract class Operation {
     this.floorKey = false;
     this.reuseValues[0] = false;
     this.reuseValues[1] = false;
-    this.readOnlyOrUpdateInPlace = false;
+    this.readOnly = false;
+    this.updateInPlace = false;
   }
   
   /**

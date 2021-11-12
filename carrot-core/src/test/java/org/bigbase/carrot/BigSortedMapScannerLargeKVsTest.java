@@ -116,7 +116,7 @@ public class BigSortedMapScannerLargeKVsTest {
   @Test
   public void runAllNoCompression() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.NONE));
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1; i++) {
       System.out.println("\n********* " + i+" ********** Codec = NONE\n");
       setUp();
       allTests();
@@ -129,7 +129,7 @@ public class BigSortedMapScannerLargeKVsTest {
   @Test
   public void runAllCompressionLZ4() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4));
-    for (int i=0; i < 100; i++) {
+    for (int i=0; i < 1; i++) {
       System.out.println("\n********* " + i+" ********** Codec = LZ4\n");
       setUp();
       allTests();
@@ -142,7 +142,7 @@ public class BigSortedMapScannerLargeKVsTest {
   @Test
   public void runAllCompressionLZ4HC() throws IOException {
     BigSortedMap.setCompressionCodec(CodecFactory.getInstance().getCodec(CodecType.LZ4HC));
-    for (int i=0; i < 100; i++) {
+    for (int i=0; i < 1; i++) {
       System.out.println("\n********* " + i+" ********** Codec = LZ4HC\n");
       setUp();
       allTests();

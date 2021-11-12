@@ -35,7 +35,7 @@ public class StringLength extends Operation {
   int strlen = 0;
   
   public StringLength() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override
@@ -56,7 +56,7 @@ public class StringLength extends Operation {
   public void reset() {
     super.reset();
     this.strlen = 0;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   /**

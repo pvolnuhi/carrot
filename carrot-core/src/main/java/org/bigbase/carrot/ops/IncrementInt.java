@@ -37,7 +37,7 @@ public class IncrementInt extends Operation {
   int value;
   
   public IncrementInt() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   /**
@@ -68,7 +68,7 @@ public class IncrementInt extends Operation {
   public void reset() {
     super.reset();
     value = 0;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override

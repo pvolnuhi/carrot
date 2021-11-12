@@ -775,11 +775,11 @@ public final class DataBlock  {
     this.numCustomAllocs = 0;
   }
   
-  private boolean isMutationOp() {
+  protected boolean isMutationOp() {
     return this.mutation;
   }
   
-  private void setMutationOp(boolean v) {
+  protected void setMutationOp(boolean v) {
     this.mutation = v;
   }
   

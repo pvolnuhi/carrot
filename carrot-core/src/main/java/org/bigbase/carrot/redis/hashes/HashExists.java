@@ -35,14 +35,14 @@ public class HashExists extends Operation {
 
   public HashExists() {
     setFloorKey(true);
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override
   public void reset() {
     super.reset();
     setFloorKey(true);
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override

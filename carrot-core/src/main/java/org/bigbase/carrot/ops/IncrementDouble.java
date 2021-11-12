@@ -38,7 +38,7 @@ public class IncrementDouble extends Operation {
   double value;
   
   public IncrementDouble() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   public void setIncrement(double v) {
@@ -57,7 +57,7 @@ public class IncrementDouble extends Operation {
   public void reset() {
     super.reset();
     value = 0;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override

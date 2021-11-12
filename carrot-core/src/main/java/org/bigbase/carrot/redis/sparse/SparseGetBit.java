@@ -39,7 +39,7 @@ public class SparseGetBit extends Operation {
   
   public SparseGetBit() {
     setFloorKey(true);
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override
@@ -87,7 +87,7 @@ public class SparseGetBit extends Operation {
     this.bit = 0;
     this.offset = 0;
     setFloorKey(true);
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   /**

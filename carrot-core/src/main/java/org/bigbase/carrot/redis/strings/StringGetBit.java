@@ -38,7 +38,7 @@ public class StringGetBit extends Operation {
   int bit;
   
   public StringGetBit() {
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   @Override
@@ -70,7 +70,7 @@ public class StringGetBit extends Operation {
     super.reset();
     this.bit = 0;
     this.offset = 0;
-    setReadOnlyOrUpdateInPlace(true);
+    setReadOnly(true);
   }
   
   /**
